@@ -1,6 +1,6 @@
 module github.com/multica-ai/multica/server
 
-go 1.26.1
+go 1.25.5
 
 require (
 	github.com/aws/aws-sdk-go-v2 v1.41.5
