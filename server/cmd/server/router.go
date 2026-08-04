@@ -1157,6 +1157,17 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 				})
 			})
 
+			// Issue templates (CLO-159): workspace-level presets for issue creation.
+			r.Route("/api/issue-templates", func(r chi.Router) {
+				r.Get("/", h.ListIssueTemplates)
+				r.Post("/", h.CreateIssueTemplate)
+				r.Route("/{id}", func(r chi.Router) {
+					r.Get("/", h.GetIssueTemplate)
+					r.Put("/", h.UpdateIssueTemplate)
+					r.Delete("/", h.DeleteIssueTemplate)
+				})
+			})
+
 			// Projects
 			r.Route("/api/projects", func(r chi.Router) {
 				r.Get("/search", h.SearchProjects)

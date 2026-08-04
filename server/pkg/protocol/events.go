@@ -102,6 +102,12 @@ const (
 	EventPropertyUpdated        = "property:updated"
 	EventIssuePropertiesChanged = "issue_properties:changed"
 
+	// Issue template events (CLO-159). Templates are hard-deleted, so there
+	// is a template:deleted event (unlike properties which archive).
+	EventIssueTemplateCreated = "issue_template:created"
+	EventIssueTemplateUpdated = "issue_template:updated"
+	EventIssueTemplateDeleted = "issue_template:deleted"
+
 	// Pin events
 	EventPinCreated   = "pin:created"
 	EventPinDeleted   = "pin:deleted"

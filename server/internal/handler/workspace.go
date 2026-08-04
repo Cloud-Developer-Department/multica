@@ -215,6 +215,13 @@ func (h *Handler) CreateWorkspace(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Seed the 4 built-in issue templates (CLO-159) inside the same
+	// transaction so a workspace never exists without its preset catalog.
+	if err := SeedPresetIssueTemplates(r.Context(), qtx, ws.ID, parseUUID(userID)); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to seed issue templates: "+err.Error())
+		return
+	}
+
 	// NOTE: CreateWorkspace deliberately does NOT mark the user as
 	// onboarded. The `onboarded_at` flag is owned by CompleteOnboarding
 	// (Step 3 of the flow) and by AcceptInvitation (invitee joining an

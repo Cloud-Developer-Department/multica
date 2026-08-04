@@ -1,0 +1,7 @@
+?? server/internal/handler/issue_template.go
+?? server/migrations/232_issue_template.down.sql
+?? server/migrations/232_issue_template.up.sql
+?? server/migrations/233_issue_template_workspace_index.down.sql
+?? server/migrations/233_issue_template_workspace_index.up.sql
+?? server/pkg/db/generated/issue_template.sql.go
+?? server/pkg/db/queries/issue_template.sql
