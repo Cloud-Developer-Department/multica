@@ -145,6 +145,7 @@
     "sr_agent": "Quick create issue",
     "manual_breadcrumb": "Create manually",
     "agent_breadcrumb": "Create with agent",
+    "template_button": "Template",
     "title_placeholder": "Issue title",
     "description_placeholder": "Add description...",
     "more_options_aria": "More options",

@@ -13,6 +13,7 @@ import {
   Check,
   ChevronRight,
   CircleUser,
+  FileText,
   FolderKanban,
   Maximize2,
   Minimize2,
@@ -63,6 +64,7 @@ import { useWorkspaceId } from "@multica/core/hooks";
 import { useIssueDraftStore } from "@multica/core/issues/stores/draft-store";
 import { useCreateModeStore } from "@multica/core/issues/stores/create-mode-store";
 import { useQuickCreateStore } from "@multica/core/issues/stores/quick-create-store";
+import { issueTemplateListOptions } from "@multica/core/issue-templates";
 import {
   useIssueCreateSettingsStore,
   type ManualCreateField,
@@ -393,6 +395,34 @@ export function ManualCreatePanel({
   const openFieldSettings = () => {
     onClose();
     router.push(`${p.settings()}?tab=issue`);
+  };
+
+  // Issue templates (CLO-159): a dropdown in the dialog header lists
+  // workspace templates; selecting one pre-fills every field the template
+  // presets. The title editor and description editor are controlled via
+  // refs + a formResetKey remount so the new content renders. Only fields
+  // the template actually sets are overwritten — empty/null template fields
+  // leave the current form state untouched.
+  const { data: issueTemplates = [] } = useQuery(issueTemplateListOptions(wsId));
+  const applyTemplate = (templateId: string) => {
+    const tpl = issueTemplates.find((t) => t.id === templateId);
+    if (!tpl) return;
+    const nextTitle = tpl.title_template || title;
+    setTitle(nextTitle);
+    setDraft({ title: nextTitle });
+    if (tpl.body_template) {
+      setDraft({ description: tpl.body_template });
+      // Remount the description editor so it picks up the new defaultValue.
+      setFormResetKey((k) => k + 1);
+    }
+    if (tpl.status) updateStatus(tpl.status);
+    if (tpl.priority) updatePriority(tpl.priority);
+    if (tpl.assignee_type) {
+      updateAssignee(tpl.assignee_type, tpl.assignee_id ?? undefined);
+    }
+    if (tpl.project_id) updateProject(tpl.project_id);
+    if (tpl.stage != null) setStage(tpl.stage);
+    if (tpl.label_ids && tpl.label_ids.length > 0) updateLabelIds(tpl.label_ids);
   };
 
   const createIssueMutation = useCreateIssue();
@@ -767,6 +797,33 @@ export function ManualCreatePanel({
                 <span className="text-muted-foreground">{workspaceName}</span>
                 <ChevronRight className="size-3 text-muted-foreground/50" />
                 <span className="font-medium">{t(($) => $.create_issue.manual_breadcrumb)}</span>
+                {issueTemplates.length > 0 && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger
+                      render={
+                        <button
+                          type="button"
+                          className="ml-1 inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs text-muted-foreground hover:bg-accent/60 hover:text-foreground transition-colors cursor-pointer"
+                        >
+                          <FileText className="size-3" />
+                          {t(($) => $.create_issue.template_button)}
+                        </button>
+                      }
+                    />
+                    <DropdownMenuContent align="start">
+                      <DropdownMenuSeparator />
+                      {issueTemplates.map((tpl) => (
+                        <DropdownMenuItem
+                          key={tpl.id}
+                          onClick={() => applyTemplate(tpl.id)}
+                        >
+                          <FileText className="size-4" />
+                          <span className="truncate">{tpl.name}</span>
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
               </div>
               <div className="flex items-center gap-1">
                 <Tooltip>

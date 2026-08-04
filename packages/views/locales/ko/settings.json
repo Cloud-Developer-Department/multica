@@ -131,7 +131,8 @@
       "labs": "실험실",
       "members": "멤버",
       "labels": "레이블",
-      "properties": "속성"
+      "properties": "속성",
+      "templates": "템플릿"
     }
   },
   "properties": {
@@ -240,6 +241,70 @@
       "cancel": "취소",
       "confirm": "레이블 삭제",
       "failed": "레이블을 삭제하지 못했습니다"
+    }
+  },
+  "templates": {
+    "title": "Issue 템플릿",
+    "description": "이 워크스페이스의 Issue 템플릿을 만들고 관리합니다. 템플릿은 Issue의 필드를 미리 채워 기능 개발, 버그 수정, 보고서 등 일반적인 워크플로를 일관된 기준에서 시작할 수 있게 합니다.",
+    "search_placeholder": "이름, 설명, 카테고리로 필터...",
+    "new_template": "새 템플릿",
+    "preset_badge": "프리셋",
+    "loading": "템플릿을 불러오는 중...",
+    "empty": "템플릿이 없습니다",
+    "no_results": "일치하는 템플릿이 없습니다",
+    "save_failed": "템플릿을 저장하지 못했습니다",
+    "columns": {
+      "name": "이름",
+      "description": "설명",
+      "category": "카테고리",
+      "updated": "수정일"
+    },
+    "actions": {
+      "open": "{{name}} 작업",
+      "edit": "편집",
+      "delete": "삭제"
+    },
+    "editor": {
+      "create_title": "새 템플릿",
+      "edit_title": "템플릿 편집",
+      "description_hint": "여기서 설정한 필드는 템플릿 적용 시 Issue 생성 대화상자에 미리 채워집니다.",
+      "preset_hint": "내장 프리셋 템플릿입니다. 내용은 편집할 수 있지만 삭제할 수는 없습니다.",
+      "name": "이름",
+      "name_placeholder": "예: 기능 개발",
+      "description": "설명",
+      "description_placeholder": "이 템플릿의 용도",
+      "title_template": "제목 접두어",
+      "title_placeholder": "예: [Feature]",
+      "body_template": "본문 템플릿",
+      "body_placeholder": "Issue 설명에 적용되는 Markdown 본문...",
+      "icon": "아이콘",
+      "icon_placeholder": "예: sparkles",
+      "category": "카테고리",
+      "category_placeholder": "예: engineering",
+      "status": "상태",
+      "priority": "우선순위",
+      "stage": "스테이지",
+      "stage_placeholder": "예: 1",
+      "assignee_type": "담당자 유형",
+      "assignee": "담당자",
+      "select_assignee": "담당자 선택",
+      "unassigned": "미할당",
+      "project": "프로젝트",
+      "no_project": "프로젝트 없음",
+      "labels": "레이블",
+      "no_labels": "선택된 레이블 없음",
+      "labels_count": "{{count}}개 레이블 선택됨",
+      "no_labels_available": "이 워크스페이스에 Issue 레이블이 없습니다",
+      "cancel": "취소",
+      "save": "템플릿 저장",
+      "saving": "저장 중..."
+    },
+    "delete_dialog": {
+      "title": "템플릿을 삭제할까요?",
+      "description": "\"{{name}}\" 템플릿을 삭제할까요? 되돌릴 수 없습니다.",
+      "cancel": "취소",
+      "confirm": "템플릿 삭제",
+      "failed": "템플릿을 삭제하지 못했습니다"
     }
   },
   "account": {
