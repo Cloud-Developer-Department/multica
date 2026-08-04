@@ -9,8 +9,8 @@
 |------|------|------|------|
 | 调研 | `01-research/` | Research（魔术师） | ✅ 完成（CLO-160） |
 | 后端代码 | `03-code/` | Coding（库里） | ✅ 完成（CLO-161） |
-| 前端 | — | Coding（库里） | ⏳ 待执行（CLO-164） |
-| 测试 | — | Validation（邓肯） | ⏳ 待执行（CLO-165） |
+| 前端 | `03-code/` | Coding（库里） | ✅ 完成（CLO-164） |
+| 测试 | `04-tests/` | Validation（邓肯） | ✅ 完成（CLO-165） |
 | 审查 | — | Review（保罗） | ⏳ 待执行（CLO-162） |
 | 文档 | — | Documentation（杜兰特） | ⏳ 待执行（CLO-163） |
 
@@ -27,3 +27,9 @@
 - 4 个预置模板在 CreateWorkspace 事务中自动播种
 - 预置模板受保护不可删除，但可编辑
 - 编译 + go vet 通过
+
+## 测试交付（CLO-165）
+
+- `04-tests/validation-report.md` — 完整功能验证报告
+- 结论：Build/Compile/Lint 全过；API 集成测试 35/35 通过；WS 三事件通过；迁移可逆
+- 🟡 风险：P2 发现 `project_id` 未校验 workspace 归属；自动化测试缺失建议补充
