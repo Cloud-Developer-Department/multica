@@ -100,18 +100,19 @@ func issueTemplateToResponse(t db.IssueTemplate) IssueTemplateResponse {
 }
 
 // parseLabelIDsJSONB decodes the JSONB label_ids array (stored as []byte from
-// pgx) into a string slice. Returns nil for empty/invalid so the JSON field
-// drops out cleanly via omitempty semantics in callers that want it.
+// pgx) into a string slice. Returns a non-nil empty slice for empty/invalid so
+// the JSON field marshals to `[]` (not `null`), matching the API contract
+// (label_ids: string[]) and the frontend zod schema.
 func parseLabelIDsJSONB(raw []byte) []string {
 	if len(raw) == 0 {
-		return nil
+		return []string{}
 	}
 	var ids []string
 	if err := json.Unmarshal(raw, &ids); err != nil {
-		return nil
+		return []string{}
 	}
 	if len(ids) == 0 {
-		return nil
+		return []string{}
 	}
 	return ids
 }

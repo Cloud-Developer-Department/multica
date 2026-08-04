@@ -1780,7 +1780,7 @@ export const IssueTemplateSchema = z.object({
   assignee_id: z.string().nullable().optional().default(null),
   project_id: z.string().nullable().optional().default(null),
   stage: z.number().nullable().optional().default(null),
-  label_ids: z.array(z.string()).optional().default([]),
+  label_ids: z.array(z.string()).nullish().transform((v) => v ?? []),
   icon: z.string().optional().default(""),
   category: z.string().optional().default(""),
   is_preset: z.boolean().optional().default(false),
