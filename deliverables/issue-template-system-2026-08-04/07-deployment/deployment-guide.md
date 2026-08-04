@@ -36,6 +36,15 @@ cd apps/web && npm run start -- -p 3000 &                            # 监听 :3
 
 > 提示：`REMOTE_API_URL=http://localhost:8080` 必须设置，否则生产模式前端不会代理 `/api/*` 到后端。
 
+### 登录说明（重要）
+
+本地部署**未配置邮件服务**（`RESEND_API_KEY` / SMTP 为空），因此「邮箱验证码收不到」是预期行为——邮件验证码根本不会发出。登录方式二选一：
+
+- **推荐：使用固定本地验证码 `888888`**。`.env` 已设 `APP_ENV=development` + `MULTICA_DEV_VERIFICATION_CODE=888888`，登录时输入任意邮箱，验证码直接填 `888888` 即可（无需真实邮箱）。该固定码仅在 `APP_ENV` 非 production 时生效。
+- **备选：从后端日志读取一次性验证码**。登录请求后，后端 stdout 会打印 `[DEV] Verification code for <邮箱>: <6位码>`，填入该码即可。
+
+> 如需真实邮件验证码，需在 `.env` 配置 `RESEND_API_KEY` 或 SMTP 参数后重启后端。
+
 ## 二、服务清单
 
 | 服务 | 端口 | 健康检查 | 日志 |
@@ -78,6 +87,6 @@ cd apps/web && npm run start -- -p 3000 &                            # 监听 :3
 | 后端连接数据库失败 | `docker compose up -d postgres`，确认 5432 可连 |
 | 迁移失败 | `go run ./cmd/migrate up` 重试（幂等）；必要时用 down 回滚单条 |
 | 预置模板缺失 | 预置模板仅「新建工作区」时播种；既有工作区需等后续 seeding 功能 |
-| 验证码收不到 | 检查后端日志 `[DEV] Verification code for ...:` |
+| 验证码收不到 | 预期行为：本地未配置邮件服务，邮件不会发出。登录验证码直接填固定码 `888888`（见上文「登录说明」），或从后端日志 `[DEV] Verification code for ...:` 读取 |
 
 详见 `rollback.md` 回滚方案。
