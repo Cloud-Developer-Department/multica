@@ -134,7 +134,8 @@
       "labs": "Labs",
       "members": "Members",
       "labels": "Labels",
-      "properties": "Properties"
+      "properties": "Properties",
+      "templates": "Templates"
     }
   },
   "properties": {
@@ -248,6 +249,70 @@
       "cancel": "Cancel",
       "confirm": "Delete label",
       "failed": "Couldn't delete label"
+    }
+  },
+  "templates": {
+    "title": "Issue Templates",
+    "description": "Create and manage issue templates for this workspace. Templates pre-fill an issue's fields so common workflows — feature development, bug fixes, reports — start from a consistent baseline.",
+    "search_placeholder": "Filter by name, description, or category...",
+    "new_template": "New template",
+    "preset_badge": "Preset",
+    "loading": "Loading templates...",
+    "empty": "No templates yet",
+    "no_results": "No matching templates",
+    "save_failed": "Couldn't save template",
+    "columns": {
+      "name": "Name",
+      "description": "Description",
+      "category": "Category",
+      "updated": "Updated"
+    },
+    "actions": {
+      "open": "Actions for {{name}}",
+      "edit": "Edit",
+      "delete": "Delete"
+    },
+    "editor": {
+      "create_title": "New template",
+      "edit_title": "Edit template",
+      "description_hint": "Fields set here will pre-fill the create-issue dialog when this template is applied.",
+      "preset_hint": "This is a built-in preset. You can edit its content but it can't be deleted.",
+      "name": "Name",
+      "name_placeholder": "e.g. Feature development",
+      "description": "Description",
+      "description_placeholder": "What this template is for",
+      "title_template": "Title prefix",
+      "title_placeholder": "e.g. [Feature]",
+      "body_template": "Body template",
+      "body_placeholder": "Markdown body applied to the issue description...",
+      "icon": "Icon",
+      "icon_placeholder": "e.g. sparkles",
+      "category": "Category",
+      "category_placeholder": "e.g. engineering",
+      "status": "Status",
+      "priority": "Priority",
+      "stage": "Stage",
+      "stage_placeholder": "e.g. 1",
+      "assignee_type": "Assignee type",
+      "assignee": "Assignee",
+      "select_assignee": "Select assignee",
+      "unassigned": "Unassigned",
+      "project": "Project",
+      "no_project": "No project",
+      "labels": "Labels",
+      "no_labels": "No labels selected",
+      "labels_count": "{{count}} labels selected",
+      "no_labels_available": "No issue labels in this workspace",
+      "cancel": "Cancel",
+      "save": "Save template",
+      "saving": "Saving..."
+    },
+    "delete_dialog": {
+      "title": "Delete template?",
+      "description": "Delete \"{{name}}\"? This can't be undone.",
+      "cancel": "Cancel",
+      "confirm": "Delete template",
+      "failed": "Couldn't delete template"
     }
   },
   "account": {

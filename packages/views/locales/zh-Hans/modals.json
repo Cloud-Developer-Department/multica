@@ -143,6 +143,7 @@
     "sr_agent": "快速创建 issue",
     "manual_breadcrumb": "手动创建",
     "agent_breadcrumb": "通过智能体创建",
+    "template_button": "模板",
     "title_placeholder": "issue 标题",
     "description_placeholder": "添加描述...",
     "more_options_aria": "更多选项",
