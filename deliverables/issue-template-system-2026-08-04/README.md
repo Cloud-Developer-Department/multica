@@ -11,8 +11,8 @@
 | 后端代码 | `03-code/` | Coding（库里） | ✅ 完成（CLO-161） |
 | 前端 | `03-code/` | Coding（库里） | ✅ 完成（CLO-164） |
 | 测试 | `04-tests/` | Validation（邓肯） | ✅ 完成（CLO-165） |
-| 审查 | — | Review（保罗） | ⏳ 待执行（CLO-162） |
-| 文档 | — | Documentation（杜兰特） | ⏳ 待执行（CLO-163） |
+| 审查 | — | Review（保罗） | ✅ 完成（CLO-162） |
+| 文档 | `06-docs/` | Documentation（杜兰特） | ✅ 完成（CLO-163） |
 
 ## 后端交付（CLO-161）
 
@@ -33,3 +33,17 @@
 - `04-tests/validation-report.md` — 完整功能验证报告
 - 结论：Build/Compile/Lint 全过；API 集成测试 35/35 通过；WS 三事件通过；迁移可逆
 - 🟡 风险：P2 发现 `project_id` 未校验 workspace 归属；自动化测试缺失建议补充
+
+## 审查交付（CLO-162）
+
+- Review（保罗）结论：🟡 **Approve with Suggestions**（功能完整、构建/lint/已有测试通过、无安全漏洞，可进入文档阶段）
+- 非阻塞风险：`project_id` 未校验 workspace 归属（P1）、未提交自动化测试（P1）、既有 workspace 无预置模板（P1）、写端点缺 owner/admin role enforcement（P2）
+
+## 文档交付（CLO-163）
+
+- `06-docs/README.md` — 文档交付索引与更新结论
+- `06-docs/feature-guide.md` — 功能说明（用户视角）
+- `06-docs/api.md` — API 参考（端点、数据模型、错误、Curl、SDK、WS 事件）
+- `06-docs/release-notes.md` — 发布说明
+- `06-docs/faq.md` — FAQ 与故障排查
+- 结论：API 文档需补充 `/api/issue-templates`；无配置/环境变量变更；仅新增迁移 232/233
