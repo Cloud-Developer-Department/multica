@@ -13,6 +13,7 @@
 | 测试 | `04-tests/` | Validation（邓肯） | ✅ 完成（CLO-165） |
 | 审查 | — | Review（保罗） | ✅ 完成（CLO-162） |
 | 文档 | `06-docs/` | Documentation（杜兰特） | ✅ 完成（CLO-163） |
+| 部署 | `07-deployment/` | DevOps（姚明） | ✅ 完成（CLO-169） |
 
 ## 后端交付（CLO-161）
 
@@ -47,3 +48,16 @@
 - `06-docs/release-notes.md` — 发布说明
 - `06-docs/faq.md` — FAQ 与故障排查
 - 结论：API 文档需补充 `/api/issue-templates`；无配置/环境变量变更；仅新增迁移 232/233
+
+## 部署交付（CLO-169）
+
+- `07-deployment/deployment-report.md` — 本地部署报告（环境、过程、健康检查、功能冒烟验证、交付状态）
+- `07-deployment/deployment-guide.md` — 一键部署与运维说明（服务清单、配置项、发布步骤、监控、故障排查）
+- `07-deployment/rollback.md` — 回滚方案（代码级 + 迁移级）
+
+## 部署结论（CLO-169）
+
+- 本地部署成功：Docker Postgres 17 + 本机后端（:8080）+ 前端生产构建（:3000）
+- 后端 `/health` OK；前端页面与 `/api/config` 200；API 代理链路正常
+- 新建工作区自动播种 4 个预置模板；CRUD 全流程、预置保护（DELETE 409）、前端模板管理页签/创建对话框选择器均验证通过
+- 🟡 遗留风险：`project_id` 未校验 workspace 归属（P2）；既有工作区无预置模板（P1，仅新建工作区播种）
