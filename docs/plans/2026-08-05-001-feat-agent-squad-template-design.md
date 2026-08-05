@@ -178,6 +178,7 @@ squad 还必须能读 leader 与**全部**成员 agent）。任一依赖不可�
 ```jsonc
 // req
 { "template": { … }, "target_runtime_id": "<uuid>", "members_mode": "…" }
+// target_runtime_id 必填（Q3）：runtime 是 model / thinking_level / service_tier 重校验前提
 
 // 200（校验失败也是 200，用 errors 承载；只有请求体本身坏了才 4xx）
 { "valid": false,
@@ -186,7 +187,8 @@ squad 还必须能读 leader 与**全部**成员 agent）。任一依赖不可�
   "required_inputs": {
     "env_keys":       [ { "agent_ref": "architect-agent", "key": "API_KEY" } ],
     "missing_skills": [ { "name": "…", "source_url": "…", "installable": true } ],
-    "mcp_servers":    [ { "agent_ref": "…", "name": "…" } ]
+    "mcp_servers":    [ { "agent_ref": "…", "name": "…" } ],
+    "missing_agents": [ { "ref": "…", "name": "…" } ]   // references 模式引用缺失（Q7）
   },
   "plan": { "agents_to_create": ["…"], "squads_to_create": ["…"],
             "conflicts": [ { "kind": "agent", "name": "…", "existing_id": "<uuid>" } ] } }
@@ -245,6 +247,33 @@ squad 还必须能读 leader 与**全部**成员 agent）。任一依赖不可�
 | `NAME_CONFLICT` | 200(plan.conflicts) / 409 | 同名且策略 fail |
 | `APPLY_ROLLED_BACK` | 500 | 事务内失败已回滚 |
 | `QUOTA_EXCEEDED` | 409 | 目标限额不足 |
+| `REQUIRED_INPUT_MISSING` | 200(errors) | `required: true` 的 env key 未在 apply 提供 |
+| `RUNTIME_NOT_FOUND` | 200(errors) / 404 | `target_runtime_id` 不存在或调用者无权访问 |
+| `RETRYABLE` | 502 / 503 / 504 | 上游超时或 5xx，结果不确定，须用同一 `idempotency_key` 重试 |
+| `CANCELLED` | 499 | 客户端断开；服务端事务继续收敛，用同 key 查询最终态 |
+
+本表是错误码的唯一权威来源。PRD §6.1 与 §9 两张表在合并前存在状态码缺口（`RETRYABLE` / `CANCELLED` 无 HTTP 状态、`RUNTIME_NOT_FOUND` 未映射），已在此闭合，实现与测试都以本表为准。
+
+`200(errors)` 表示 validate / dry-run 语义下的"请求本身合法、内容校验失败"，响应体 `errors[]` 携带 code + JSON path；同一 code 出现在真正写入路径时使用其后备 HTTP 状态。
+
+### 4.5 契约裁定（回应 CLO-252 Q1–Q12）
+
+以下裁定为实现与测试断言的权威口径，编码前生效。
+
+| # | 裁定 |
+| --- | --- |
+| Q1 | `schema_version` 只比 major。major 相同即接受，未知**顶层**字段拒绝（`TEMPLATE_INVALID`），未知**嵌套**字段忽略并计入 `warnings`。不做兼容矩阵。 |
+| Q2 | 见 §4.4 合并后的单表，已补全三个缺口码。 |
+| Q3 | `target_runtime_id` 在 validate 与 apply **均必填**；缺失或不可访问 → `RUNTIME_NOT_FOUND`。runtime 是 `model` / `thinking_level` / `service_tier` 重校验的前提，validate 少了它就无法给出可信 dry-run。 |
+| Q4 | 权限在 **validate 阶段**全量校验（创建 agent/squad、绑定 skill、设置 permission_mode / invocation_target），dry-run 因此可信。apply 重跑同一套校验（TOCTOU 防护），额外只做 `idempotency_key` 回放判定。 |
+| Q5 | `rename` 后缀 = `"<name>-" + 短 UUID 前 8 位小写十六进制`，例：`架构师-3f9a1c04`。不用序号（并发下需额外锁且不幂等）。映射写入结果 `resource_mapping`。 |
+| Q6 | secret 检测三条并行规则：① key 名大小写不敏感黑名单（`token` / `secret` / `password` / `passwd` / `api_key` / `apikey` / `private_key` / `credential` / `auth` 子串匹配）且值长度 ≥ 8；② 值匹配 `Authorization` 头结构（`Bearer|Basic|Token` + 空格 + ≥ 8 位）按结构判定，不做字符串包含匹配；③ 已知前缀字面量（`sk-` / `ghp_` / `gho_` / `xoxb-` 等）。不做熵值判定——误报率高且不可测。命中即 `SECRET_DETECTED`，导出与导入双侧拒绝，绝不静默清洗。 |
+| Q7 | `references` 模式引用缺失：validate 响应 `errors[]` 置 `DEPENDENCY_NOT_FOUND`，同时 `required_inputs.missing_agents[]` 列出 `{ref, name}`。前者决定能否 apply，后者供 UI/CLI 渲染补齐清单。 |
+| Q8 | `overrides.agents[<ref>]` 的 `ref` 是**导出时生成的模板内符号**（slug 化的 agent 名，模板内唯一，非 UUID）。apply 在 plan 阶段建立 `ref → 新建资源 ID` 映射并回写 `resource_mapping`；`squad.leader.agent_ref` / `members[].agent_ref` 走同一张表。 |
+| Q9 | `kind: "bundle"` 一期**拒绝**，code 复用 `TEMPLATE_INVALID`，message 明示"bundle 一期不支持"。不新增 `BUNDLE_NOT_SUPPORTED`——错误码是稳定契约，为一期就不实现的形态占位会留下永久死码。 |
+| Q10 | apply 的 `env` 结构 = `{ "<agent_ref>": { "KEY": "value" } }`，按 Q8 的符号 ref 索引。`kind: agent` 模板同样用 ref 一层包裹，保持单一形状。 |
+| Q11 | `install_missing_skills` 元素只接受 `source_url` 字符串，必须是模板 `spec` 内已出现的 URL 子集；服务端**不**做 name → URL 解析，避免把"名字像"变成任意 URL 拉取。 |
+| Q12 | apply 未提供 `required: true` 的 env key → validate 阶段 `REQUIRED_INPUT_MISSING`（携带 `agent_ref` + key 名，**不带值**），不进入写入路径。可选 key 缺失只进 `warnings`。 |
 
 ## 5. CLI 契约
 
