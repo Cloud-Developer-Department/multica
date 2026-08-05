@@ -1,0 +1,1 @@
+DROP INDEX CONCURRENTLY IF EXISTS template_apply_log_workspace_key_unique;
