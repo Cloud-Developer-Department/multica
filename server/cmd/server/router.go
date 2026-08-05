@@ -1330,6 +1330,20 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 				r.Get("/activity", h.GetMonitoringActivity)
 				r.Get("/comments", h.GetMonitoringComments)
 				r.Get("/completion", h.GetMonitoringCompletion)
+
+				// Personal-dimension usage dashboard (CLO-206 / CLO-212).
+				// ?range=today|week|month + ?tz=; personal endpoints read the
+				// session user (X-User-ID) and never accept a client-supplied
+				// user_id. /rates is the realtime USD→CNY rate (live fetch +
+				// default fallback).
+				r.Get("/personal/summary", h.GetPersonalUsageSummary)
+				r.Get("/personal/trend", h.GetPersonalUsageTrend)
+				r.Get("/personal/models", h.GetPersonalUsageModels)
+				r.Get("/personal/duration", h.GetPersonalUsageDuration)
+				r.Get("/personal/runtime-trend", h.GetPersonalRuntimeTrend)
+				r.Get("/personal/errors", h.GetPersonalUsageErrors)
+				r.Get("/personal/rank", h.GetPersonalUsageRank)
+				r.Get("/rates", h.GetDashboardRates)
 			})
 
 			// Runtimes
