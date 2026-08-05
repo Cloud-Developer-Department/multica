@@ -159,6 +159,42 @@ type AgentToLabel struct {
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 }
 
+// Artifact is an AI-produced deliverable attached to a workflow node. One row
+// per version (same node + type + increasing version); content-style artifacts
+// carry their text in Content, file-style artifacts reference an attachment
+// (Q2: file in the designated folder + DB record). status lifecycle:
+// draft -> submitted -> approved | rejected -> superseded (AC-AR2).
+type Artifact struct {
+	ID               pgtype.UUID        `json:"id"`
+	WorkspaceID      pgtype.UUID        `json:"workspace_id"`
+	WorkflowID       pgtype.UUID        `json:"workflow_id"`
+	NodeID           pgtype.UUID        `json:"node_id"`
+	IssueID          pgtype.UUID        `json:"issue_id"`
+	Type             string             `json:"type"`
+	Title            string             `json:"title"`
+	Content          pgtype.Text        `json:"content"`
+	ContentType      string             `json:"content_type"`
+	FileAttachmentID pgtype.UUID        `json:"file_attachment_id"`
+	Version          int32              `json:"version"`
+	Status           string             `json:"status"`
+	AuthorType       string             `json:"author_type"`
+	AuthorID         pgtype.UUID        `json:"author_id"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+}
+
+// ArtifactReview is an append-only review record (Q3: reviewer is the
+// source_issue creator or a workspace owner/admin override).
+type ArtifactReview struct {
+	ID           pgtype.UUID        `json:"id"`
+	ArtifactID   pgtype.UUID        `json:"artifact_id"`
+	ReviewerType string             `json:"reviewer_type"`
+	ReviewerID   pgtype.UUID        `json:"reviewer_id"`
+	Action       string             `json:"action"`
+	Comment      pgtype.Text        `json:"comment"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+}
+
 type Attachment struct {
 	ID            pgtype.UUID        `json:"id"`
 	WorkspaceID   pgtype.UUID        `json:"workspace_id"`
@@ -1121,6 +1157,59 @@ type VerificationCode struct {
 	Used      bool               `json:"used"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 	Attempts  int32              `json:"attempts"`
+}
+
+// Workflow is a workflow instance derived from a source_issue. Status reuses
+// the issue status set (Q1); definition is a JSONB template snapshot. Stage
+// progression is driven by the WorkflowService (FR1/AC-W).
+type Workflow struct {
+	ID            pgtype.UUID        `json:"id"`
+	WorkspaceID   pgtype.UUID        `json:"workspace_id"`
+	SourceIssueID pgtype.UUID        `json:"source_issue_id"`
+	Name          string             `json:"name"`
+	Description   pgtype.Text        `json:"description"`
+	Definition    []byte             `json:"definition"`
+	Status        string             `json:"status"`
+	CurrentStage  int32              `json:"current_stage"`
+	CreatedByType string             `json:"created_by_type"`
+	CreatedByID   pgtype.UUID        `json:"created_by_id"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
+}
+
+// WorkflowNode is a workflow node mapped 1:1 to a child issue (Q4). Node
+// status reuses the issue status set (Q1) and is written back from the mapped
+// issue via the UpdateIssue sync hook (see architecture 4.2).
+type WorkflowNode struct {
+	ID             pgtype.UUID        `json:"id"`
+	WorkflowID     pgtype.UUID        `json:"workflow_id"`
+	Seq            int32              `json:"seq"`
+	Stage          int32              `json:"stage"`
+	Type           string             `json:"type"`
+	Name           string             `json:"name"`
+	Description    pgtype.Text        `json:"description"`
+	Status         string             `json:"status"`
+	IssueID        pgtype.UUID        `json:"issue_id"`
+	AssigneeType   pgtype.Text        `json:"assignee_type"`
+	AssigneeID     pgtype.UUID        `json:"assignee_id"`
+	ReviewRequired bool               `json:"review_required"`
+	StartedAt      pgtype.Timestamptz `json:"started_at"`
+	CompletedAt    pgtype.Timestamptz `json:"completed_at"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+}
+
+// WorkflowTransitionLog is an append-only status-transition audit record.
+type WorkflowTransitionLog struct {
+	ID         pgtype.UUID        `json:"id"`
+	WorkflowID pgtype.UUID        `json:"workflow_id"`
+	NodeID     pgtype.UUID        `json:"node_id"`
+	FromStatus pgtype.Text        `json:"from_status"`
+	ToStatus   string             `json:"to_status"`
+	ActorType  string             `json:"actor_type"`
+	ActorID    pgtype.UUID        `json:"actor_id"`
+	Reason     pgtype.Text        `json:"reason"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
 }
 
 type WebhookDelivery struct {

@@ -2980,6 +2980,14 @@ func (h *Handler) UpdateIssue(w http.ResponseWriter, r *http.Request) {
 		h.notifyParentOfChildDone(r.Context(), prevIssue, issue)
 	}
 
+	// Workflow node status write-back (CLO-146 / architecture 4.2): when this
+	// issue is mapped to a workflow_node, mirror the new status onto the node,
+	// validate the transition, and write the audit log. Best-effort — a
+	// failure here never rolls back the issue update.
+	if statusChanged && h.WorkflowService != nil {
+		h.WorkflowService.SyncNodeFromIssue(r.Context(), issue, prevIssue.Status)
+	}
+
 	writeJSON(w, http.StatusOK, resp)
 }
 
@@ -3483,6 +3491,12 @@ func (h *Handler) BatchUpdateIssues(w http.ResponseWriter, r *http.Request) {
 		if statusChanged && issue.ParentIssueID.Valid &&
 			!isTerminalChildStatus(prevIssue.Status) && isTerminalChildStatus(issue.Status) {
 			childDoneCompleted = append(childDoneCompleted, issue)
+		}
+
+		// Workflow node status write-back (CLO-146), mirrored from UpdateIssue.
+		// Best-effort; never blocks the batch.
+		if statusChanged && h.WorkflowService != nil {
+			h.WorkflowService.SyncNodeFromIssue(r.Context(), issue, prevIssue.Status)
 		}
 
 		updated++

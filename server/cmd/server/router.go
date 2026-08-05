@@ -1449,6 +1449,51 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 				r.Patch("/", h.PatchNotificationPreferences)
 				r.Put("/", h.UpdateNotificationPreferences)
 			})
+
+			// Workflow state machine (CLO-146)
+			r.Route("/api/workflows", func(r chi.Router) {
+				r.Get("/", h.ListWorkflows)
+				r.Post("/", h.CreateWorkflow)
+				r.Route("/{id}", func(r chi.Router) {
+					r.Get("/", h.GetWorkflow)
+					r.Put("/", h.UpdateWorkflow)
+					// M-1 (security audit): stage advancement is a Leader/admin
+					// control (FR5.5) — restrict to human actors + role check in
+					// the handler, so arbitrary members cannot force advancement.
+					r.With(handler.RequireHumanActor).Post("/advance", h.AdvanceWorkflow)
+					r.Get("/nodes", h.ListWorkflowNodes)
+					r.Get("/transitions", h.ListWorkflowTransitions)
+					// H-2 (security audit): node status override can bypass the
+					// human review loop — human-only + role check + review guard
+					// in the handler/service.
+					r.With(handler.RequireHumanActor).Post("/nodes/{nodeId}/status", h.OverrideNodeStatus)
+				})
+			})
+
+			// Artifacts + review loop (CLO-146)
+			r.Route("/api/artifacts", func(r chi.Router) {
+				r.Get("/", h.ListArtifacts)
+				r.Post("/", h.CreateArtifact)
+				r.Get("/stats", h.GetArtifactStats)
+				r.Route("/{id}", func(r chi.Router) {
+					r.Get("/", h.GetArtifact)
+					r.Get("/versions", h.ListArtifactVersions)
+					r.Get("/diff", h.DiffArtifactVersions)
+					r.Get("/reviews", h.ListArtifactReviews)
+					// H-1 (security audit): the human review gate must not be
+					// reachable with a machine credential (mat_ task token /
+					// mcn_ cloud PAT), otherwise an agent could self-review and
+					// self-approve its own artifact. Reviews are human-only.
+					r.With(handler.RequireHumanActor).Post("/review", h.ReviewArtifact)
+				})
+			})
+
+			// Human review queue (FR4.1). V-04 (security audit): the queue
+			// exposes workflow/node/author metadata that machine credentials
+			// must not read — human-only.
+			r.Route("/api/reviews", func(r chi.Router) {
+				r.With(handler.RequireHumanActor).Get("/queue", h.ListReviewQueue)
+			})
 		})
 	})
 
