@@ -1288,6 +1288,13 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 				r.Get("/", h.ListAgentTemplates)
 				r.Get("/{slug}", h.GetAgentTemplate)
 			})
+			// Resource templates (CLO-245): portable agent/squad export,
+			// validation and apply. Backed by internal/resourcetmpl.
+			r.Route("/api/templates", func(r chi.Router) {
+				r.Post("/export", h.ExportResourceTemplate)
+				r.Post("/validate", h.ValidateResourceTemplate)
+				r.Post("/apply", h.ApplyResourceTemplate)
+			})
 			r.Route("/api/agent-builder/sessions", func(r chi.Router) {
 				r.Post("/", h.CreateAgentBuilderSession)
 				r.Patch("/{sessionId}/runtime", h.SwitchAgentBuilderRuntime)
