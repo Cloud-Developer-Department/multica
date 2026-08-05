@@ -8,6 +8,14 @@ export interface SquadMemberPreview {
   role: string;
 }
 
+// Lightweight child-squad summary embedded in a parent squad's payload
+// (LIU-8 squad nesting).
+export interface SquadChild {
+  id: string;
+  name: string;
+  member_count: number;
+}
+
 export interface Squad {
   id: string;
   workspace_id: string;
@@ -21,8 +29,15 @@ export interface Squad {
   updated_at: string;
   archived_at: string | null;
   archived_by: string | null;
+  // Parent squad id when this squad is nested under another squad (v1 nesting
+  // is one level deep); null for top-level squads.
+  parent_squad_id: string | null;
+  // Per-squad safety valve for the F3 member-mention upgrade: when true
+  // (default), @-ing an ordinary member of this squad wakes the squad leader.
+  upgrade_on_member_mention: boolean;
   member_count?: number;
   member_preview?: SquadMemberPreview[];
+  child_squads?: SquadChild[];
 }
 
 export interface SquadMember {
@@ -45,11 +60,26 @@ export interface SquadActivityLog {
   created_at: string;
 }
 
+export interface CreateSquadMember {
+  member_type: SquadMemberType;
+  member_id: string;
+  // Optional role, matching the detail page AddMemberDialog (F2, LIU-9).
+  role?: string;
+}
+
 export interface CreateSquadRequest {
   name: string;
   description?: string;
   leader_id: string;
   avatar_url?: string;
+  // Squads to nest under the new squad (v1 nesting: each must be unarchived
+  // and not already nested under another squad).
+  included_squad_ids?: string[];
+  // Members to add atomically with the create (F1, LIU-9): any invalid entry
+  // fails the whole create and the response carries failed_members.
+  members?: CreateSquadMember[];
+  // Optional member-mention upgrade switch (defaults true server-side).
+  upgrade_on_member_mention?: boolean;
 }
 
 export interface UpdateSquadRequest {
@@ -58,6 +88,7 @@ export interface UpdateSquadRequest {
   instructions?: string;
   leader_id?: string;
   avatar_url?: string;
+  upgrade_on_member_mention?: boolean;
 }
 
 export interface AddSquadMemberRequest {

@@ -13,7 +13,8 @@
     },
     "no_matches": "該当するスカッドはありません",
     "row_menu": "スカッドの操作",
-    "archive_action": "アーカイブ"
+    "archive_action": "アーカイブ",
+    "nested_in": "所属: {{name}}"
   },
   "inspector": {
     "details_section": "詳細",
@@ -95,5 +96,9 @@
     "filter_label": "フィルター",
     "filter_active_count_other": "{{count}} 件のフィルター",
     "clear_filters": "フィルターをクリア"
+  },
+  "child_squads": {
+    "section_title": "子スカッド",
+    "section_count_other": "このスカッドに{{count}}件統合されています"
   }
 }

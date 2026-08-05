@@ -610,32 +610,33 @@ type InboxItem struct {
 }
 
 type Issue struct {
-	ID                 pgtype.UUID        `json:"id"`
-	WorkspaceID        pgtype.UUID        `json:"workspace_id"`
-	Title              string             `json:"title"`
-	Description        pgtype.Text        `json:"description"`
-	Status             string             `json:"status"`
-	Priority           string             `json:"priority"`
-	AssigneeType       pgtype.Text        `json:"assignee_type"`
-	AssigneeID         pgtype.UUID        `json:"assignee_id"`
-	CreatorType        string             `json:"creator_type"`
-	CreatorID          pgtype.UUID        `json:"creator_id"`
-	ParentIssueID      pgtype.UUID        `json:"parent_issue_id"`
-	AcceptanceCriteria []byte             `json:"acceptance_criteria"`
-	ContextRefs        []byte             `json:"context_refs"`
-	Position           float64            `json:"position"`
-	DueDate            pgtype.Date        `json:"due_date"`
-	CreatedAt          pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
-	Number             int32              `json:"number"`
-	ProjectID          pgtype.UUID        `json:"project_id"`
-	OriginType         pgtype.Text        `json:"origin_type"`
-	OriginID           pgtype.UUID        `json:"origin_id"`
-	FirstExecutedAt    pgtype.Timestamptz `json:"first_executed_at"`
-	StartDate          pgtype.Date        `json:"start_date"`
-	Metadata           []byte             `json:"metadata"`
-	Stage              pgtype.Int4        `json:"stage"`
-	Properties         []byte             `json:"properties"`
+	ID                  pgtype.UUID        `json:"id"`
+	WorkspaceID         pgtype.UUID        `json:"workspace_id"`
+	Title               string             `json:"title"`
+	Description         pgtype.Text        `json:"description"`
+	Status              string             `json:"status"`
+	Priority            string             `json:"priority"`
+	AssigneeType        pgtype.Text        `json:"assignee_type"`
+	AssigneeID          pgtype.UUID        `json:"assignee_id"`
+	CreatorType         string             `json:"creator_type"`
+	CreatorID           pgtype.UUID        `json:"creator_id"`
+	ParentIssueID       pgtype.UUID        `json:"parent_issue_id"`
+	AcceptanceCriteria  []byte             `json:"acceptance_criteria"`
+	ContextRefs         []byte             `json:"context_refs"`
+	Position            float64            `json:"position"`
+	DueDate             pgtype.Date        `json:"due_date"`
+	CreatedAt           pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
+	Number              int32              `json:"number"`
+	ProjectID           pgtype.UUID        `json:"project_id"`
+	OriginType          pgtype.Text        `json:"origin_type"`
+	OriginID            pgtype.UUID        `json:"origin_id"`
+	FirstExecutedAt     pgtype.Timestamptz `json:"first_executed_at"`
+	StartDate           pgtype.Date        `json:"start_date"`
+	Metadata            []byte             `json:"metadata"`
+	Stage               pgtype.Int4        `json:"stage"`
+	Properties          []byte             `json:"properties"`
+	DelegationCommentID pgtype.UUID        `json:"delegation_comment_id"`
 }
 
 type IssueDependency struct {
@@ -924,18 +925,20 @@ type SkillToLabel struct {
 }
 
 type Squad struct {
-	ID           pgtype.UUID        `json:"id"`
-	WorkspaceID  pgtype.UUID        `json:"workspace_id"`
-	Name         string             `json:"name"`
-	Description  string             `json:"description"`
-	LeaderID     pgtype.UUID        `json:"leader_id"`
-	CreatorID    pgtype.UUID        `json:"creator_id"`
-	CreatedAt    pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
-	ArchivedAt   pgtype.Timestamptz `json:"archived_at"`
-	ArchivedBy   pgtype.UUID        `json:"archived_by"`
-	AvatarUrl    pgtype.Text        `json:"avatar_url"`
-	Instructions string             `json:"instructions"`
+	ID                     pgtype.UUID        `json:"id"`
+	WorkspaceID            pgtype.UUID        `json:"workspace_id"`
+	Name                   string             `json:"name"`
+	Description            string             `json:"description"`
+	LeaderID               pgtype.UUID        `json:"leader_id"`
+	CreatorID              pgtype.UUID        `json:"creator_id"`
+	CreatedAt              pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt              pgtype.Timestamptz `json:"updated_at"`
+	ArchivedAt             pgtype.Timestamptz `json:"archived_at"`
+	ArchivedBy             pgtype.UUID        `json:"archived_by"`
+	AvatarUrl              pgtype.Text        `json:"avatar_url"`
+	Instructions           string             `json:"instructions"`
+	ParentSquadID          pgtype.UUID        `json:"parent_squad_id"`
+	UpgradeOnMemberMention bool               `json:"upgrade_on_member_mention"`
 }
 
 type SquadMember struct {

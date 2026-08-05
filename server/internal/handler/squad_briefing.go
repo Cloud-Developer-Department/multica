@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"strconv"
 	"strings"
 
 	"github.com/jackc/pgx/v5/pgtype"
@@ -176,8 +177,11 @@ func buildSquadLeaderBriefing(ctx context.Context, q *db.Queries, squad db.Squad
 	return sb.String()
 }
 
-// buildSquadRoster renders the "## Squad Roster" section: a leader self-row
-// plus one row per non-archived member, with literal mention markdown.
+// buildSquadRoster renders the "## Squad Roster" section: a leader self-row,
+// one row per non-archived member, plus one row per non-archived member of
+// the squad's child squads (LIU-8 squad nesting), with literal mention
+// markdown. Members appearing in both the direct roster and a child squad are
+// listed once, under their direct membership.
 func buildSquadRoster(ctx context.Context, q *db.Queries, squad db.Squad) string {
 	var sb strings.Builder
 	sb.WriteString("## Squad Roster\n\n")
@@ -202,12 +206,14 @@ func buildSquadRoster(ctx context.Context, q *db.Queries, squad db.Squad) string
 	skillNamesByAgentID, skillsLoaded := loadSquadMemberSkillNames(ctx, q, members, util.UUIDToString(squad.LeaderID))
 
 	rows := make([]string, 0, len(members))
+	directKeys := make(map[string]struct{}, len(members))
 	for _, m := range members {
 		// Skip the leader if they happen to also be in the member list —
 		// they're already shown above and we don't want self-delegation.
 		if m.MemberType == "agent" && util.UUIDToString(m.MemberID) == util.UUIDToString(squad.LeaderID) {
 			continue
 		}
+		directKeys[memberKey(m)] = struct{}{}
 		row := renderMemberRow(ctx, q, m, skillNamesByAgentID, skillsLoaded)
 		if row != "" {
 			rows = append(rows, row)
@@ -216,13 +222,152 @@ func buildSquadRoster(ctx context.Context, q *db.Queries, squad db.Squad) string
 
 	if len(rows) == 0 {
 		sb.WriteString("\nMembers: (none — you are the only member of this squad)\n")
+	} else {
+		sb.WriteString("\nMembers:\n")
+		for _, r := range rows {
+			sb.WriteString(r)
+		}
+	}
+
+	// Child squads (LIU-8 squad nesting): members of every non-archived child
+	// squad are listed too, annotated with their origin squad, so the leader
+	// can coordinate the whole tree. Members already listed directly are
+	// skipped to avoid duplicates across levels.
+	if childBlock := buildSquadChildRoster(ctx, q, squad, directKeys); childBlock != "" {
+		sb.WriteString("\n")
+		sb.WriteString(childBlock)
+	}
+	return sb.String()
+}
+
+// memberKey is the dedup key for a squad member (member_type + member_id).
+func memberKey(m db.SquadMember) string {
+	return m.MemberType + ":" + util.UUIDToString(m.MemberID)
+}
+
+// buildSquadChildRoster renders the "## Child Squads" roster section listing
+// every non-archived child squad as a direct @squad delegation target, plus
+// every non-archived member of those child squads (v1 nesting is one level,
+// so children have no children of their own). Each member row is annotated
+// with its origin squad name and carries a literal mention so the parent
+// leader can delegate to any descendant. Members in `skip` (already listed as
+// direct members) are omitted. Returns "" when there is nothing to list.
+func buildSquadChildRoster(ctx context.Context, q *db.Queries, squad db.Squad, skip map[string]struct{}) string {
+	children, err := q.ListChildSquadSummaries(ctx, squad.ID)
+	if err != nil || len(children) == 0 {
+		return ""
+	}
+
+	var sb strings.Builder
+	sb.WriteString("## Child Squads (merged roster)\n")
+	sb.WriteString("Squads nested under this squad. Mention a squad to delegate to its leader; you can also mention the members below directly.\n\n")
+
+	// Each non-archived child squad as an @squad mention target (SR1): the
+	// parent leader can hand work to a whole sub-squad with one mention, and
+	// @squad routing delivers it as a squad-level task to the sub-leader.
+	sb.WriteString("Squads:\n")
+	for _, c := range children {
+		sb.WriteString(formatChildSquadRow(c.Name, int(c.MemberCount), formatMention(c.Name, "squad", util.UUIDToString(c.ID))))
+	}
+
+	rows, err := q.ListChildSquadMembers(ctx, squad.ID)
+	if err != nil || len(rows) == 0 {
 		return sb.String()
 	}
 
-	sb.WriteString("\nMembers:\n")
+	childMembers := make([]db.SquadMember, 0, len(rows))
+	childNameByKey := make(map[string]string, len(rows))
 	for _, r := range rows {
-		sb.WriteString(r)
+		key := r.MemberType + ":" + util.UUIDToString(r.MemberID)
+		if _, dup := childNameByKey[key]; dup {
+			continue // same member in two child squads — keep the first
+		}
+		childNameByKey[key] = r.ChildSquadName
+		childMembers = append(childMembers, db.SquadMember{
+			ID:         r.ID,
+			SquadID:    r.SquadID,
+			MemberType: r.MemberType,
+			MemberID:   r.MemberID,
+			Role:       r.Role,
+			CreatedAt:  r.CreatedAt,
+		})
 	}
+
+	skillNamesByAgentID, skillsLoaded := loadSquadMemberSkillNames(ctx, q, childMembers, util.UUIDToString(squad.LeaderID))
+
+	sb.WriteString("\nMembers:\n")
+	rendered := 0
+	for _, m := range childMembers {
+		if _, ok := skip[memberKey(m)]; ok {
+			continue // already listed as a direct member
+		}
+		row := renderChildMemberRow(ctx, q, m, childNameByKey[memberKey(m)], skillNamesByAgentID, skillsLoaded)
+		if row == "" {
+			continue
+		}
+		sb.WriteString(row)
+		rendered++
+	}
+	return sb.String()
+}
+
+// formatChildSquadRow renders one child-squad delegation row: name — member
+// count — literal @squad mention.
+func formatChildSquadRow(name string, memberCount int, mention string) string {
+	return "- " + name + " — " + strconv.Itoa(memberCount) + " members — `" + mention + "`\n"
+}
+
+// renderChildMemberRow renders one child-squad member roster row, annotated
+// with the child squad's name. Returns "" when the member can't be resolved
+// or should be skipped (e.g. archived agent).
+func renderChildMemberRow(ctx context.Context, q *db.Queries, m db.SquadMember, childSquadName string, skillNamesByAgentID map[string][]string, skillsLoaded bool) string {
+	id := util.UUIDToString(m.MemberID)
+	role := strings.TrimSpace(m.Role)
+	switch m.MemberType {
+	case "agent":
+		ag, err := q.GetAgent(ctx, m.MemberID)
+		if err != nil {
+			return ""
+		}
+		if ag.ArchivedAt.Valid {
+			return ""
+		}
+		skills := agentSkillsRosterSegment(skillNamesByAgentID, skillsLoaded, id)
+		return formatChildRosterRow(ag.Name, childSquadName, "agent", role, skills, formatMention(ag.Name, "agent", id))
+	case "member":
+		user, err := q.GetUser(ctx, m.MemberID)
+		if err != nil {
+			return ""
+		}
+		userID := util.UUIDToString(m.MemberID)
+		return formatChildRosterRow(user.Name, childSquadName, "member (human)", role, "", formatMention(user.Name, "member", userID))
+	default:
+		return ""
+	}
+}
+
+// formatChildRosterRow renders a child-squad roster row: name (child squad
+// name), kind, role and skills like the direct rows, plus the literal mention.
+func formatChildRosterRow(name, childSquadName, kind, role, skills, mention string) string {
+	var sb strings.Builder
+	sb.WriteString("- ")
+	sb.WriteString(name)
+	sb.WriteString(" (")
+	sb.WriteString(childSquadName)
+	sb.WriteString(") — ")
+	sb.WriteString(kind)
+	if role != "" {
+		sb.WriteString(`, role: "`)
+		sb.WriteString(role)
+		sb.WriteString(`"`)
+	}
+	if skills != "" {
+		sb.WriteString(" — ")
+		sb.WriteString(skills)
+	}
+	sb.WriteString(" — `")
+	sb.WriteString(mention)
+	sb.WriteString("`\n")
 	return sb.String()
 }
 

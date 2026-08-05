@@ -39,6 +39,7 @@ a pointer.
 | Everything not `agent` after the squad branch is skipped: `if m.Type != "agent" { continue }` | `server/internal/handler/comment.go:1437-1439` |
 | `agent` branch: load agent in workspace, then add the agent trigger | `server/internal/handler/comment.go:1440-1464` |
 | `agent` → shared enqueue helper calls `EnqueueTaskForMention` (a run for that agent) | `server/internal/handler/comment.go:1148-1154` |
+| **SR3 unique-leader upgrade:** an `@agent` mention whose agent is the unique leader of exactly one non-archived squad is added with `Source=mention_squad_leader` + the squad mounted (→ `EnqueueTaskForSquadLeader`, briefing injected); multi-squad leaders and same-comment same-squad member mentions stay personal (`uniqueLedSquadForMention`) | `server/internal/handler/comment.go` resolveMentionedAgentCommentTriggers / uniqueLedSquadForMention |
 | **`member` and `issue` mentions reach neither branch — they enqueue NOTHING.** A `member` mention fails the `!= "agent"` skip at lines 1437-1439 (the squad branch above it only matches `squad`); an `issue` mention does the same. | `server/internal/handler/comment.go:1397,1437-1439` |
 
 ## Preview and suppression

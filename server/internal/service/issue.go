@@ -77,6 +77,12 @@ type IssueCreateParams struct {
 	// Stage groups this issue into an ordered barrier group under its parent
 	// (NULL = unstaged). See issue_child_done.go for the staged-barrier wake.
 	Stage pgtype.Int4
+	// DelegationCommentID records the comment that created this issue via the
+	// /delegate command (LIU-13). NULL for every non-delegated issue. It carries
+	// delegation provenance AND the edit-idempotency key (delegation_comment_id,
+	// assignee_id) so a /delegate comment's description-only edit never
+	// re-creates an existing active child. See handler.CreateDelegatedChildIssue.
+	DelegationCommentID pgtype.UUID
 }
 
 // IssueCreateOpts groups optional knobs for IssueService.Create. Most
@@ -256,43 +262,45 @@ func (s *IssueService) Create(ctx context.Context, p IssueCreateParams, opts Iss
 	var issue db.Issue
 	if p.OriginType.Valid {
 		issue, err = qtx.CreateIssueWithOrigin(ctx, db.CreateIssueWithOriginParams{
-			WorkspaceID:   p.WorkspaceID,
-			Title:         p.Title,
-			Description:   p.Description,
-			Status:        p.Status,
-			Priority:      p.Priority,
-			AssigneeType:  p.AssigneeType,
-			AssigneeID:    p.AssigneeID,
-			CreatorType:   p.CreatorType,
-			CreatorID:     p.CreatorID,
-			ParentIssueID: p.ParentIssueID,
-			Position:      newPosition,
-			StartDate:     p.StartDate,
-			DueDate:       p.DueDate,
-			Number:        issueNumber,
-			ProjectID:     projectID,
-			OriginType:    p.OriginType,
-			OriginID:      p.OriginID,
-			Stage:         p.Stage,
+			WorkspaceID:         p.WorkspaceID,
+			Title:               p.Title,
+			Description:         p.Description,
+			Status:              p.Status,
+			Priority:            p.Priority,
+			AssigneeType:        p.AssigneeType,
+			AssigneeID:          p.AssigneeID,
+			CreatorType:         p.CreatorType,
+			CreatorID:           p.CreatorID,
+			ParentIssueID:       p.ParentIssueID,
+			Position:            newPosition,
+			StartDate:           p.StartDate,
+			DueDate:             p.DueDate,
+			Number:              issueNumber,
+			ProjectID:           projectID,
+			OriginType:          p.OriginType,
+			OriginID:            p.OriginID,
+			Stage:               p.Stage,
+			DelegationCommentID: p.DelegationCommentID,
 		})
 	} else {
 		issue, err = qtx.CreateIssue(ctx, db.CreateIssueParams{
-			WorkspaceID:   p.WorkspaceID,
-			Title:         p.Title,
-			Description:   p.Description,
-			Status:        p.Status,
-			Priority:      p.Priority,
-			AssigneeType:  p.AssigneeType,
-			AssigneeID:    p.AssigneeID,
-			CreatorType:   p.CreatorType,
-			CreatorID:     p.CreatorID,
-			ParentIssueID: p.ParentIssueID,
-			Position:      newPosition,
-			StartDate:     p.StartDate,
-			DueDate:       p.DueDate,
-			Number:        issueNumber,
-			ProjectID:     projectID,
-			Stage:         p.Stage,
+			WorkspaceID:         p.WorkspaceID,
+			Title:               p.Title,
+			Description:         p.Description,
+			Status:              p.Status,
+			Priority:            p.Priority,
+			AssigneeType:        p.AssigneeType,
+			AssigneeID:          p.AssigneeID,
+			CreatorType:         p.CreatorType,
+			CreatorID:           p.CreatorID,
+			ParentIssueID:       p.ParentIssueID,
+			Position:            newPosition,
+			StartDate:           p.StartDate,
+			DueDate:             p.DueDate,
+			Number:              issueNumber,
+			ProjectID:           projectID,
+			Stage:               p.Stage,
+			DelegationCommentID: p.DelegationCommentID,
 		})
 	}
 	if err != nil {
@@ -570,4 +578,76 @@ func (s *IssueService) enqueueSquadLeaderTask(ctx context.Context, issue db.Issu
 			"leader_id", util.UUIDToString(squad.LeaderID),
 			"error", err)
 	}
+}
+
+// DelegatedChildIssueParams carries the delegation-specific inputs for
+// CreateDelegatedChildIssue. The method fills every fixed delegation semantic
+// itself (AllowDuplicate=true, stage=NULL, origin_type='agent_create'), so a
+// caller cannot forget one of them (LIU-13 §7.2 / O4 / O2).
+type DelegatedChildIssueParams struct {
+	// Parent is the main issue the leader delegates from; it becomes the new
+	// issue's parent_issue_id and supplies the inherited project_id.
+	Parent db.Issue
+	// Squad is the delegated sub-squad; it becomes the child's assignee.
+	Squad db.Squad
+	// Title and Description follow the /delegate syntax rules (§7.2): the
+	// description embeds the full command text plus the main-issue / comment
+	// backlinks, built by the handler.
+	Title       string
+	Description string
+	// Status is "todo" when the leader is ready (the create auto-enqueues the
+	// leader on the child) or "backlog" when the leader is offline (parked
+	// until a backlog→todo promotion retries the dispatch, O3.2 / AC-5.3).
+	Status string
+	// CreatorType / CreatorID identify the authoring principal (the main-issue
+	// leader agent). OriginID is the /delegate comment's source_task_id, which
+	// MUL-4305 uses to inherit the top-of-chain human originator; it may be
+	// zero when the trigger comment carried no task (E11: unattributed child).
+	CreatorType string
+	CreatorID   pgtype.UUID
+	OriginID    pgtype.UUID
+	// DelegationCommentID is the /delegate comment's id — the provenance and
+	// edit-idempotency key (delegation_comment_id, assignee_id), O5 / AC-6.
+	DelegationCommentID pgtype.UUID
+}
+
+// CreateDelegatedChildIssue creates the child issue a /delegate comment asks
+// for (LIU-13 F3). It is a thin wrapper over Create that pins the delegation
+// contract:
+//
+//   - parent = the main issue; assignee = the delegated squad;
+//   - AllowDuplicate is always true — several /delegate comments (or one
+//     comment with several squads) legitimately share parent + title, and the
+//     duplicate guard must not reject them (O4);
+//   - origin_type='agent_create' + origin_id=<trigger comment source_task_id>
+//     so the existing MUL-4305 originator inheritance applies (O2 — no new
+//     origin type);
+//   - stage is NULL — delegation children are never stage-grouped in v1, so
+//     completion report-back follows the implicit single-stage barrier
+//     semantics (O1 / AC-4.4);
+//   - status todo/backlog drives whether the leader is auto-enqueued by
+//     Create's maybeEnqueueOnAssign (F4: the dispatch happens on the CHILD,
+//     never on the main issue).
+//
+// The caller must have run the private-leader gate (canEnqueueSquadLeader)
+// BEFORE calling — this service path itself does not re-check it (it matches
+// the existing assign path, O3).
+func (s *IssueService) CreateDelegatedChildIssue(ctx context.Context, p DelegatedChildIssueParams) (IssueCreateResult, error) {
+	return s.Create(ctx, IssueCreateParams{
+		WorkspaceID:         p.Parent.WorkspaceID,
+		Title:               p.Title,
+		Description:         pgtype.Text{String: p.Description, Valid: true},
+		Status:              p.Status,
+		Priority:            p.Parent.Priority,
+		AssigneeType:        pgtype.Text{String: "squad", Valid: true},
+		AssigneeID:          p.Squad.ID,
+		CreatorType:         p.CreatorType,
+		CreatorID:           p.CreatorID,
+		ParentIssueID:       p.Parent.ID,
+		ProjectID:           p.Parent.ProjectID,
+		OriginType:          pgtype.Text{String: "agent_create", Valid: true},
+		OriginID:            p.OriginID,
+		AllowDuplicate:      true,
+		DelegationCommentID: p.DelegationCommentID,
+	}, IssueCreateOpts{})
 }

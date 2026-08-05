@@ -10,7 +10,7 @@ import { resolvePublicFileUrl } from "@multica/core/workspace/avatar-url";
 import { isImeComposing } from "@multica/core/utils";
 import { getShortcut, shortcutMatchesEvent } from "@multica/core/shortcuts";
 import { useTimeAgo } from "../../i18n";
-import { agentListOptions, memberListOptions, squadMemberStatusOptions, workspaceKeys } from "@multica/core/workspace/queries";
+import { agentListOptions, memberListOptions, squadListOptions, squadMemberStatusOptions, workspaceKeys } from "@multica/core/workspace/queries";
 import { useNavigation } from "../../navigation";
 import { AppLink } from "../../navigation";
 import { BreadcrumbHeader } from "../../layout/breadcrumb-header";
@@ -59,7 +59,7 @@ import {
 } from "../../issues/components/pickers/property-picker";
 import { ChevronDown, UserPlus } from "lucide-react";
 import { toast } from "sonner";
-import type { Squad, SquadMember, SquadMemberStatus, SquadMemberStatusValue, Agent, MemberWithUser } from "@multica/core/types";
+import type { Squad, SquadChild, SquadMember, SquadMemberStatus, SquadMemberStatusValue, Agent, MemberWithUser } from "@multica/core/types";
 import { useT } from "../../i18n";
 import { matchesPinyin } from "../../editor/extensions/pinyin-match";
 
@@ -100,6 +100,9 @@ export function SquadDetailPage() {
 
   const { data: agents = [] } = useQuery(agentListOptions(wsId));
   const { data: wsMembers = [] } = useQuery(memberListOptions(wsId));
+  // Squads list — used to resolve the parent squad's display name for the
+  // "Belongs to" inspector entry (LIU-8 squad nesting).
+  const { data: squads = [] } = useQuery(squadListOptions(wsId));
 
   const currentUser = useAuthStore((s) => s.user);
   const myRole = useMemo(() => {
@@ -114,6 +117,12 @@ export function SquadDetailPage() {
   // instead of controls that 403 (MUL-4223).
   const canManage =
     isWorkspaceAdmin || (!!currentUser && squad?.creator_id === currentUser.id);
+  // Parent squad name (resolved from the workspace squad list; the detail
+  // payload only carries the parent id).
+  const parentSquadName = useMemo(() => {
+    if (!squad?.parent_squad_id) return undefined;
+    return squads.find((s) => s.id === squad.parent_squad_id)?.name;
+  }, [squads, squad?.parent_squad_id]);
 
   const [showAddMember, setShowAddMember] = useState(false);
   const [confirmArchive, setConfirmArchive] = useState(false);
@@ -228,6 +237,7 @@ export function SquadDetailPage() {
           memberCount={members.length}
           leaderName={getEntityName("agent", squad.leader_id)}
           creatorName={getEntityName("member", squad.creator_id)}
+          parentSquadName={parentSquadName}
           canManage={canManage}
           onUploadAvatar={(url) => updateSquadMut.mutateAsync({ avatar_url: url })}
           onRename={async (next) => { await updateSquadMut.mutateAsync({ name: next.trim() }); }}
@@ -713,6 +723,7 @@ function SquadDetailInspector({
   memberCount,
   leaderName,
   creatorName,
+  parentSquadName,
   canManage,
   onUploadAvatar,
   onRename,
@@ -722,6 +733,8 @@ function SquadDetailInspector({
   memberCount: number;
   leaderName: string;
   creatorName: string;
+  // Parent squad display name; undefined when the squad is top-level.
+  parentSquadName?: string;
   // When false the identity block renders as static text (no avatar upload,
   // no rename/description popovers) — the viewer can read the squad but not
   // edit it. Mirrors the agent inspector's `canEdit` read-only treatment.
@@ -732,6 +745,7 @@ function SquadDetailInspector({
 }) {
   const { t } = useT("squads");
   const timeAgo = useTimeAgo();
+  const p = useWorkspacePaths();
   const initials = squad.name
     .split(" ")
     .map((w) => w[0])
@@ -785,6 +799,17 @@ function SquadDetailInspector({
           {t(($) => $.inspector.details_section)}
         </div>
         <div className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5">
+          {squad.parent_squad_id && (
+            <InspectorRow label="Belongs to">
+              <AppLink
+                href={p.squadDetail(squad.parent_squad_id)}
+                className="inline-flex min-w-0 items-center gap-1.5 hover:text-foreground transition-colors"
+              >
+                <Users className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                <span className="truncate">{parentSquadName ?? squad.parent_squad_id.slice(0, 8)}</span>
+              </AppLink>
+            </InspectorRow>
+          )}
           <InspectorRow label="Leader">
             <span className="flex min-w-0 items-center gap-1.5">
               <ActorAvatar actorType="agent" actorId={squad.leader_id} size="xs" />
@@ -996,6 +1021,9 @@ function SquadOverviewPane({
 
   return (
     <div className="flex min-h-[60vh] flex-col overflow-hidden rounded-lg border bg-background md:h-full md:min-h-0">
+      {(squad.child_squads?.length ?? 0) > 0 && (
+        <ChildSquadsSection squads={squad.child_squads ?? []} />
+      )}
       <div className="flex shrink-0 items-center gap-0 overflow-x-auto border-b px-2 md:px-4">
         {squadDetailTabs.map((tab) => (
           <button
@@ -1063,6 +1091,39 @@ function SquadOverviewPane({
           </AlertDialogContent>
         </AlertDialog>
       )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// ChildSquadsSection — strip above the tabs on a parent squad's detail page
+// listing the squads merged under it (LIU-8 squad nesting). Each card links
+// to the child squad's detail page.
+// ---------------------------------------------------------------------------
+function ChildSquadsSection({ squads }: { squads: SquadChild[] }) {
+  const { t } = useT("squads");
+  const p = useWorkspacePaths();
+  return (
+    <div className="border-b px-4 py-3 md:px-6">
+      <h3 className="text-sm font-medium">{t(($) => $.child_squads.section_title)}</h3>
+      <p className="mt-0.5 text-xs text-muted-foreground">
+        {t(($) => $.child_squads.section_count, { count: squads.length })}
+      </p>
+      <div className="mt-2 flex flex-wrap gap-2">
+        {squads.map((s) => (
+          <AppLink
+            key={s.id}
+            href={p.squadDetail(s.id)}
+            className="inline-flex items-center gap-2 rounded-lg border bg-background px-3 py-2 text-sm transition-colors hover:bg-accent"
+          >
+            <Users className="h-4 w-4 shrink-0 text-muted-foreground" />
+            <span className="max-w-[200px] truncate font-medium">{s.name}</span>
+            <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+              {s.member_count}
+            </span>
+          </AppLink>
+        ))}
+      </div>
     </div>
   );
 }

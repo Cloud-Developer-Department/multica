@@ -14,6 +14,8 @@ Source:
 server/migrations/084_squad.up.sql                # base table: name, description, leader_id, creator_id
 server/migrations/085_squad_archive.up.sql        # archived_at, archived_by columns
 server/migrations/088_squad_instructions.up.sql   # instructions column
+server/migrations/232_squad_hierarchy.up.sql      # parent_squad_id column (squad nesting, no FK)
+server/migrations/233_squad_parent_index.up.sql   # concurrent partial index on parent_squad_id
 server/pkg/db/queries/squad.sql
 packages/core/types/squad.ts
 ```
@@ -21,7 +23,8 @@ packages/core/types/squad.ts
 Key facts:
 
 - `squad` stores `name`, `description`, `leader_id`, `creator_id` (084), archive
-  metadata `archived_at`/`archived_by` (085), and `instructions` (088).
+  metadata `archived_at`/`archived_by` (085), `instructions` (088), and the
+  optional `parent_squad_id` (232, no FK per repo rule — validated in-app).
 - `squad_member` stores `member_type`, `member_id`, and `role`.
 - `member_type` is constrained to `agent` or `member`.
 - issue `assignee_type` supports `squad`.
@@ -50,6 +53,9 @@ multica squad member remove <squad-id>
 multica squad member set-role <squad-id>
 ```
 
+`multica squad create` accepts repeatable `--include-squad <squad-id>` to nest
+existing squads under the new one (cmd_squad.go runSquadCreate).
+
 Use `--help` for exact flags before writes.
 
 ## Create / Update
@@ -75,6 +81,48 @@ Contracts:
   validation (issue.go:2625-2627), and autopilot admission (autopilot.go:885-891);
 - leader is auto-added as member with role `leader` (squad.go:258-263);
 - updating `leader_id` auto-adds new leader as member if missing (squad.go:340-347).
+- create accepts `included_squad_ids`: validated in-app (must exist in the same
+  workspace, unarchived, not already nested) then the parent squad + leader
+  member + child links are created in one transaction
+  (squad.go CreateSquad / validateIncludedSquads); the create response carries
+  `child_squads`.
+- GET / list responses include `parent_squad_id` and `child_squads` summaries
+  (squad.go loadChildSquadSummaries / loadChildSquadSummariesByWorkspace).
+- archiving a parent squad clears its children's `parent_squad_id` in the same
+  transaction — children become independent and are NOT archived
+  (squad.go DeleteSquad + ClearChildSquadParents).
+
+## Squad Nesting
+
+Source:
+
+```text
+server/migrations/232_squad_hierarchy.up.sql       # parent_squad_id column
+server/migrations/233_squad_parent_index.up.sql    # concurrent partial index
+server/internal/handler/squad.go                   # CreateSquad / validateIncludedSquads / loadChildSquadSummaries / DeleteSquad
+server/internal/handler/squad_briefing.go          # buildSquadChildRoster / renderChildMemberRow / formatChildSquadRow
+server/internal/handler/comment.go                 # uniqueLedSquadForMention (SR3 auto-upgrade)
+server/cmd/multica/cmd_squad.go                    # --include-squad flag
+server/pkg/db/queries/squad.sql                    # SetSquadParent / ClearSquadParent / ClearChildSquadParents / ListSquadsByIdsInWorkspace / ListChildSquadSummaries(+ByWorkspace) / ListChildSquadMembers / ListSquadsLedByAgent
+```
+
+Contracts:
+
+- v1 is one level deep: an included squad must not already have a parent;
+  each squad has at most one `parent_squad_id` (enforced in-app, no FK);
+- every included squad id must resolve to an unarchived squad in the same
+  workspace, else the whole create fails with a 400;
+- `parent_squad_id` / `child_squads` are present in create, get and list
+  responses;
+- archiving a parent detaches children; archiving a child hides it from the
+  parent's `child_squads` and roster;
+- the leader briefing expands child-squad members with origin-squad annotation
+  and dedup against the direct roster, and lists each child squad as a direct
+  `@squad` delegation target with member count (SR1, formatChildSquadRow);
+- SR3: `@agent` on the unique leader of one non-archived squad upgrades to a
+  squad-level leader task (uniqueLedSquadForMention in comment.go); suppressed
+  for multi-squad leaders and when another same-squad member is @'d in the
+  same comment (personal-task escape hatch).
 
 ## Leader Briefing
 
@@ -101,6 +149,14 @@ Contracts:
   someone else (MUL-3724);
 - `instructions` section appears only when non-empty (squad_briefing.go:110-112);
 - archived agent members are skipped from roster (squad_briefing.go:178-179);
+- squads with child squads get a `## Child Squads (merged roster)` section:
+  each non-archived child squad listed first as an `@squad` delegation target
+  with member count (SR1), then members of every non-archived child squad,
+  annotated with the origin squad name, deduped against the direct roster,
+  archived child members skipped
+  (squad_briefing.go buildSquadChildRoster / formatChildSquadRow /
+  renderChildMemberRow, squad.sql.go ListChildSquadSummaries /
+  ListChildSquadMembers);
 - agent member roster rows list assigned workspace skills via
   `loadSquadMemberSkillNames` (ListAgentSkillNamesByAgentIDs) and
   `agentSkillsRosterSegment` — "skills: a, b" or
@@ -157,6 +213,11 @@ Contracts:
   endpoint;
 - explicit `mention://squad/<id>` resolves squad and adds the leader trigger
   (comment.go:1352-1391);
+- SR3 (LIU-8 follow-up): an explicit `mention://agent/<id>` whose agent is the
+  unique leader of exactly one non-archived squad in the workspace is upgraded
+  to the same squad-leader trigger (`uniqueLedSquadForMention` in comment.go);
+  multi-squad leaders and same-comment same-squad member mentions stay
+  personal (personal-task escape hatch);
 - squad mention does not fan out to members — enqueue targets `squad.LeaderID`
   only (comment.go:1104-1112, and squad.go:1007 on the assign/backlog paths);
 - leader task uses `is_leader_task=true` (via `EnqueueTaskForSquadLeader`);
@@ -262,6 +323,7 @@ server/internal/handler/squad_briefing_test.go
 server/internal/handler/squad_private_leader_test.go
 server/internal/handler/autopilot_private_leader_test.go
 server/internal/handler/squad_no_action_test.go
+server/internal/handler/squad_nesting_test.go            # nesting create/list/archive/roster
 ```
 
 Verification command:

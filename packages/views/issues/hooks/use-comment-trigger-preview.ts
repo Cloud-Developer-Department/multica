@@ -15,6 +15,9 @@ export interface UseCommentTriggerPreviewResult {
   // Explicit @agent / @squad mentions that will NOT trigger if posted as-is
   // (MUL-4525 §2), so the composer can warn before sending.
   blocked: CommentTriggerOutcome[];
+  // /delegate (LIU-13 §7.3): the squads this comment would create child
+  // issues for.
+  delegations: CommentTriggerOutcome[];
 }
 
 export function isNoteCommentDraft(content: string): boolean {
@@ -114,11 +117,12 @@ export function useCommentTriggerPreview({
   // Loading and errors intentionally surface as "no agents": the preview is
   // an enhancement, and the composer renders nothing for an empty list.
   if (signature === "empty" || debouncedSignature === "empty") {
-    return { agents: [], blocked: [] };
+    return { agents: [], blocked: [], delegations: [] };
   }
 
   return {
     agents: previewQuery.data?.agents ?? [],
     blocked: previewQuery.data?.blocked ?? [],
+    delegations: previewQuery.data?.delegations ?? [],
   };
 }

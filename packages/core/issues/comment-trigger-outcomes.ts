@@ -81,3 +81,12 @@ const HANDLED_TRIGGER_STATUSES = new Set(["queued", "coalesced", "deferred"]);
 export function unhandledCommentTriggerOutcomes(raw: unknown): CommentTriggerOutcome[] {
   return parseCommentTriggerOutcomes(raw).filter((o) => !HANDLED_TRIGGER_STATUSES.has(o.status));
 }
+
+// The /delegate (LIU-13) outcomes that carry a created child issue reference —
+// a successful delegation. Used to surface the child issue link after posting
+// (AC-3.3). Queued delegation outcomes without a subissue ref (an idempotent
+// edit recompute that could not resolve the prefix) are still handled, so they
+// are NOT surfaced as unhandled.
+export function delegationSubissueOutcomes(raw: unknown): CommentTriggerOutcome[] {
+  return parseCommentTriggerOutcomes(raw).filter((o) => o.subissue != null);
+}

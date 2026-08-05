@@ -49,6 +49,16 @@ export interface CommentTriggerOutcome {
   target_id: string;
   status: CommentTriggerStatus | string;
   reason_code: string;
+  // /delegate (LIU-13): set on a successful delegation outcome — the child
+  // issue created for the target squad. Optional so older servers omit it.
+  subissue?: CommentSubissueRef;
+}
+
+// The child issue a /delegate command created for one squad (LIU-13 §7.5).
+export interface CommentSubissueRef {
+  id: string;
+  identifier?: string;
+  title?: string;
 }
 
 export type CommentTriggerSource =
@@ -69,4 +79,8 @@ export interface CommentTriggerPreview {
   // Explicit @agent / @squad mentions that will NOT trigger if posted as-is
   // (MUL-4525 §2). Additive: older servers omit it.
   blocked?: CommentTriggerOutcome[];
+  // /delegate (LIU-13 §7.3): the squads this comment would create child
+  // issues for. Gate-passing squads appear here; gate failures are in
+  // `blocked`. Additive: older servers omit it.
+  delegations?: CommentTriggerOutcome[];
 }

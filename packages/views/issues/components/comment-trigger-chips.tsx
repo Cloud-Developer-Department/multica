@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { TriangleAlert } from "lucide-react";
+import { Clock, TriangleAlert } from "lucide-react";
 import type { CommentTriggerPreviewAgent, CommentTriggerOutcome } from "@multica/core/types";
 import { useAgentPresenceDetail } from "@multica/core/agents";
 import { mentionLabelsByTarget } from "@multica/core/issues/comment-trigger-outcomes";
@@ -38,6 +38,10 @@ interface CommentTriggerChipsProps {
   // (MUL-4525 §2). Each renders as a named warning chip so the user sees WHICH
   // target won't run and why, not a silent no-op after sending.
   blocked?: CommentTriggerOutcome[];
+  // /delegate (LIU-13 §7.3): the squads this comment would create child
+  // issues for. Each renders as an informational chip — "will create a child
+  // issue and delegate" — labeled from the user's own mention markup.
+  delegations?: CommentTriggerOutcome[];
   // The draft markdown, used only to label each blocked target with the name the
   // user typed in its mention markup. The server omits blocked target names
   // (enumeration-safety); this is the user's own text, so it discloses nothing new.
@@ -126,6 +130,7 @@ function TriggerAgentTooltipBody({
 export function CommentTriggerChips({
   agents,
   blocked = [],
+  delegations = [],
   draftContent = "",
   suppressedAgentIds,
   onToggle,
@@ -137,7 +142,7 @@ export function CommentTriggerChips({
 
   // Loading and errors render nothing: the preview is an enhancement, and
   // any interim chrome here reads as composer noise.
-  if (agents.length === 0 && blocked.length === 0) return null;
+  if (agents.length === 0 && blocked.length === 0 && delegations.length === 0) return null;
 
   const allowed =
     agents.length === 1 ? (
@@ -156,11 +161,18 @@ export function CommentTriggerChips({
       />
     ) : null;
 
-  if (blocked.length === 0) return allowed;
+  if (blocked.length === 0 && delegations.length === 0) return allowed;
 
   return (
     <div className="flex flex-wrap items-center gap-1.5">
       {allowed}
+      {delegations.map((outcome) => (
+        <DelegationChip
+          key={`delegation:${outcome.target_type}:${outcome.target_id}`}
+          label={blockedLabels.get(`${outcome.target_type}:${outcome.target_id}`)}
+          t={t}
+        />
+      ))}
       {blocked.map((outcome) => (
         <BlockedTriggerChip
           key={`${outcome.target_type}:${outcome.target_id}`}
@@ -173,9 +185,52 @@ export function CommentTriggerChips({
   );
 }
 
+// One delegation target in the composer preview (LIU-13 §7.3): the squad
+// mention will NOT trigger the leader on this issue — the platform creates a
+// child issue and delegates to the squad there. Informational styling, named
+// from the user's own mention markup.
+function DelegationChip({
+  label,
+  t,
+}: {
+  label?: string;
+  t: IssuesT;
+}) {
+  const text = t(($) => $.comment.trigger_delegation_will_create);
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <span
+            className="inline-flex h-6 min-w-0 max-w-full animate-in fade-in items-center gap-1.5 rounded-md px-1.5 text-[11px] font-medium text-sky-600"
+            aria-label={label ? t(($) => $.comment.trigger_delegation_chip_aria, { name: label }) : text}
+          >
+            <Clock className="size-3 shrink-0" />
+            {label ? (
+              <span className="inline-flex min-w-0 items-center gap-1">
+                <span className="truncate">{label}</span>
+                <span className="shrink-0">·</span>
+                <span className="shrink-0">{text}</span>
+              </span>
+            ) : (
+              <span className="truncate">{text}</span>
+            )}
+          </span>
+        }
+      />
+      <TooltipContent side="top" className="max-w-72 text-xs">
+        {t(($) => $.comment.trigger_delegation_tooltip)}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
 // One blocked mention: named like an allowed chip ("Go"), but with an error
 // indicator and a short reason ("No permission") instead of "will start", so a
 // refused @mention reads as a clear, specific error rather than a vague count.
+// The F3 member-upgrade deferral (LIU-9 子任务A) renders the same way but with
+// informational styling: the member mention was handled — the squad leader was
+// woken and this member's own task is suspended, not refused.
 function BlockedTriggerChip({
   outcome,
   label,
@@ -185,20 +240,31 @@ function BlockedTriggerChip({
   label?: string;
   t: IssuesT;
 }) {
+  const deferred = outcome.status === "deferred";
   const shortReason = blockedShortReasonLabel(outcome.reason_code, t);
+  const chipAria = label
+    ? deferred
+      ? t(($) => $.comment.trigger_deferred_member_chip_aria, { name: label })
+      : t(($) => $.comment.trigger_blocked_chip_aria, { name: label, reason: shortReason })
+    : shortReason;
   return (
     <Tooltip>
       <TooltipTrigger
         render={
           <span
-            className="inline-flex h-6 min-w-0 max-w-full animate-in fade-in items-center gap-1.5 rounded-md px-1.5 text-[11px] font-medium text-destructive"
-            aria-label={
-              label
-                ? t(($) => $.comment.trigger_blocked_chip_aria, { name: label, reason: shortReason })
-                : shortReason
-            }
+            className={cn(
+              "inline-flex h-6 min-w-0 max-w-full animate-in fade-in items-center gap-1.5 rounded-md px-1.5 text-[11px] font-medium",
+              deferred
+                ? "text-amber-600"
+                : "text-destructive",
+            )}
+            aria-label={chipAria}
           >
-            <TriangleAlert className="size-3 shrink-0" />
+            {deferred ? (
+              <Clock className="size-3 shrink-0" />
+            ) : (
+              <TriangleAlert className="size-3 shrink-0" />
+            )}
             {label ? (
               <span className="inline-flex min-w-0 items-center gap-1">
                 <span className="truncate">{label}</span>

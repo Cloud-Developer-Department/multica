@@ -368,6 +368,9 @@
     "trigger_blocked_short_target_unavailable": "不可用",
     "trigger_blocked_short_runtime_offline": "运行时离线",
     "trigger_blocked_short_generic": "不会触发",
+    "trigger_deferred_member": "该成员属于小队，本次提及将唤醒其小队 Leader；该成员的个人任务已挂起，等待 Leader 委派",
+    "trigger_deferred_member_short": "任务挂起 · 唤醒 Leader",
+    "trigger_deferred_member_chip_aria": "{{name}} 的个人任务已挂起，将唤醒小队 Leader",
     "send_reply_failed": "发送回复失败",
     "delete_failed": "删除评论失败",
     "reply_count_other": "{{count}} 条回复",
@@ -403,7 +406,14 @@
       "bar_authors_more_other": "{{names}} 等 {{count}} 人",
       "resolve_failed": "标记已解决失败",
       "unresolve_failed": "重新打开失败"
-    }
+    },
+    "trigger_blocked_invalid_command": "委派指令无效",
+    "trigger_blocked_short_invalid_command": "指令无效",
+    "trigger_delegation_will_create": "将创建子 issue",
+    "trigger_delegation_chip_aria": "将为 {{name}} 创建委派子 issue",
+    "trigger_delegation_tooltip": "将为该子小队创建子 issue，其 leader 将在子 issue 上执行（而非本 issue）",
+    "delegation_created": "已委派给 {{squad}} — 子 issue {{identifier}} 已创建（{{title}}）",
+    "delegation_target_default": "该子小队"
   },
   "reply": {
     "placeholder": "回复..."
