@@ -290,25 +290,53 @@ A–H 由 PMO 在主管授权下拍板，覆盖 §4.5 未触及的契约面。�
 | G | `references` 解析：apply 开始前**一次性全量解析并锁定全部引用**，任一缺失 → `DEPENDENCY_NOT_FOUND` 并列出**全部**缺失清单，不创建任何资源；解析成功后执行期内不再边写边查。 | CLO-248 apply |
 | H | CLI `--id` 的 name 解析限定当前 CLI 上下文工作区（沿用 `--workspace` / 默认 workspace 语义），工作区内名称唯一，跨工作区同名用 UUID 消歧，解析不到明确报错。沿用现有 resolveAgent/squad 辅助函数，不新造。 | CLO-249 CLI |
 
+### 4.7 UX 裁定 1–6（CLO-253，授权拍板）
+
+来自 CLO-253 的 UX/UI 设计裁决，同样按授权生效。其中 1 / 3 / 6 修订了本文档原先的写法。
+
+| # | 裁定 | 落地位置 |
+| --- | --- | --- |
+| 1 | 文件路径统一用 `--file <path>`，`--output` 只作格式控制。**修订**：§5 原先的 `export --output agent.json` 写法作废。 | CLO-249 CLI |
+| 2 | JSON 无注释 → 模板附带同名 `README.md`，`metadata.readme` 记录该文件名。`@file:` 引用语法列为 P1，一期不引入 `.jsonc`。 | `resourcetmpl/types.go`（已落） |
+| 3 | export 默认 `embedded`；**apply 允许 `--members-mode` 覆盖**：embedded 模板可按 references 模式 apply（按同名匹配现有 agent）；references 模板**不可**反向按 embedded apply（缺少 agent 定义），须报错并提示重新导出。 | CLO-248 apply |
+| 4 | 批量凭据首选 `--custom-env-file`；交互输入作 fallback，用 `golang.org/x/term` 的 `ReadPassword` 不回显，且支持 skip 留占位符。 | CLO-249 CLI |
+| 5 | `template_id` 由服务端**基于资源确定性生成**（同一资源多次导出保持一致，支持幂等识别）；`version` 由用户手动管理 SemVer，两者独立演进。 | `resourcetmpl/types.go`（已落）+ CLO-247 export |
+| 6 | override 路径支持点分语法（对象属性 + 数组索引，如 `spec.squad.members[0].role`），复杂覆盖走 `--overrides-file`。**修订**：§5 原先的 `--set agents.<ref>.name` 写法作废。 | CLO-248 + CLO-249 |
+
+裁定 3 的方向性约束值得单独强调：`embedded → references` 是信息丢弃（忽略内嵌定义、
+改按名字找现存 agent），可以做；`references → embedded` 是信息凭空生成，做不到 ——
+必须显式报错，不能退化成「创建一个空壳 agent」，那会产出一批半配置资源。
+
 ## 5. CLI 契约
 
 新文件 `server/cmd/multica/cmd_template.go`，`main.go` 注册 `templateCmd`。
 
 ```bash
-multica template export --kind agent --id <agent> --output agent.json
-multica template export --kind squad --id <squad> --members-mode embedded -o squad.json
+multica template export --kind agent --id <agent> --file agent.json
+multica template export --kind squad --id <squad> --members-mode embedded --file squad.json
 multica template validate --file squad.json --runtime-id <rt> [--output json]
 multica template apply --file squad.json --runtime-id <rt> --dry-run
 multica template apply --file squad.json --runtime-id <rt> \
-    --conflict-policy rename --set name="我的团队" --set agents.senior-dev.name="小李" \
-    --env-file ./env.json --install-missing-skills --yes
+    --conflict-policy rename --set metadata.name="我的团队" \
+    --set 'spec.squad.members[0].agent.name=小李' \
+    --custom-env-file ./env.json --install-missing-skills --yes
 ```
 
 规则：
 
-- `--id` 走现有 `resolveAgent` / squad 解析，支持名称或 UUID。
-- 密钥只接受 `--env-file`（建议 0600）或 `--env-stdin`，**没有** `--env` 明文 flag
-  —— 比 `agent create` 更严，因为模板场景天然会被贴进聊天记录。
+- **`--file <path>` 是文件路径；`--output` 只控制格式（json/table）。** 二者语义不
+  混用，与现有 CLI 全局约定一致（UX 裁定 1）。export 也用 `--file`，不用 `--output`
+  写文件。
+- `--id` 走现有 `resolveAgent` / squad 解析，支持名称或 UUID；名称解析限定当前
+  CLI 上下文工作区（PMO 决议 H）。
+- 密钥只接受 `--custom-env-file`（建议 0600）或 `--custom-env-stdin`，**没有**
+  `--custom-env` 明文 flag —— 比 `agent create` 更严，因为模板场景天然会被贴进聊天
+  记录。交互输入作 fallback，必须走 `golang.org/x/term` 的 `ReadPassword`（不回显），
+  并支持 skip → 留占位符稍后配置（UX 裁定 4）。
+- **override 路径用点分语法，根在模板文档上**：对象属性 + 数组索引，例如
+  `spec.squad.members[0].role`。复杂/批量覆盖走 `--overrides-file <path>` JSON
+  （UX 裁定 6）。注意这与 `env` 的寻址方式不同 —— `env` 按 `agent_ref` 键入
+  （Q10），因为凭据要跟着符号引用走，不能因成员重排而错位。
 - 非交互执行必须 `--yes`；否则 apply 先打印 dry-run 计划再确认。
 - `--output json` 输出与 API 同构的稳定机器格式；默认 table/人类可读。
 - 退出码：0 成功；1 一般错误；2 校验失败（errors 非空）；3 冲突需决策。
