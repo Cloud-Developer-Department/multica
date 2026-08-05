@@ -262,18 +262,33 @@ squad 还必须能读 leader 与**全部**成员 agent）。任一依赖不可�
 
 | # | 裁定 |
 | --- | --- |
-| Q1 | `schema_version` 只比 major。major 相同即接受，未知**顶层**字段拒绝（`TEMPLATE_INVALID`），未知**嵌套**字段忽略并计入 `warnings`。不做兼容矩阵。 |
+| Q1 | **已按 PMO 裁定 D 修订**：major 必须相等，且模板 minor ≤ 服务器支持 minor（一期 1.0，故接受 `1.0.x`，拒绝 `1.1+` 与 `0.x`/`2.x`），patch 忽略。未知**顶层**字段拒绝（`TEMPLATE_INVALID`），未知**嵌套**字段忽略并计入 `warnings`。<br>（我原裁定为"只比 major"，会把 `1.7` 当 `1.0` 读——模板携带本版本无法解释的结构却按缺省语义处理，是静默错读。D 更严格，已落码。） |
 | Q2 | 见 §4.4 合并后的单表，已补全三个缺口码。 |
 | Q3 | `target_runtime_id` 在 validate 与 apply **均必填**；缺失或不可访问 → `RUNTIME_NOT_FOUND`。runtime 是 `model` / `thinking_level` / `service_tier` 重校验的前提，validate 少了它就无法给出可信 dry-run。 |
 | Q4 | 权限在 **validate 阶段**全量校验（创建 agent/squad、绑定 skill、设置 permission_mode / invocation_target），dry-run 因此可信。apply 重跑同一套校验（TOCTOU 防护），额外只做 `idempotency_key` 回放判定。 |
 | Q5 | `rename` 后缀 = `"<name>-" + 短 UUID 前 8 位小写十六进制`，例：`架构师-3f9a1c04`。不用序号（并发下需额外锁且不幂等）。映射写入结果 `resource_mapping`。 |
-| Q6 | secret 检测三条并行规则：① key 名大小写不敏感黑名单（`token` / `secret` / `password` / `passwd` / `api_key` / `apikey` / `private_key` / `credential` / `auth` 子串匹配）且值长度 ≥ 8；② 值匹配 `Authorization` 头结构（`Bearer|Basic|Token` + 空格 + ≥ 8 位）按结构判定，不做字符串包含匹配；③ 已知前缀字面量（`sk-` / `ghp_` / `gho_` / `xoxb-` 等）。不做熵值判定——误报率高且不可测。命中即 `SECRET_DETECTED`，导出与导入双侧拒绝，绝不静默清洗。 |
+| Q6 | secret 检测两路并行信号，**key 名命中即报，不设值长度阈值**（PMO 裁定 E：漏报不可接受、误报可接受——长度阈值会造成短凭据漏报）：① key 名大小写不敏感匹配（精确名 + 复合名边界匹配，如 `github_token` / `db_password` / `x-api-key`）；② 值形态匹配已知前缀与结构（`sk-` / `ghp_` / `github_pat_` / `AKIA` / `xoxb-`、`Bearer`/`Basic` 结构、PEM `-----BEGIN … PRIVATE KEY-----`、`scheme://user:pass@` 内联凭据）。不做熵值判定——误报不可解释且不可测。命中即 `SECRET_DETECTED` 并附 `path`，导出与导入双侧拒绝，绝不静默清洗；误报由用户人工核验后修正字段再 apply。 |
 | Q7 | `references` 模式引用缺失：validate 响应 `errors[]` 置 `DEPENDENCY_NOT_FOUND`，同时 `required_inputs.missing_agents[]` 列出 `{ref, name}`。前者决定能否 apply，后者供 UI/CLI 渲染补齐清单。 |
 | Q8 | `overrides.agents[<ref>]` 的 `ref` 是**导出时生成的模板内符号**（slug 化的 agent 名，模板内唯一，非 UUID）。apply 在 plan 阶段建立 `ref → 新建资源 ID` 映射并回写 `resource_mapping`；`squad.leader.agent_ref` / `members[].agent_ref` 走同一张表。 |
 | Q9 | `kind: "bundle"` 一期**拒绝**，code 复用 `TEMPLATE_INVALID`，message 明示"bundle 一期不支持"。不新增 `BUNDLE_NOT_SUPPORTED`——错误码是稳定契约，为一期就不实现的形态占位会留下永久死码。 |
 | Q10 | apply 的 `env` 结构 = `{ "<agent_ref>": { "KEY": "value" } }`，按 Q8 的符号 ref 索引。`kind: agent` 模板同样用 ref 一层包裹，保持单一形状。 |
 | Q11 | `install_missing_skills` 元素只接受 `source_url` 字符串，必须是模板 `spec` 内已出现的 URL 子集；服务端**不**做 name → URL 解析，避免把"名字像"变成任意 URL 拉取。 |
 | Q12 | apply 未提供 `required: true` 的 env key → validate 阶段 `REQUIRED_INPUT_MISSING`（携带 `agent_ref` + key 名，**不带值**），不进入写入路径。可选 key 缺失只进 `warnings`。 |
+
+### 4.6 PMO 裁定 A–H（授权拍板，与 §4.5 并列生效）
+
+A–H 由 PMO 在主管授权下拍板，覆盖 §4.5 未触及的契约面。冲突处 A–H 优先（已影响的两项见 §4.5 Q1 / Q6 的修订说明）。
+
+| # | 裁定 | 落地位置 |
+| --- | --- | --- |
+| A | `kind=bundle` 一期不在范围，顶层枚举仅 `agent|squad`，收到 `bundle` → `TEMPLATE_INVALID`。与 §4.5 Q9 一致。 | `resourcetmpl/validate.go`（已落） |
+| B | 幂等目标 = `{workspace_id, runtime_id, kind}` 三元组，任一不同即不同目标（防跨用户 / 跨 runtime / 跨 kind 误命中）。同目标重试须复用同一 `idempotency_key`。 | CLO-248 apply |
+| C | apply 后默认状态：`owner` = 当前操作者、`permission_mode = private`、**默认不激活接收任务**。越权 `permission_mode` 严禁静默改写为 `private`——必须报 `CONFIG_NOT_ALLOWED`，降级会掩盖越权。 | CLO-248 apply |
+| D | `schema_version`：major 相等 + 模板 minor ≤ 服务器 minor + patch 忽略。见 §4.5 Q1。 | `resourcetmpl/version.go`（已落） |
+| E | 密钥探测：漏报不可接受、误报可接受，key 名命中即报并附 `path`。见 §4.5 Q6。 | `resourcetmpl/redact.go`（已落） |
+| F | 幂等键命中即**复用原结果**，成功回放成功、失败回放原错误/回滚结果，**不重新执行**——同一键永远对应同一次执行。客户端重试失败场景须换新幂等键。 | CLO-248 apply |
+| G | `references` 解析：apply 开始前**一次性全量解析并锁定全部引用**，任一缺失 → `DEPENDENCY_NOT_FOUND` 并列出**全部**缺失清单，不创建任何资源；解析成功后执行期内不再边写边查。 | CLO-248 apply |
+| H | CLI `--id` 的 name 解析限定当前 CLI 上下文工作区（沿用 `--workspace` / 默认 workspace 语义），工作区内名称唯一，跨工作区同名用 UUID 消歧，解析不到明确报错。沿用现有 resolveAgent/squad 辅助函数，不新造。 | CLO-249 CLI |
 
 ## 5. CLI 契约
 
