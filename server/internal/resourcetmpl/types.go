@@ -62,9 +62,12 @@ type Template struct {
 	// no downgrade). See version.go.
 	SchemaVersion string `json:"schema_version"`
 
-	// TemplateID is a UUID generated at export time. It is an idempotency /
-	// provenance handle only — it is never used as an import authorisation
-	// source (source_workspace isn't either).
+	// TemplateID is a UUID the server derives deterministically from the
+	// exported resource, so re-exporting the same resource yields the same id
+	// and repeat exports stay recognisable as the same template. It is an
+	// idempotency / provenance handle only — never an import authorisation
+	// source (source_workspace isn't either). metadata.version is the
+	// user-managed SemVer and moves independently of this id.
 	TemplateID string `json:"template_id,omitempty"`
 
 	// Kind selects which Spec payload is present. Must be agent or squad and
@@ -93,6 +96,13 @@ type Metadata struct {
 	SourceWorkspace string `json:"source_workspace,omitempty"`
 	// CreatedAt is an RFC3339 timestamp of export time.
 	CreatedAt string `json:"created_at,omitempty"`
+	// Readme names a companion prose file shipped alongside the template
+	// (conventionally "README.md"). JSON cannot carry comments, so anything a
+	// human needs to read — what the template does, which credentials to
+	// supply after apply — lives in that sibling file rather than in the
+	// template body. Display-only: it is a filename, never a path to resolve
+	// or fetch, and the import path must not read it.
+	Readme string `json:"readme,omitempty"`
 }
 
 // Author identifies who produced the template. Both fields are display-only.

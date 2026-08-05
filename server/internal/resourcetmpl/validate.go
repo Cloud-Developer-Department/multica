@@ -19,7 +19,7 @@ import (
 var (
 	topLevelKnown = set("schema_version", "template_id", "kind", "metadata", "spec")
 	metadataKnown = set("name", "description", "author", "version", "visibility",
-		"tags", "source_workspace", "created_at")
+		"tags", "source_workspace", "created_at", "readme")
 	authorKnown = set("id", "display_name")
 	specKnown   = set("agent", "squad")
 	agentKnown  = set("name", "description", "instructions", "model", "thinking_level",

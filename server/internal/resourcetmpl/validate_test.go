@@ -117,6 +117,21 @@ func TestValidate_UnknownMetadataField(t *testing.T) {
 	}
 }
 
+// metadata.readme carries the companion README.md filename (PMO UX ruling 2:
+// JSON has no comments, so prose lives in a sibling file). It is a known
+// optional field and must not be reported as unknown.
+func TestValidate_ReadmeAccepted(t *testing.T) {
+	m := validAgentMap()
+	setPath(t, m, "metadata.readme", "README.md")
+	r := Validate(marshal(t, m))
+	if r.HasErrors() {
+		t.Fatalf("metadata.readme should be accepted, got %v", r.Errors)
+	}
+	if hasPath(r, "metadata.readme") {
+		t.Fatalf("metadata.readme should not be flagged, got %v", r.Warnings)
+	}
+}
+
 func TestValidate_UnknownNestedAgentField(t *testing.T) {
 	m := validAgentMap()
 	setPath(t, m, "spec.agent.avatar_url", "https://x.png")
