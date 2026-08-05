@@ -8,6 +8,8 @@
 | 子目录 | 阶段 | 说明 |
 |--------|------|------|
 | `01-research/` | Research | 现状调研报告（Board/Table hierarchy/拖拽/数据/部署/分支） |
+| `02-design/` | Architect | 架构设计方案（数据模型/API 契约/前端改造/拖拽决策） |
+| `03-backend/` | Backend-Coding | 后端改造（`?hierarchy=true` + `direct_child_count`，零迁移零破坏） |
 
 ## 关键结论
 
@@ -20,5 +22,6 @@
 
 ## 分支
 
-- 调研基线：`origin/Equipment_Department_Exploration` @ `6d400f2d`
-- 本调研提交所在分支：`agent/sgd-magic-research/1808b523`（只读调研，不含代码改动）
+- 基线：`origin/Equipment_Department_Exploration` @ `6d400f2d`
+- 唯一特性分支：`feature/board-tree`（从基线创建，合并 01-research + 02-design 交付件，Backend/Frontend Coding 共用）
+- 各阶段交付件来源分支：Research `agent/sgd-magic-research/1808b523`、Architect `agent/sgd-architect-architecture/f4a706db`
