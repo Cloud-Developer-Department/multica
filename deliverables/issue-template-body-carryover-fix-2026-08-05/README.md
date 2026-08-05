@@ -11,6 +11,7 @@
 |------|------|
 | `03-code/bugfix-report.md` | 根因分析、修复方案、改动明细 |
 | `04-tests/verification.md` | 回归测试与验证结果 |
+| `07-deployment/redeploy-verification.md` | 复部署验证报告（CLO-191） |
 
 ## 关键结论
 
