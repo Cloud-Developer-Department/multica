@@ -143,6 +143,7 @@
     "sr_agent": "イシューをクイック作成",
     "manual_breadcrumb": "手動で作成",
     "agent_breadcrumb": "エージェントで作成",
+    "template_button": "テンプレート",
     "title_placeholder": "イシューのタイトル",
     "description_placeholder": "説明を追加...",
     "more_options_aria": "その他のオプション",

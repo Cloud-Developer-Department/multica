@@ -107,6 +107,10 @@ import type {
   UpdatePropertyRequest,
   ListPropertiesResponse,
   IssuePropertiesResponse,
+  IssueTemplate,
+  CreateIssueTemplateRequest,
+  UpdateIssueTemplateRequest,
+  ListIssueTemplatesResponse,
   CreateLabelRequest,
   UpdateLabelRequest,
   ListLabelsResponse,
@@ -295,6 +299,10 @@ import {
   IssuePropertySchema,
   ListPropertiesResponseSchema,
   IssuePropertiesResponseSchema,
+  IssueTemplateSchema,
+  ListIssueTemplatesResponseSchema,
+  EMPTY_ISSUE_TEMPLATE,
+  EMPTY_LIST_ISSUE_TEMPLATES_RESPONSE,
   EMPTY_ISSUE_PROPERTY,
   EMPTY_LIST_PROPERTIES_RESPONSE,
   EMPTY_ISSUE_PROPERTIES_RESPONSE,
@@ -3156,5 +3164,45 @@ export class ApiClient {
     if (params?.offset != null) search.set("offset", String(params.offset));
     const qs = search.toString();
     return this.fetch(`/api/reviews/queue${qs ? `?${qs}` : ""}`);
+  }
+
+  // Issue templates (CLO-159): workspace-scoped presets that pre-fill an
+  // issue's fields on creation. CRUD mirrors labels/properties.
+  async listIssueTemplates(): Promise<ListIssueTemplatesResponse> {
+    const raw = await this.fetch<unknown>(`/api/issue-templates`);
+    return parseWithFallback(raw, ListIssueTemplatesResponseSchema, EMPTY_LIST_ISSUE_TEMPLATES_RESPONSE, {
+      endpoint: "GET /api/issue-templates",
+    });
+  }
+
+  async getIssueTemplate(id: string): Promise<IssueTemplate> {
+    const raw = await this.fetch<unknown>(`/api/issue-templates/${id}`);
+    return parseWithFallback(raw, IssueTemplateSchema, EMPTY_ISSUE_TEMPLATE, {
+      endpoint: "GET /api/issue-templates/{id}",
+    });
+  }
+
+  async createIssueTemplate(data: CreateIssueTemplateRequest): Promise<IssueTemplate> {
+    const raw = await this.fetch<unknown>(`/api/issue-templates`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+    return parseWithFallback(raw, IssueTemplateSchema, EMPTY_ISSUE_TEMPLATE, {
+      endpoint: "POST /api/issue-templates",
+    });
+  }
+
+  async updateIssueTemplate(id: string, data: UpdateIssueTemplateRequest): Promise<IssueTemplate> {
+    const raw = await this.fetch<unknown>(`/api/issue-templates/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+    return parseWithFallback(raw, IssueTemplateSchema, EMPTY_ISSUE_TEMPLATE, {
+      endpoint: "PUT /api/issue-templates/{id}",
+    });
+  }
+
+  async deleteIssueTemplate(id: string): Promise<void> {
+    await this.fetch(`/api/issue-templates/${id}`, { method: "DELETE" });
   }
 }

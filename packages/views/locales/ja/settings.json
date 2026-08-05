@@ -131,7 +131,8 @@
       "labs": "ラボ",
       "members": "メンバー",
       "labels": "ラベル",
-      "properties": "プロパティ"
+      "properties": "プロパティ",
+      "templates": "テンプレート"
     }
   },
   "properties": {
@@ -240,6 +241,70 @@
       "cancel": "キャンセル",
       "confirm": "ラベルを削除",
       "failed": "ラベルを削除できませんでした"
+    }
+  },
+  "templates": {
+    "title": "Issue テンプレート",
+    "description": "このワークスペースの Issue テンプレートを作成・管理します。テンプレートは Issue のフィールドを事前入力し、機能開発・バグ修正・報告などの一般的なワークフローを一貫したベースラインから開始できます。",
+    "search_placeholder": "名前、説明、カテゴリーで絞り込み...",
+    "new_template": "新規テンプレート",
+    "preset_badge": "プリセット",
+    "loading": "テンプレートを読み込み中...",
+    "empty": "テンプレートはまだありません",
+    "no_results": "一致するテンプレートはありません",
+    "save_failed": "テンプレートを保存できませんでした",
+    "columns": {
+      "name": "名前",
+      "description": "説明",
+      "category": "カテゴリー",
+      "updated": "更新日"
+    },
+    "actions": {
+      "open": "{{name}} のアクション",
+      "edit": "編集",
+      "delete": "削除"
+    },
+    "editor": {
+      "create_title": "新規テンプレート",
+      "edit_title": "テンプレートを編集",
+      "description_hint": "ここで設定したフィールドは、テンプレート適用時に Issue 作成ダイアログに事前入力されます。",
+      "preset_hint": "これは組み込みのプリセットテンプレートです。内容は編集できますが削除はできません。",
+      "name": "名前",
+      "name_placeholder": "例: 機能開発",
+      "description": "説明",
+      "description_placeholder": "このテンプレートの用途",
+      "title_template": "タイトルプレフィックス",
+      "title_placeholder": "例: [Feature]",
+      "body_template": "本文テンプレート",
+      "body_placeholder": "Issue の説明に適用される Markdown 本文...",
+      "icon": "アイコン",
+      "icon_placeholder": "例: sparkles",
+      "category": "カテゴリー",
+      "category_placeholder": "例: engineering",
+      "status": "ステータス",
+      "priority": "優先度",
+      "stage": "ステージ",
+      "stage_placeholder": "例: 1",
+      "assignee_type": "担当者タイプ",
+      "assignee": "担当者",
+      "select_assignee": "担当者を選択",
+      "unassigned": "未割り当て",
+      "project": "プロジェクト",
+      "no_project": "プロジェクトなし",
+      "labels": "ラベル",
+      "no_labels": "ラベル未選択",
+      "labels_count": "{{count}} 件のラベルを選択中",
+      "no_labels_available": "このワークスペースに Issue ラベルはありません",
+      "cancel": "キャンセル",
+      "save": "テンプレートを保存",
+      "saving": "保存中..."
+    },
+    "delete_dialog": {
+      "title": "テンプレートを削除しますか？",
+      "description": "「{{name}}」を削除しますか？この操作は元に戻せません。",
+      "cancel": "キャンセル",
+      "confirm": "テンプレートを削除",
+      "failed": "テンプレートを削除できませんでした"
     }
   },
   "account": {

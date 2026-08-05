@@ -27,6 +27,8 @@ import type {
   IssueProperty,
   ListPropertiesResponse,
   IssuePropertiesResponse,
+  IssueTemplate,
+  ListIssueTemplatesResponse,
   IssueTableGroupDescriptor,
   IssueTableFacetsResponse,
   IssueTableGroupsResponse,
@@ -1759,4 +1761,62 @@ export const CreateBillingPortalSessionResponseSchema = z.object({
 
 export const EMPTY_CREATE_BILLING_PORTAL_SESSION_RESPONSE: CreateBillingPortalSessionResponse = {
   url: "",
+};
+
+// Issue templates (CLO-159) — workspace-scoped presets that pre-fill an
+// issue's fields on creation. Kept lenient (.loose()) so newer servers can
+// add fields without breaking installed clients; nullable fields default
+// to null so a pre-template-feature server response still parses cleanly.
+export const IssueTemplateSchema = z.object({
+  id: z.string(),
+  workspace_id: z.string(),
+  name: z.string(),
+  description: z.string().optional().default(""),
+  title_template: z.string().optional().default(""),
+  body_template: z.string().optional().default(""),
+  status: z.string().optional().default("todo"),
+  priority: z.string().optional().default("none"),
+  assignee_type: z.string().nullable().optional().default(null),
+  assignee_id: z.string().nullable().optional().default(null),
+  project_id: z.string().nullable().optional().default(null),
+  stage: z.number().nullable().optional().default(null),
+  label_ids: z.array(z.string()).nullish().transform((v) => v ?? []),
+  icon: z.string().optional().default(""),
+  category: z.string().optional().default(""),
+  is_preset: z.boolean().optional().default(false),
+  created_by: z.string(),
+  created_at: z.string(),
+  updated_at: z.string(),
+}).loose();
+
+export const EMPTY_ISSUE_TEMPLATE: IssueTemplate = {
+  id: "",
+  workspace_id: "",
+  name: "",
+  description: "",
+  title_template: "",
+  body_template: "",
+  status: "todo",
+  priority: "none",
+  assignee_type: null,
+  assignee_id: null,
+  project_id: null,
+  stage: null,
+  label_ids: [],
+  icon: "",
+  category: "",
+  is_preset: false,
+  created_by: "",
+  created_at: "",
+  updated_at: "",
+};
+
+export const ListIssueTemplatesResponseSchema = z.object({
+  issue_templates: z.array(IssueTemplateSchema).default([]),
+  total: z.number().default(0),
+}).loose();
+
+export const EMPTY_LIST_ISSUE_TEMPLATES_RESPONSE: ListIssueTemplatesResponse = {
+  issue_templates: [],
+  total: 0,
 };
