@@ -10,6 +10,9 @@
 | `01-research/` | Research | 现状调研报告（Board/Table hierarchy/拖拽/数据/部署/分支） |
 | `02-design/` | Architect | 架构设计方案（数据模型/API 契约/前端改造/拖拽决策） |
 | `03-backend/` | Backend-Coding | 后端改造（`?hierarchy=true` + `direct_child_count`，零迁移零破坏） |
+| `03-code/` | Frontend-Coding | 前端实现（board-tree-model / board-view / drag-utils / view-store） |
+| `04-tests/` | Validation | 测试报告（基于 `f9b602d6`，注：分支后续重写为 `23c6ed5c`，需重跑） |
+| `05-review/` | Review | 代码审查报告（基于最终 tip `23c6ed5c`，含独立复验） |
 
 ## 关键结论
 
