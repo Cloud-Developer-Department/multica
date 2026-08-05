@@ -1,8 +1,8 @@
 # 研发效能分析平台 · 后端实现交付物索引
 
 > 关联需求：**CLO-227**（需求基线）→ **CLO-228**（PRD / API 契约 v2.0 / 数据口径 v2.0）→ **CLO-237**（阶段7 补充）→ **CLO-239**（后端实现）
-> 归档时间：2026-08-06
-> 状态：**已实现并本地验证通过**（待 Review / 联调）
+> 归档时间：2026-08-06（含阶段10 Review 修复轮）
+> 状态：**已实现并本地验证通过**（阶段10 Review 后端项已修复，待复审）
 > 存放位置：`deliverables/engineering-analytics-2026-08-05/代码/`
 
 ## 文件索引
@@ -11,7 +11,7 @@
 | --- | --- | --- |
 | `README.md` | 本索引：实现清单、路由、验证结论 | Leader / 全员 |
 | `接口文档-研发效能分析平台.md` | 19 个接口的字段/类型/空值语义/示例/引导态，与 `设计/API契约-研发效能分析平台.md` v2.0 一致 | 前端 / 测试 |
-| `本地验证报告.md` | go build / go vet / 单元测试 / 引导态与边界场景验证结论 | Leader / 测试 |
+| `本地验证报告.md` | go build / go vet / 单元测试 / 引导态与边界场景 / 阶段10 修复记录 | Leader / 测试 |
 | `src/` 下源码副本 | 新增后端文件快照（与仓库 HEAD 对齐） | 归档 |
 
 ## 实现清单（19 接口，全量四看板）
@@ -44,10 +44,11 @@
 
 **新增**
 - `server/internal/handler/analytics_dashboard.go` — 19 个接口处理器、`analyticsScope` 公共解析（窗口/时区/部门/项目过滤）、`source_status` 判定
-- `server/internal/handler/analytics_dashboard_test.go` — 覆盖全部 19 接口的授权/正常态/引导态/边界（CLO-239 本次补充）
-- `server/pkg/db/queries/analytics.sql` — 43 条聚合 SQL（sqlc 源）
+- `server/internal/handler/analytics_dashboard_test.go` — 覆盖全部 19 接口的授权/正常态/引导态/边界 + 阶段10 Review 修复用例（20 项）
+- `server/pkg/db/queries/analytics.sql` — 47 条聚合 SQL（sqlc 源）
 - `server/pkg/db/generated/analytics.sql.go` — sqlc 生成代码
 - `server/migrations/254_analytics_dashboard.up.sql` / `.down.sql` — 数据模型（`member.department` / `repo_quality_snapshot` / `deployment_event` / `vcs_author_mapping` / `identity_import`）
+- `server/migrations/255_analytics_identity_result_nullable.up.sql` / `.down.sql` — `identity_import.result` 放开 NOT NULL（P2-04）
 - `packages/core/analytics-dashboard/`、`packages/core/api/client.ts` / `schemas.ts`、`packages/views/analytics/` — 前端（CLO-240 交付）
 
 **修改**
@@ -67,12 +68,12 @@
 
 - `go build ./...` ✅
 - `go vet ./internal/handler/` ✅
-- 单元测试：`go test ./internal/handler/ -run "TestAnalytics"` — **14 项全部通过**（授权 / A1–A5 / B1–B6 / G1–G4 引导态 / D1–D2 引导态 / L1–L2 引导态 / department_id 400 / project_id 400 / limit 钳制）
-- 全量 handler 测试包中 `TestDashboardFailuresByAgentUsesExactWindow`、`TestParseSkillArchive_RejectsUnsafeSkillMdPath` 为基线分支既有失败（本地共享测试库数据/环境相关，与本次改动无关，已对照确认）
+- 单元测试：`go test ./internal/handler/ -run "TestAnalytics"` — **20 项全部通过**（授权 / A1–A5 / B1–B6 / G1–G4 引导态 / D1–D2 引导态 / L1–L2 引导态 / department_id 400 / project_id 400 / limit 钳制 / 阶段10 修复用例）
+- 阶段10 Review 后端项（P1-02/P1-03/P2-01/P2-02/P2-04/P3-02）已修复并单测覆盖；前端项（P0-01/P1-01/P1-05）由 CLO-240 修复（`8f6da199`）
+- 全量 handler 测试包中 `TestShortTaskIDMatchesDaemon`、`TestDashboardFailuresByAgentUsesExactWindow`、`TestParseSkillArchive_RejectsUnsafeSkillMdPath` 为基线分支既有失败（本地共享测试库数据/环境相关，与本次改动无关，已对照确认）
 - 详细结论见 `本地验证报告.md`
 
 ## 下一步
 
-1. 与前端（CLO-240 已交付）联调：`source_status` 判定、ELOC 人/机分组、雷达反轴归一化参数、秒→天换算已按契约对齐
-2. 联调通过后进入 Review（阶段10）审查
-3. Review 通过后进入测试阶段（阶段11），最后统一造演示数据（DevOps 阶段12）
+1. 阶段10 Review 复审（后端修复 + CLO-240 前端修复）
+2. 复审通过后进入阶段11 测试（阶段12 DevOps 统一造演示数据）

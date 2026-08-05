@@ -326,10 +326,17 @@ WHERE w.id = $1;
 -- name: CountAnalyticsMergedIssues :one
 -- Merged stage (B1): distinct issues linked to a merged PR whose merged_at
 -- falls in the window. Requires VCS connection (caller gates on it).
+-- Optional department slice attributes the issue to the department of its
+-- creator (member), and project_id scopes to a project (P2-01) so the funnel's
+-- three stages share the same filters.
 SELECT COUNT(DISTINCT ipr.issue_id)::bigint AS merged_count
 FROM vcs_pull_request pr
 JOIN issue_vcs_pull_request ipr ON ipr.pull_request_id = pr.id AND NOT ipr.reference_only
-WHERE pr.workspace_id = $1 AND pr.state = 'merged' AND pr.merged_at >= $2;
+JOIN issue i ON i.id = ipr.issue_id
+WHERE pr.workspace_id = $1 AND pr.state = 'merged' AND pr.merged_at >= $2
+  AND ($3::text = '' OR i.creator_type = 'member' AND i.creator_id IN (
+      SELECT m.user_id FROM member m WHERE m.workspace_id = $1 AND m.department = $3))
+  AND ($4::uuid IS NULL OR i.project_id = $4);
 
 -- name: GetAnalyticsAgentPerformance :one
 -- Terminal-task aggregate (B2): completed/failed within the window, windowed
@@ -473,6 +480,41 @@ FROM (
     WHERE c.issue_id = $1 AND c.author_type = 'agent' AND c.created_at >= $2
 ) resolutions;
 
+-- name: ListAnalyticsBlockerResolutions :many
+-- Batched blocker resolutions for every issue that entered blocked state in the
+-- window (replaces the per-issue GetAnalyticsBlockerResolution N+1 — P2-02).
+-- Each row carries the issue's first blocked_at (the floor for its resolution)
+-- and the resolved_at when one exists; resolved_at IS NULL means still open.
+SELECT
+    b.issue_id AS issue_id,
+    b.blocked_at AS blocked_at,
+    r.resolved_at AS resolved_at
+FROM (
+    SELECT
+        al.issue_id AS issue_id,
+        MIN(al.created_at)::timestamptz AS blocked_at
+    FROM activity_log al
+    WHERE al.workspace_id = $1
+      AND al.action = 'status_changed'
+      AND al.details->>'to' = 'blocked'
+      AND al.created_at >= $2
+    GROUP BY al.issue_id
+) b
+LEFT JOIN LATERAL (
+    SELECT MIN(t)::timestamptz AS resolved_at
+    FROM (
+        SELECT MIN(al2.created_at) AS t
+        FROM activity_log al2
+        WHERE al2.issue_id = b.issue_id AND al2.action = 'status_changed'
+          AND al2.details->>'to' <> 'blocked' AND al2.created_at >= b.blocked_at
+        UNION ALL
+        SELECT MIN(c.created_at) AS t
+        FROM comment c
+        WHERE c.issue_id = b.issue_id AND c.author_type = 'agent' AND c.created_at >= b.blocked_at
+    ) resolutions
+) r ON true
+ORDER BY b.blocked_at DESC;
+
 -- =============================================================
 -- Tab3 Git contributions (G1-G4)
 -- =============================================================
@@ -516,11 +558,14 @@ SELECT a.id, a.name FROM agent a WHERE a.workspace_id = $1 AND a.archived_at IS 
 
 -- name: ListAnalyticsQualitySnapshots :many
 -- Latest quality snapshot per repo (G2). Empty table => guide state.
+-- coverage / duplication_rate are nullable NUMERIC columns; selecting them
+-- raw keeps NULL semantics (a partially-populated snapshot must not turn the
+-- endpoint into a 500 — P1-03). Handler skips nulls in aggregates.
 SELECT DISTINCT ON (rq.repo)
     rq.repo,
-    rq.coverage::float8 AS coverage,
+    rq.coverage AS coverage,
     rq.vulnerabilities AS vulnerabilities,
-    rq.duplication_rate::float8 AS duplication_rate,
+    rq.duplication_rate AS duplication_rate,
     rq.snapshot_at
 FROM repo_quality_snapshot rq
 WHERE rq.workspace_id = $1
@@ -565,6 +610,12 @@ LIMIT $4;
 -- Existence of deployment events for the workspace (D readiness).
 SELECT COUNT(*)::bigint AS count FROM deployment_event WHERE workspace_id = $1;
 
+-- name: GetAnalyticsDeploymentLastSync :one
+-- Most recent deployment finished_at for the workspace (D source_status.updated_at).
+SELECT MAX(de.finished_at)::timestamptz AS updated_at
+FROM deployment_event de
+WHERE de.workspace_id = $1;
+
 -- name: ListAnalyticsLeadTimeDeploy :many
 -- Issue->deploy lead times for successful deployments linked to issues in
 -- the window (D1 metric=deploy). Empty table => guide state.
@@ -602,6 +653,21 @@ SELECT
     COUNT(*) FILTER (WHERE de.result = 'failed')::bigint AS failed
 FROM deployment_event de
 WHERE de.workspace_id = $1 AND de.finished_at >= $3
+GROUP BY week
+ORDER BY week;
+
+-- name: ListAnalyticsDeploymentTrendMttr :many
+-- Per-week recovered-failure MTTR (P50 of recovered_at - finished_at, seconds)
+-- for the D2 trend[].mttr_seconds field. Weeks with no recovered failures are
+-- simply absent; the handler leaves their mttr_seconds as null.
+SELECT
+    DATE_TRUNC('week', de.finished_at AT TIME ZONE $2::text)::date AS week,
+    PERCENTILE_CONT(0.5) WITHIN GROUP (
+        ORDER BY EXTRACT(EPOCH FROM (de.recovered_at - de.finished_at))
+    )::float8 AS mttr_seconds
+FROM deployment_event de
+WHERE de.workspace_id = $1 AND de.result = 'failed'
+  AND de.recovered_at IS NOT NULL AND de.finished_at >= $3
 GROUP BY week
 ORDER BY week;
 

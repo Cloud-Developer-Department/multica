@@ -152,6 +152,20 @@ func ratio(a, b int64) *float64 {
 	return &v
 }
 
+// numericToPtr converts a nullable NUMERIC scan target to a *float64,
+// returning nil for SQL NULL. Prevents a 500 when a snapshot row carries a
+// partially-populated value (P1-03).
+func numericToPtr(n pgtype.Numeric) *float64 {
+	if !n.Valid {
+		return nil
+	}
+	if v, err := n.Float64Value(); err == nil && v.Valid {
+		r := round1p(v.Float64)
+		return &r
+	}
+	return nil
+}
+
 // round1p snaps a value to one decimal place (mirror of round1 in
 // personal_dashboard.go).
 func round1p(v float64) float64 {
@@ -658,6 +672,8 @@ func (h *Handler) GetAnalyticsAgentsFunnel(w http.ResponseWriter, r *http.Reques
 		merged, err := h.Queries.CountAnalyticsMergedIssues(ctx, db.CountAnalyticsMergedIssuesParams{
 			WorkspaceID: sc.workspaceID,
 			MergedAt:    sc.since,
+			Column3:     sc.department,
+			Column4:     sc.projectID,
 		})
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, "failed to load agent funnel")
@@ -1015,6 +1031,14 @@ func (h *Handler) GetAnalyticsCollaborationBlockers(w http.ResponseWriter, r *ht
 		return
 	}
 
+	// Resolve every blocker's resolution in one batched query (P2-02) instead
+	// of an N+1 of per-issue GetAnalyticsBlockerResolution calls.
+	resolvedAt, err := h.blockerResolutions(ctx, sc.workspaceID, sc.since)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to load blockers")
+		return
+	}
+
 	items := make([]AnalyticsBlocker, 0, len(blockers))
 	for _, b := range blockers {
 		blockedAt := util.TimestampToString(b.BlockedAt)
@@ -1024,15 +1048,7 @@ func (h *Handler) GetAnalyticsCollaborationBlockers(w http.ResponseWriter, r *ht
 			BlockedAt:  blockedAt,
 			Status:     "open",
 		}
-		resolved, err := h.Queries.GetAnalyticsBlockerResolution(ctx, db.GetAnalyticsBlockerResolutionParams{
-			IssueID:   b.IssueID,
-			CreatedAt: b.BlockedAt,
-		})
-		if err != nil {
-			writeError(w, http.StatusInternalServerError, "failed to load blockers")
-			return
-		}
-		if resolved.Valid {
+		if resolved, ok := resolvedAt[uuidToString(b.IssueID)]; ok {
 			item.Status = "resolved"
 			item.ResolvedAt = timestampToPtr(resolved)
 			secs := resolved.Time.Sub(b.BlockedAt.Time).Seconds()
@@ -1042,6 +1058,26 @@ func (h *Handler) GetAnalyticsCollaborationBlockers(w http.ResponseWriter, r *ht
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{"items": items})
+}
+
+// blockerResolutions returns one resolved_at per blocked issue (keyed by
+// issue UUID string) using a single batched query. Issues whose resolution is
+// still open are absent from the map.
+func (h *Handler) blockerResolutions(ctx context.Context, ws pgtype.UUID, since pgtype.Timestamptz) (map[string]pgtype.Timestamptz, error) {
+	rows, err := h.Queries.ListAnalyticsBlockerResolutions(ctx, db.ListAnalyticsBlockerResolutionsParams{
+		WorkspaceID: ws,
+		CreatedAt:   since,
+	})
+	if err != nil {
+		return nil, err
+	}
+	resolved := make(map[string]pgtype.Timestamptz, len(rows))
+	for _, r := range rows {
+		if r.ResolvedAt.Valid {
+			resolved[uuidToString(r.IssueID)] = r.ResolvedAt
+		}
+	}
+	return resolved, nil
 }
 
 // blockerStats returns the resolved blocker durations (seconds) and the count
@@ -1055,17 +1091,15 @@ func (h *Handler) blockerStats(ctx context.Context, sc analyticsScope) ([]float6
 	if err != nil {
 		return nil, 0, err
 	}
+	resolvedAt, err := h.blockerResolutions(ctx, sc.workspaceID, sc.since)
+	if err != nil {
+		return nil, 0, err
+	}
 	var durations []float64
 	var open int64
 	for _, b := range blockers {
-		resolved, err := h.Queries.GetAnalyticsBlockerResolution(ctx, db.GetAnalyticsBlockerResolutionParams{
-			IssueID:   b.IssueID,
-			CreatedAt: b.BlockedAt,
-		})
-		if err != nil {
-			return nil, 0, err
-		}
-		if resolved.Valid {
+		resolved, ok := resolvedAt[uuidToString(b.IssueID)]
+		if ok {
 			durations = append(durations, resolved.Time.Sub(b.BlockedAt.Time).Seconds())
 		} else {
 			open++
@@ -1387,13 +1421,21 @@ func (h *Handler) GetAnalyticsGitQuality(w http.ResponseWriter, r *http.Request)
 
 	if repo == "all" {
 		// 汇总口径: simple mean across per-repo latest snapshots, snapshot_at =
-		// max(snapshot_at) (数据口径 §3.2).
+		// max(snapshot_at) (数据口径 §3.2). Repos with a NULL metric are excluded
+		// from that metric's mean (P1-03) rather than pulling it to 0.
 		var covSum, dupSum float64
+		var covN, dupN int
 		var vulnSum int64
 		latest := time.Time{}
 		for _, s := range snapshots {
-			covSum += s.Coverage
-			dupSum += s.DuplicationRate
+			if c := numericToPtr(s.Coverage); c != nil {
+				covSum += *c
+				covN++
+			}
+			if d := numericToPtr(s.DuplicationRate); d != nil {
+				dupSum += *d
+				dupN++
+			}
 			if s.Vulnerabilities.Valid {
 				vulnSum += int64(s.Vulnerabilities.Int32)
 			}
@@ -1401,11 +1443,14 @@ func (h *Handler) GetAnalyticsGitQuality(w http.ResponseWriter, r *http.Request)
 				latest = s.SnapshotAt.Time
 			}
 		}
-		n := float64(len(snapshots))
-		cov := covSum / n
-		dup := dupSum / n
-		coverage = &cov
-		duplicationRate = &dup
+		if covN > 0 {
+			cov := round1p(covSum / float64(covN))
+			coverage = &cov
+		}
+		if dupN > 0 {
+			dup := round1p(dupSum / float64(dupN))
+			duplicationRate = &dup
+		}
 		v := vulnSum
 		vulnerabilities = &v
 		if !latest.IsZero() {
@@ -1415,10 +1460,8 @@ func (h *Handler) GetAnalyticsGitQuality(w http.ResponseWriter, r *http.Request)
 	} else {
 		for _, s := range snapshots {
 			if s.Repo == repo {
-				cov := s.Coverage
-				coverage = &cov
-				dup := s.DuplicationRate
-				duplicationRate = &dup
+				coverage = numericToPtr(s.Coverage)
+				duplicationRate = numericToPtr(s.DuplicationRate)
 				if s.Vulnerabilities.Valid {
 					v := int64(s.Vulnerabilities.Int32)
 					vulnerabilities = &v
@@ -1664,6 +1707,14 @@ func (h *Handler) GetAnalyticsDoraLeadTime(w http.ResponseWriter, r *http.Reques
 		}
 		points := buildWeeklyLeadTime(samples)
 		var updatedAt *string
+		lastSync, err := h.Queries.GetAnalyticsDeploymentLastSync(ctx, sc.workspaceID)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "failed to load dora lead time")
+			return
+		}
+		if lastSync.Valid {
+			updatedAt = timestampToPtr(lastSync)
+		}
 		writeJSON(w, http.StatusOK, AnalyticsLeadTime{
 			SourceStatus: sourceStatusReady(updatedAt),
 			Metric:       metric,
@@ -1818,6 +1869,15 @@ func (h *Handler) GetAnalyticsDoraDeployments(w http.ResponseWriter, r *http.Req
 		writeError(w, http.StatusInternalServerError, "failed to load dora deployments")
 		return
 	}
+	trendMttr, err := h.Queries.ListAnalyticsDeploymentTrendMttr(ctx, db.ListAnalyticsDeploymentTrendMttrParams{
+		WorkspaceID: sc.workspaceID,
+		Column2:     sc.tz,
+		FinishedAt:  sc.since,
+	})
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to load dora deployments")
+		return
+	}
 	failureRows, err := h.Queries.ListAnalyticsDeploymentFailures(ctx, db.ListAnalyticsDeploymentFailuresParams{
 		WorkspaceID: sc.workspaceID,
 		FinishedAt:  sc.since,
@@ -1839,14 +1899,25 @@ func (h *Handler) GetAnalyticsDoraDeployments(w http.ResponseWriter, r *http.Req
 		freq = &v
 	}
 
+	// Per-week MTTR from the batched query (P1-02), keyed by week start date.
+	mttrByWeek := make(map[string]float64, len(trendMttr))
+	for _, m := range trendMttr {
+		mttrByWeek[m.Week.Time.Format(time.DateOnly)] = round1p(m.MttrSeconds)
+	}
+
 	trend := make([]AnalyticsDeploymentTrendPoint, 0, len(trendRows))
 	for _, t := range trendRows {
-		trend = append(trend, AnalyticsDeploymentTrendPoint{
-			Week:        t.Week.Time.Format(time.DateOnly),
+		week := t.Week.Time.Format(time.DateOnly)
+		point := AnalyticsDeploymentTrendPoint{
+			Week:        week,
 			Deployments: t.Deployments,
 			Failed:      t.Failed,
 			FailureRate: ratio(t.Failed, t.Deployments),
-		})
+		}
+		if m, ok := mttrByWeek[week]; ok {
+			point.MTTRSeconds = &m
+		}
+		trend = append(trend, point)
 	}
 
 	failures := make([]AnalyticsDeploymentFailure, 0, len(failureRows))
@@ -1874,8 +1945,18 @@ func (h *Handler) GetAnalyticsDoraDeployments(w http.ResponseWriter, r *http.Req
 		mttr = p50
 	}
 
+	var updatedAt *string
+	lastSync, err := h.Queries.GetAnalyticsDeploymentLastSync(ctx, sc.workspaceID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to load dora deployments")
+		return
+	}
+	if lastSync.Valid {
+		updatedAt = timestampToPtr(lastSync)
+	}
+
 	writeJSON(w, http.StatusOK, AnalyticsDeployments{
-		SourceStatus:      sourceStatusReady(nil),
+		SourceStatus:      sourceStatusReady(updatedAt),
 		TotalDeployments:  summary.TotalDeployments,
 		FailedDeployments: summary.FailedDeployments,
 		DeployFreqWeekly:  freq,
@@ -1959,12 +2040,11 @@ func (h *Handler) GetAnalyticsIdentityLifecycle(w http.ResponseWriter, r *http.R
 
 	recent := make([]AnalyticsLifecycleEvent, 0, len(events))
 	for _, e := range events {
-		result := e.Result
 		recent = append(recent, AnalyticsLifecycleEvent{
 			EventType:  e.EventType,
 			MemberName: e.MemberName,
 			OccurredAt: util.TimestampToString(e.OccurredAt),
-			Result:     &result,
+			Result:     textToPtr(e.Result),
 		})
 	}
 

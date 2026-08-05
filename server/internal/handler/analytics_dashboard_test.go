@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -649,5 +650,290 @@ func TestAnalyticsLimitClamping(t *testing.T) {
 	req3 := httptest.NewRequest("GET", "/api/analytics/activity/top-members?days=999", nil)
 	if got := parseAnalyticsDays(req3); got != 30 {
 		t.Errorf("days fallback: got %d, want 30", got)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Stage-10 review fixes
+// ---------------------------------------------------------------------------
+
+// TestAnalyticsQualityNullableSnapshot (P1-03) seeds a quality snapshot whose
+// coverage / duplication_rate are NULL and asserts G2 returns 200 with null
+// values — not a 500 from scanning NULL into a float64.
+func TestAnalyticsQualityNullableSnapshot(t *testing.T) {
+	if testHandler == nil || testPool == nil {
+		t.Skip("database not available")
+	}
+	ctx := context.Background()
+	if _, err := testPool.Exec(ctx, `
+		INSERT INTO repo_quality_snapshot (workspace_id, repo, coverage, vulnerabilities, duplication_rate, snapshot_at)
+		VALUES ($1, 'clotest-repo-null', NULL, 3, NULL, now())
+	`, testWorkspaceID); err != nil {
+		t.Fatalf("insert nullable snapshot: %v", err)
+	}
+	t.Cleanup(func() {
+		testPool.Exec(ctx, `DELETE FROM repo_quality_snapshot WHERE repo = 'clotest-repo-null' AND workspace_id = $1`, testWorkspaceID)
+	})
+
+	w := httptest.NewRecorder()
+	testHandler.GetAnalyticsGitQuality(w, newRequest("GET", "/api/analytics/git/quality?repo=clotest-repo-null", nil))
+	if w.Code != http.StatusOK {
+		t.Fatalf("nullable snapshot: expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var q AnalyticsQuality
+	if err := json.NewDecoder(w.Body).Decode(&q); err != nil {
+		t.Fatalf("decode quality: %v", err)
+	}
+	if !q.SourceStatus.Ready {
+		t.Errorf("quality: source_status.ready should be true when snapshots exist")
+	}
+	if q.Coverage != nil {
+		t.Errorf("quality coverage = %v, want null for NULL column", *q.Coverage)
+	}
+	if q.DuplicationRate != nil {
+		t.Errorf("quality duplication_rate = %v, want null for NULL column", *q.DuplicationRate)
+	}
+	if q.Vulnerabilities == nil || *q.Vulnerabilities != 3 {
+		t.Errorf("quality vulnerabilities = %v, want 3", q.Vulnerabilities)
+	}
+}
+
+// TestAnalyticsDeploymentsTrendMttr (P1-02) seeds recovered failed deployments
+// and asserts D2 trend[].mttr_seconds is populated per week.
+func TestAnalyticsDeploymentsTrendMttr(t *testing.T) {
+	if testHandler == nil || testPool == nil {
+		t.Skip("database not available")
+	}
+	ctx := context.Background()
+	now := time.Now().UTC()
+	// Two failed deployments ~1h ago with a 30-min recovery each.
+	for i := 0; i < 2; i++ {
+		if _, err := testPool.Exec(ctx, `
+			INSERT INTO deployment_event (workspace_id, deployment_id, app, started_at, finished_at, result, recovered_at)
+			VALUES ($1, $2, 'clotest-app', $3, $4, 'failed', $5)
+		`, testWorkspaceID, fmt.Sprintf("clotest-deploy-%d", i), now.Add(-2*time.Hour), now.Add(-time.Hour), now.Add(-30*time.Minute)); err != nil {
+			t.Fatalf("insert deployment: %v", err)
+		}
+	}
+	t.Cleanup(func() {
+		testPool.Exec(ctx, `DELETE FROM deployment_event WHERE deployment_id LIKE 'clotest-deploy-%' AND workspace_id = $1`, testWorkspaceID)
+	})
+
+	w := httptest.NewRecorder()
+	testHandler.GetAnalyticsDoraDeployments(w, newRequest("GET", "/api/analytics/dora/deployments?days=7", nil))
+	if w.Code != http.StatusOK {
+		t.Fatalf("deployments: expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var d AnalyticsDeployments
+	if err := json.NewDecoder(w.Body).Decode(&d); err != nil {
+		t.Fatalf("decode deployments: %v", err)
+	}
+	if !d.SourceStatus.Ready {
+		t.Errorf("deployments: source_status.ready should be true with events")
+	}
+	if d.SourceStatus.UpdatedAt == nil {
+		t.Errorf("deployments: source_status.updated_at should be set (P3-02)")
+	}
+	if d.TotalDeployments < 2 || d.FailedDeployments < 2 {
+		t.Errorf("deployments totals = %d/%d, want >= 2/2", d.TotalDeployments, d.FailedDeployments)
+	}
+	found := false
+	for _, p := range d.Trend {
+		if p.Deployments >= 2 && p.Failed >= 2 && p.MTTRSeconds != nil && *p.MTTRSeconds > 0 {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("deployments trend: expected a week with failed>=2 and mttr_seconds populated")
+	}
+}
+
+// TestAnalyticsLeadTimeDeployUpdatedAt (P3-02) asserts D1 metric=deploy returns
+// source_status.updated_at when deployment events exist.
+func TestAnalyticsLeadTimeDeployUpdatedAt(t *testing.T) {
+	if testHandler == nil || testPool == nil {
+		t.Skip("database not available")
+	}
+	ctx := context.Background()
+	now := time.Now().UTC()
+	// A successful deployment linked to a seeded issue.
+	issueID := seedAnalyticsIssue(t, ctx, "clotest-d1-"+now.Format("150405"), "", "", now.Add(-72*time.Hour))
+	if _, err := testPool.Exec(ctx, `
+		INSERT INTO deployment_event (workspace_id, deployment_id, app, started_at, finished_at, result, issue_ids)
+		VALUES ($1, 'clotest-d1-deploy', 'clotest-app', $2, $3, 'success', $4::jsonb)
+	`, testWorkspaceID, now.Add(-2*time.Hour), now.Add(-time.Hour), fmt.Sprintf(`["%s"]`, issueID)); err != nil {
+		t.Fatalf("insert deployment: %v", err)
+	}
+	t.Cleanup(func() {
+		testPool.Exec(ctx, `DELETE FROM deployment_event WHERE deployment_id = 'clotest-d1-deploy' AND workspace_id = $1`, testWorkspaceID)
+	})
+
+	w := httptest.NewRecorder()
+	testHandler.GetAnalyticsDoraLeadTime(w, newRequest("GET", "/api/analytics/dora/lead-time?metric=deploy&days=7", nil))
+	if w.Code != http.StatusOK {
+		t.Fatalf("lead-time: expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var lt AnalyticsLeadTime
+	if err := json.NewDecoder(w.Body).Decode(&lt); err != nil {
+		t.Fatalf("decode lead time: %v", err)
+	}
+	if !lt.SourceStatus.Ready {
+		t.Errorf("lead-time: source_status.ready should be true with deployments")
+	}
+	if lt.SourceStatus.UpdatedAt == nil {
+		t.Errorf("lead-time: source_status.updated_at should be set (P3-02)")
+	}
+	if len(lt.Points) < 1 {
+		t.Errorf("lead-time: expected >= 1 weekly point, got %d", len(lt.Points))
+	}
+}
+
+// TestAnalyticsIdentityResultNullable (P2-04) seeds an identity event with a
+// NULL result (offboard) and asserts L1 recent_events[].result is null.
+func TestAnalyticsIdentityResultNullable(t *testing.T) {
+	if testHandler == nil || testPool == nil {
+		t.Skip("database not available")
+	}
+	ctx := context.Background()
+	now := time.Now().UTC()
+	if _, err := testPool.Exec(ctx, `
+		INSERT INTO identity_import (workspace_id, event_type, member_name, occurred_at, result)
+		VALUES ($1, 'offboard', 'clotest-user', $2, NULL)
+	`, testWorkspaceID, now.Add(-24*time.Hour)); err != nil {
+		t.Fatalf("insert identity event: %v", err)
+	}
+	t.Cleanup(func() {
+		testPool.Exec(ctx, `DELETE FROM identity_import WHERE member_name = 'clotest-user' AND workspace_id = $1`, testWorkspaceID)
+	})
+
+	w := httptest.NewRecorder()
+	testHandler.GetAnalyticsIdentityLifecycle(w, newRequest("GET", "/api/analytics/identity/lifecycle", nil))
+	if w.Code != http.StatusOK {
+		t.Fatalf("lifecycle: expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var l AnalyticsLifecycle
+	if err := json.NewDecoder(w.Body).Decode(&l); err != nil {
+		t.Fatalf("decode lifecycle: %v", err)
+	}
+	if !l.SourceStatus.Ready {
+		t.Errorf("lifecycle: source_status.ready should be true with identity events")
+	}
+	found := false
+	for _, e := range l.RecentEvents {
+		if e.MemberName == "clotest-user" {
+			found = true
+			if e.Result != nil {
+				t.Errorf("lifecycle: offboard result = %q, want null (P2-04)", *e.Result)
+			}
+		}
+	}
+	if !found {
+		t.Errorf("lifecycle: expected seeded offboard event in recent_events")
+	}
+}
+
+// TestAnalyticsMergedCountFiltered (P2-01) wires up a VCS connection + merged
+// PR linked to an issue and asserts B1 merged_count becomes a number (>= 1)
+// rather than staying null, with the issue visible under the workspace scope.
+func TestAnalyticsMergedCountFiltered(t *testing.T) {
+	if testHandler == nil || testPool == nil {
+		t.Skip("database not available")
+	}
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	// VCS connection toggles the merged guide state.
+	if _, err := testPool.Exec(ctx, `
+		INSERT INTO vcs_connection (workspace_id, provider, instance_url, account_login, access_token_encrypted, webhook_secret_encrypted, connected_by_id, created_at)
+		VALUES ($1, 'forgejo', $2, 'clotest', 'enc', 'enc', $3, now())
+	`, testWorkspaceID, "https://clotest.example.com", testUserID); err != nil {
+		t.Fatalf("insert vcs connection: %v", err)
+	}
+	t.Cleanup(func() {
+		testPool.Exec(ctx, `DELETE FROM vcs_connection WHERE instance_url = 'https://clotest.example.com' AND workspace_id = $1`, testWorkspaceID)
+	})
+
+	issueID := seedAnalyticsIssue(t, ctx, "clotest-merged-"+now.Format("150405"), "", "", now.Add(-72*time.Hour))
+	connID := ""
+	if err := testPool.QueryRow(ctx, `SELECT id FROM vcs_connection WHERE workspace_id = $1 AND instance_url = $2`, testWorkspaceID, "https://clotest.example.com").Scan(&connID); err != nil {
+		t.Fatalf("fetch vcs connection: %v", err)
+	}
+	var prID string
+	if err := testPool.QueryRow(ctx, `
+		INSERT INTO vcs_pull_request (workspace_id, connection_id, repo_owner, repo_name, pr_number, title, state, html_url, pr_created_at, merged_at, pr_updated_at, additions, deletions)
+		VALUES ($1, $2, 'clotest', 'clotest-repo', 1, 'clotest merged pr', 'merged', $3, $4, $5, $5, 10, 5)
+		RETURNING id
+	`, testWorkspaceID, connID, "https://clotest.example.com/pr/1", now.Add(-72*time.Hour), now.Add(-24*time.Hour)).Scan(&prID); err != nil {
+		t.Fatalf("insert merged PR: %v", err)
+	}
+	t.Cleanup(func() {
+		testPool.Exec(ctx, `DELETE FROM issue_vcs_pull_request WHERE pull_request_id = $1`, prID)
+		testPool.Exec(ctx, `DELETE FROM vcs_pull_request WHERE id = $1`, prID)
+	})
+	if _, err := testPool.Exec(ctx, `
+		INSERT INTO issue_vcs_pull_request (issue_id, pull_request_id)
+		VALUES ($1, $2)
+	`, issueID, prID); err != nil {
+		t.Fatalf("link issue to PR: %v", err)
+	}
+
+	w := httptest.NewRecorder()
+	testHandler.GetAnalyticsAgentsFunnel(w, newRequest("GET", "/api/analytics/agents/funnel?days=30", nil))
+	if w.Code != http.StatusOK {
+		t.Fatalf("funnel: expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var f AnalyticsAgentFunnel
+	if err := json.NewDecoder(w.Body).Decode(&f); err != nil {
+		t.Fatalf("decode funnel: %v", err)
+	}
+	if f.MergedCount == nil {
+		t.Errorf("funnel merged_count = nil, want a number with VCS + merged PR (P2-01)")
+	} else if *f.MergedCount < 1 {
+		t.Errorf("funnel merged_count = %d, want >= 1", *f.MergedCount)
+	}
+	// merged_ratio stays null when execute_count = 0 (contract: null = 分母 0).
+	if f.MergedRatio != nil {
+		t.Errorf("funnel merged_ratio = %v, want null with no executed tasks", *f.MergedRatio)
+	}
+}
+
+// TestAnalyticsBlockerNPlusOne (P2-02) verifies the batched resolution query
+// returns the same resolved-state the per-issue path did for a seeded blocker.
+func TestAnalyticsBlockerNPlusOne(t *testing.T) {
+	if testHandler == nil || testPool == nil {
+		t.Skip("database not available")
+	}
+	ctx := context.Background()
+	now := time.Now().UTC()
+	issueID := seedAnalyticsIssue(t, ctx, "clotest-blocker2-"+now.Format("150405"), "", "", now.Add(-48*time.Hour))
+	if _, err := testPool.Exec(ctx, `
+		INSERT INTO activity_log (workspace_id, issue_id, actor_type, actor_id, action, details, created_at)
+		VALUES ($1, $2, 'member', $3, 'status_changed', '{"to":"blocked"}'::jsonb, $4)
+	`, testWorkspaceID, issueID, testUserID, now.Add(-24*time.Hour)); err != nil {
+		t.Fatalf("insert blocked activity: %v", err)
+	}
+	// Resolve it with an agent comment one hour later.
+	seedAnalyticsComment(t, ctx, issueID, "agent", "00000000-0000-0000-0000-000000000000", now.Add(-23*time.Hour))
+
+	w := httptest.NewRecorder()
+	testHandler.GetAnalyticsCollaborationBlockers(w, newRequest("GET", "/api/analytics/collaboration/blockers?limit=50", nil))
+	if w.Code != http.StatusOK {
+		t.Fatalf("blockers: expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var body struct {
+		Items []AnalyticsBlocker `json:"items"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&body); err != nil {
+		t.Fatalf("decode blockers: %v", err)
+	}
+	for _, b := range body.Items {
+		if b.IssueID == issueID {
+			if b.Status != "resolved" {
+				t.Errorf("blocker status = %q, want resolved after agent comment (P2-02)", b.Status)
+			}
+			if b.ResponseSeconds == nil || *b.ResponseSeconds <= 0 {
+				t.Errorf("blocker response_seconds = %v, want > 0", b.ResponseSeconds)
+			}
+		}
 	}
 }

@@ -186,33 +186,31 @@ type CountAnalyticsMembersParams struct {
 // Engineering analytics platform queries (CLO-239).
 //
 // Backs the four-dashboard platform under GET /api/analytics/*:
-//
-//	Tab1 Adoption & Activity  (A1-A5): activity/summary, activity/heatmap,
-//	                                 activity/top-members, adoption/summary,
-//	                                 adoption/trend
-//	Tab2 Agent Performance    (B1-B6): agents/funnel, agents/performance,
-//	                                 agents/top, skills/overview,
-//	                                 collaboration/summary,
-//	                                 collaboration/blockers
-//	Tab3 Git Contributions    (G1-G4): git/eloc, git/quality, git/repos,
-//	                                 git/prs
-//	Tab4 DORA                 (D1-D2): dora/lead-time, dora/deployments
-//	Identity & departments    (L1-L2): identity/lifecycle,
-//	                                 identity/departments
+//   Tab1 Adoption & Activity  (A1-A5): activity/summary, activity/heatmap,
+//                                    activity/top-members, adoption/summary,
+//                                    adoption/trend
+//   Tab2 Agent Performance    (B1-B6): agents/funnel, agents/performance,
+//                                    agents/top, skills/overview,
+//                                    collaboration/summary,
+//                                    collaboration/blockers
+//   Tab3 Git Contributions    (G1-G4): git/eloc, git/quality, git/repos,
+//                                    git/prs
+//   Tab4 DORA                 (D1-D2): dora/lead-time, dora/deployments
+//   Identity & departments    (L1-L2): identity/lifecycle,
+//                                    identity/departments
 //
 // 口径 follows the data spec (数据口径-CLO-228 v2.0). Key conventions:
-//   - Every time-bucketed query buckets by the viewer tz ($2::text) so a
+//   * Every time-bucketed query buckets by the viewer tz ($2::text) so a
 //     natural-day window uses the viewer's local midnight as the day boundary.
-//   - "active member" = a member (via user_id) that created an issue,
+//   * "active member" = a member (via user_id) that created an issue,
 //     authored a comment, or initiated an agent task inside the window.
-//   - Optional filters are passed as sentinel defaults, never NULL casts that
-//     could vary by driver: department = ” means "all departments",
+//   * Optional filters are passed as sentinel defaults, never NULL casts that
+//     could vary by driver: department = '' means "all departments",
 //     project_id = NULL means "whole workspace" (uuid columns allow NULL).
-//   - Ratios are computed in the handler (0-1), never in SQL.
-//   - G/D/L readiness is decided by the handler via vcs_connection /
+//   * Ratios are computed in the handler (0-1), never in SQL.
+//   * G/D/L readiness is decided by the handler via vcs_connection /
 //     deployment_event / identity_import existence; these queries return
 //     empty sets when the underlying source has no rows.
-//
 // Total workspace members (optional department slice).
 func (q *Queries) CountAnalyticsMembers(ctx context.Context, arg CountAnalyticsMembersParams) (int64, error) {
 	row := q.db.QueryRow(ctx, countAnalyticsMembers, arg.WorkspaceID, arg.Column2)
@@ -324,18 +322,32 @@ const countAnalyticsMergedIssues = `-- name: CountAnalyticsMergedIssues :one
 SELECT COUNT(DISTINCT ipr.issue_id)::bigint AS merged_count
 FROM vcs_pull_request pr
 JOIN issue_vcs_pull_request ipr ON ipr.pull_request_id = pr.id AND NOT ipr.reference_only
+JOIN issue i ON i.id = ipr.issue_id
 WHERE pr.workspace_id = $1 AND pr.state = 'merged' AND pr.merged_at >= $2
+  AND ($3::text = '' OR i.creator_type = 'member' AND i.creator_id IN (
+      SELECT m.user_id FROM member m WHERE m.workspace_id = $1 AND m.department = $3))
+  AND ($4::uuid IS NULL OR i.project_id = $4)
 `
 
 type CountAnalyticsMergedIssuesParams struct {
 	WorkspaceID pgtype.UUID        `json:"workspace_id"`
 	MergedAt    pgtype.Timestamptz `json:"merged_at"`
+	Column3     string             `json:"column_3"`
+	Column4     pgtype.UUID        `json:"column_4"`
 }
 
 // Merged stage (B1): distinct issues linked to a merged PR whose merged_at
 // falls in the window. Requires VCS connection (caller gates on it).
+// Optional department slice attributes the issue to the department of its
+// creator (member), and project_id scopes to a project (P2-01) so the funnel's
+// three stages share the same filters.
 func (q *Queries) CountAnalyticsMergedIssues(ctx context.Context, arg CountAnalyticsMergedIssuesParams) (int64, error) {
-	row := q.db.QueryRow(ctx, countAnalyticsMergedIssues, arg.WorkspaceID, arg.MergedAt)
+	row := q.db.QueryRow(ctx, countAnalyticsMergedIssues,
+		arg.WorkspaceID,
+		arg.MergedAt,
+		arg.Column3,
+		arg.Column4,
+	)
 	var merged_count int64
 	err := row.Scan(&merged_count)
 	return merged_count, err
@@ -528,6 +540,20 @@ func (q *Queries) GetAnalyticsCollabSummary(ctx context.Context, arg GetAnalytic
 	var i GetAnalyticsCollabSummaryRow
 	err := row.Scan(&i.CollabIssueCount, &i.TotalIssues, &i.CollabCommentTotal)
 	return i, err
+}
+
+const getAnalyticsDeploymentLastSync = `-- name: GetAnalyticsDeploymentLastSync :one
+SELECT MAX(de.finished_at)::timestamptz AS updated_at
+FROM deployment_event de
+WHERE de.workspace_id = $1
+`
+
+// Most recent deployment finished_at for the workspace (D source_status.updated_at).
+func (q *Queries) GetAnalyticsDeploymentLastSync(ctx context.Context, workspaceID pgtype.UUID) (pgtype.Timestamptz, error) {
+	row := q.db.QueryRow(ctx, getAnalyticsDeploymentLastSync, workspaceID)
+	var updated_at pgtype.Timestamptz
+	err := row.Scan(&updated_at)
+	return updated_at, err
 }
 
 const getAnalyticsDeploymentSummary = `-- name: GetAnalyticsDeploymentSummary :one
@@ -1086,6 +1112,73 @@ func (q *Queries) ListAnalyticsAuthorMappings(ctx context.Context, workspaceID p
 	return items, nil
 }
 
+const listAnalyticsBlockerResolutions = `-- name: ListAnalyticsBlockerResolutions :many
+SELECT
+    b.issue_id AS issue_id,
+    b.blocked_at AS blocked_at,
+    r.resolved_at AS resolved_at
+FROM (
+    SELECT
+        al.issue_id AS issue_id,
+        MIN(al.created_at)::timestamptz AS blocked_at
+    FROM activity_log al
+    WHERE al.workspace_id = $1
+      AND al.action = 'status_changed'
+      AND al.details->>'to' = 'blocked'
+      AND al.created_at >= $2
+    GROUP BY al.issue_id
+) b
+LEFT JOIN LATERAL (
+    SELECT MIN(t)::timestamptz AS resolved_at
+    FROM (
+        SELECT MIN(al2.created_at) AS t
+        FROM activity_log al2
+        WHERE al2.issue_id = b.issue_id AND al2.action = 'status_changed'
+          AND al2.details->>'to' <> 'blocked' AND al2.created_at >= b.blocked_at
+        UNION ALL
+        SELECT MIN(c.created_at) AS t
+        FROM comment c
+        WHERE c.issue_id = b.issue_id AND c.author_type = 'agent' AND c.created_at >= b.blocked_at
+    ) resolutions
+) r ON true
+ORDER BY b.blocked_at DESC
+`
+
+type ListAnalyticsBlockerResolutionsParams struct {
+	WorkspaceID pgtype.UUID        `json:"workspace_id"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+}
+
+type ListAnalyticsBlockerResolutionsRow struct {
+	IssueID    pgtype.UUID        `json:"issue_id"`
+	BlockedAt  pgtype.Timestamptz `json:"blocked_at"`
+	ResolvedAt pgtype.Timestamptz `json:"resolved_at"`
+}
+
+// Batched blocker resolutions for every issue that entered blocked state in the
+// window (replaces the per-issue GetAnalyticsBlockerResolution N+1 — P2-02).
+// Each row carries the issue's first blocked_at (the floor for its resolution)
+// and the resolved_at when one exists; resolved_at IS NULL means still open.
+func (q *Queries) ListAnalyticsBlockerResolutions(ctx context.Context, arg ListAnalyticsBlockerResolutionsParams) ([]ListAnalyticsBlockerResolutionsRow, error) {
+	rows, err := q.db.Query(ctx, listAnalyticsBlockerResolutions, arg.WorkspaceID, arg.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListAnalyticsBlockerResolutionsRow{}
+	for rows.Next() {
+		var i ListAnalyticsBlockerResolutionsRow
+		if err := rows.Scan(&i.IssueID, &i.BlockedAt, &i.ResolvedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listAnalyticsBlockers = `-- name: ListAnalyticsBlockers :many
 SELECT
     al.issue_id AS issue_id,
@@ -1230,6 +1323,53 @@ func (q *Queries) ListAnalyticsDeploymentTrend(ctx context.Context, arg ListAnal
 	return items, nil
 }
 
+const listAnalyticsDeploymentTrendMttr = `-- name: ListAnalyticsDeploymentTrendMttr :many
+SELECT
+    DATE_TRUNC('week', de.finished_at AT TIME ZONE $2::text)::date AS week,
+    PERCENTILE_CONT(0.5) WITHIN GROUP (
+        ORDER BY EXTRACT(EPOCH FROM (de.recovered_at - de.finished_at))
+    )::float8 AS mttr_seconds
+FROM deployment_event de
+WHERE de.workspace_id = $1 AND de.result = 'failed'
+  AND de.recovered_at IS NOT NULL AND de.finished_at >= $3
+GROUP BY week
+ORDER BY week
+`
+
+type ListAnalyticsDeploymentTrendMttrParams struct {
+	WorkspaceID pgtype.UUID        `json:"workspace_id"`
+	Column2     string             `json:"column_2"`
+	FinishedAt  pgtype.Timestamptz `json:"finished_at"`
+}
+
+type ListAnalyticsDeploymentTrendMttrRow struct {
+	Week        pgtype.Date `json:"week"`
+	MttrSeconds float64     `json:"mttr_seconds"`
+}
+
+// Per-week recovered-failure MTTR (P50 of recovered_at - finished_at, seconds)
+// for the D2 trend[].mttr_seconds field. Weeks with no recovered failures are
+// simply absent; the handler leaves their mttr_seconds as null.
+func (q *Queries) ListAnalyticsDeploymentTrendMttr(ctx context.Context, arg ListAnalyticsDeploymentTrendMttrParams) ([]ListAnalyticsDeploymentTrendMttrRow, error) {
+	rows, err := q.db.Query(ctx, listAnalyticsDeploymentTrendMttr, arg.WorkspaceID, arg.Column2, arg.FinishedAt)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListAnalyticsDeploymentTrendMttrRow{}
+	for rows.Next() {
+		var i ListAnalyticsDeploymentTrendMttrRow
+		if err := rows.Scan(&i.Week, &i.MttrSeconds); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listAnalyticsElocByAuthor = `-- name: ListAnalyticsElocByAuthor :many
 SELECT
     COALESCE(pr.author_login, '') AS author,
@@ -1346,7 +1486,7 @@ type ListAnalyticsIdentityEventsRow struct {
 	EventType  string             `json:"event_type"`
 	MemberName string             `json:"member_name"`
 	OccurredAt pgtype.Timestamptz `json:"occurred_at"`
-	Result     string             `json:"result"`
+	Result     pgtype.Text        `json:"result"`
 }
 
 // Recent identity events (L1 recent_events). Optional department slice.
@@ -1762,9 +1902,9 @@ func (q *Queries) ListAnalyticsPRs(ctx context.Context, arg ListAnalyticsPRsPara
 const listAnalyticsQualitySnapshots = `-- name: ListAnalyticsQualitySnapshots :many
 SELECT DISTINCT ON (rq.repo)
     rq.repo,
-    rq.coverage::float8 AS coverage,
+    rq.coverage AS coverage,
     rq.vulnerabilities AS vulnerabilities,
-    rq.duplication_rate::float8 AS duplication_rate,
+    rq.duplication_rate AS duplication_rate,
     rq.snapshot_at
 FROM repo_quality_snapshot rq
 WHERE rq.workspace_id = $1
@@ -1773,13 +1913,16 @@ ORDER BY rq.repo, rq.snapshot_at DESC
 
 type ListAnalyticsQualitySnapshotsRow struct {
 	Repo            string             `json:"repo"`
-	Coverage        float64            `json:"coverage"`
+	Coverage        pgtype.Numeric     `json:"coverage"`
 	Vulnerabilities pgtype.Int4        `json:"vulnerabilities"`
-	DuplicationRate float64            `json:"duplication_rate"`
+	DuplicationRate pgtype.Numeric     `json:"duplication_rate"`
 	SnapshotAt      pgtype.Timestamptz `json:"snapshot_at"`
 }
 
 // Latest quality snapshot per repo (G2). Empty table => guide state.
+// coverage / duplication_rate are nullable NUMERIC columns; selecting them
+// raw keeps NULL semantics (a partially-populated snapshot must not turn the
+// endpoint into a 500 — P1-03). Handler skips nulls in aggregates.
 func (q *Queries) ListAnalyticsQualitySnapshots(ctx context.Context, workspaceID pgtype.UUID) ([]ListAnalyticsQualitySnapshotsRow, error) {
 	rows, err := q.db.Query(ctx, listAnalyticsQualitySnapshots, workspaceID)
 	if err != nil {
