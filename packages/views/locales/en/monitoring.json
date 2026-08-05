@@ -1,0 +1,84 @@
+{
+  "range": {
+    "1": "Last 24 hours",
+    "7": "Last 7 days",
+    "30": "Last 30 days"
+  },
+  "page": {
+    "title": "Monitoring dashboard"
+  },
+  "toolbar": {
+    "data_updated": "Data updated",
+    "auto_refresh": "Auto refresh",
+    "refresh": "Refresh",
+    "refreshing": "Refreshing…",
+    "no_update": "No update",
+    "auto_refresh_paused_badge": "Auto refresh paused",
+    "enabled": "Auto refresh enabled (60s)",
+    "disabled": "Auto refresh disabled",
+    "paused_toast": "Too many consecutive failures — auto refresh paused",
+    "up_to_date": "Data is up to date ({{time}})",
+    "refresh_partial_failed": "Some data failed to refresh — showing last data"
+  },
+  "kpi": {
+    "section": "Key metrics",
+    "total_label": "Total issues",
+    "in_progress_label": "In progress",
+    "in_progress_sub": "{{pct}} of total",
+    "completion_label": "Completion rate",
+    "delay_label": "Delay rate",
+    "delay_no_data": "No due-date data available",
+    "online_runtime_label": "Online runtimes",
+    "online_runtime_sub": "{{total}} runtimes total",
+    "online_rate_label": "Online rate",
+    "online_rate_sub": "{{online}}/{{total}} online"
+  },
+  "module": {
+    "section": "Data modules",
+    "other": "Other",
+    "issue_distribution_title": "Issue status distribution",
+    "issue_distribution_empty": "No issue data yet",
+    "issue_distribution_empty_desc": "Distribution appears here once issues are created",
+    "project_progress_title": "Project progress",
+    "project_progress_empty": "No project data yet",
+    "project_progress_empty_desc": "Progress appears here once projects are created",
+    "agent_workload_title": "Agent workload",
+    "agent_workload_empty": "No active records",
+    "team_activity_title": "Team activity",
+    "team_activity_empty": "No active records",
+    "comments_title": "Comment activity",
+    "comments_total": "{{count}} total",
+    "comments_today": "{{count}} today",
+    "comments_series": "Comments",
+    "comments_empty": "No comment data yet",
+    "comments_empty_desc": "Activity appears here once comments are created",
+    "completion_title": "Completion / delay trend",
+    "completion_empty": "No trend data yet",
+    "completion_empty_desc": "Trend appears here once due-date tasks exist",
+    "completion_series": "Completion rate",
+    "delay_series": "Delay rate"
+  },
+  "donut": {
+    "total_label": "Total issues"
+  },
+  "runtime": {
+    "title": "Runtime status",
+    "summary": "{{online}} online / {{total}} total",
+    "empty_title": "No runtimes found",
+    "col_name": "Runtime",
+    "col_type": "Type",
+    "col_status": "Status",
+    "col_heartbeat": "Last heartbeat",
+    "col_resources": "Resource usage",
+    "minutes_ago": "{{minutes}} min ago",
+    "prev_page": "Previous",
+    "next_page": "Next"
+  },
+  "error": {
+    "module_title": "Failed to load data",
+    "page_title": "Failed to load data",
+    "page_desc": "Please retry shortly or check your connection",
+    "retry": "Retry",
+    "reload": "Reload"
+  }
+}

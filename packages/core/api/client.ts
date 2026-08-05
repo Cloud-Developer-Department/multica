@@ -73,6 +73,10 @@ import type {
   DashboardRunTimeDaily,
   DashboardFailureDaily,
   DashboardFailureByAgent,
+  MonitoringIssueDistribution,
+  MonitoringActivity,
+  MonitoringComments,
+  MonitoringCompletion,
   RuntimeUpdate,
   RuntimeModelListRequest,
   RuntimeLocalSkillListRequest,
@@ -199,6 +203,14 @@ import {
   DashboardFailureByAgentListSchema,
   DashboardUsageByAgentListSchema,
   DashboardUsageDailyListSchema,
+  EMPTY_MONITORING_ACTIVITY,
+  EMPTY_MONITORING_COMMENTS,
+  EMPTY_MONITORING_COMPLETION,
+  EMPTY_MONITORING_ISSUE_DISTRIBUTION,
+  MonitoringActivitySchema,
+  MonitoringCommentsSchema,
+  MonitoringCompletionSchema,
+  MonitoringIssueDistributionSchema,
   EMPTY_AGENT_TEMPLATE_DETAIL,
   EMPTY_AGENT_TEMPLATE_SUMMARY_LIST,
   EMPTY_APP_CONFIG,
@@ -1654,6 +1666,74 @@ export class ApiClient {
       DashboardFailureByAgentListSchema,
       [],
       { endpoint: "GET /api/dashboard/failures/by-agent" },
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Data-monitoring dashboard — four aggregation endpoints for
+  // `/{slug}/dashboard` (CLO-166 / CLO-171). The monitoring page degrades
+  // module-by-module, so each method parses leniently and falls back to an
+  // empty payload: a missing endpoint / contract drift surfaces as that
+  // module's error/empty state instead of taking the page down.
+  // ---------------------------------------------------------------------------
+
+  async getMonitoringIssueDistribution(
+    params: { days?: number; tz?: string },
+  ): Promise<MonitoringIssueDistribution> {
+    const search = new URLSearchParams();
+    if (params.days) search.set("days", String(params.days));
+    if (params.tz) search.set("tz", params.tz);
+    const raw = await this.fetch<unknown>(`/api/dashboard/issue-distribution?${search}`);
+    return parseWithFallback<MonitoringIssueDistribution>(
+      raw,
+      MonitoringIssueDistributionSchema,
+      EMPTY_MONITORING_ISSUE_DISTRIBUTION,
+      { endpoint: "GET /api/dashboard/issue-distribution" },
+    );
+  }
+
+  async getMonitoringActivity(
+    params: { days?: number; tz?: string },
+  ): Promise<MonitoringActivity> {
+    const search = new URLSearchParams();
+    if (params.days) search.set("days", String(params.days));
+    if (params.tz) search.set("tz", params.tz);
+    const raw = await this.fetch<unknown>(`/api/dashboard/activity?${search}`);
+    return parseWithFallback<MonitoringActivity>(
+      raw,
+      MonitoringActivitySchema,
+      EMPTY_MONITORING_ACTIVITY,
+      { endpoint: "GET /api/dashboard/activity" },
+    );
+  }
+
+  async getMonitoringComments(
+    params: { days?: number; tz?: string },
+  ): Promise<MonitoringComments> {
+    const search = new URLSearchParams();
+    if (params.days) search.set("days", String(params.days));
+    if (params.tz) search.set("tz", params.tz);
+    const raw = await this.fetch<unknown>(`/api/dashboard/comments?${search}`);
+    return parseWithFallback<MonitoringComments>(
+      raw,
+      MonitoringCommentsSchema,
+      EMPTY_MONITORING_COMMENTS,
+      { endpoint: "GET /api/dashboard/comments" },
+    );
+  }
+
+  async getMonitoringCompletion(
+    params: { days?: number; tz?: string },
+  ): Promise<MonitoringCompletion> {
+    const search = new URLSearchParams();
+    if (params.days) search.set("days", String(params.days));
+    if (params.tz) search.set("tz", params.tz);
+    const raw = await this.fetch<unknown>(`/api/dashboard/completion?${search}`);
+    return parseWithFallback<MonitoringCompletion>(
+      raw,
+      MonitoringCompletionSchema,
+      EMPTY_MONITORING_COMPLETION,
+      { endpoint: "GET /api/dashboard/completion" },
     );
   }
 

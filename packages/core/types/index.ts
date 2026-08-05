@@ -76,6 +76,17 @@ export type {
   RuntimeLocalSkillImportResult,
   IssueUsageSummary,
 } from "./agent";
+export type {
+  MonitoringStatusCounts,
+  MonitoringIssueDistribution,
+  MonitoringProjectProgress,
+  MonitoringActivity,
+  MonitoringActivityEntity,
+  MonitoringCommentPoint,
+  MonitoringComments,
+  MonitoringCompletionPoint,
+  MonitoringCompletion,
+} from "./monitoring";
 export { RUNTIME_PROFILE_PROTOCOL_FAMILIES } from "./agent";
 export type { Workspace, WorkspaceRepo, Member, MemberRole, User, MemberWithUser, Invitation, ShareLink } from "./workspace";
 export type { InboxItem, InboxSeverity, InboxItemType, InboxWorkspaceUnread } from "./inbox";

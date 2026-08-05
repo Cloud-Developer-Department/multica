@@ -34,6 +34,10 @@ import type {
   ListIssuesResponse,
   ListLabelsResponse,
   ListWebhookDeliveriesResponse,
+  MonitoringIssueDistribution,
+  MonitoringActivity,
+  MonitoringComments,
+  MonitoringCompletion,
   NotificationPreferenceResponse,
   ResourceLabelsResponse,
   SearchIssuesResponse,
@@ -1759,4 +1763,93 @@ export const CreateBillingPortalSessionResponseSchema = z.object({
 
 export const EMPTY_CREATE_BILLING_PORTAL_SESSION_RESPONSE: CreateBillingPortalSessionResponse = {
   url: "",
+};
+
+// ---------------------------------------------------------------------------
+// Data-monitoring dashboard schemas (CLO-166 / CLO-171).
+//
+// Four independent aggregation endpoints feed the `/{slug}/dashboard`
+// monitoring page (PRD §5). Same leniency rules as the usage-dashboard
+// schemas: numbers default to 0, strings to "", `.loose()` passes unknown
+// fields, and status bags stay `Record<string, number>` so a backend that
+// grows a new status id never drops the whole response.
+// ---------------------------------------------------------------------------
+
+export const MonitoringStatusCountsSchema = z.record(z.string(), z.number());
+
+const MonitoringProjectProgressSchema = z.object({
+  id: z.string().default(""),
+  name: z.string().default(""),
+  total: z.number().default(0),
+  status_counts: MonitoringStatusCountsSchema,
+}).loose();
+
+export const MonitoringIssueDistributionSchema = z.object({
+  total: z.number().default(0),
+  status_counts: MonitoringStatusCountsSchema,
+  projects: z.array(MonitoringProjectProgressSchema).default([]),
+}).loose();
+
+export const EMPTY_MONITORING_ISSUE_DISTRIBUTION: MonitoringIssueDistribution = {
+  total: 0,
+  status_counts: {},
+  projects: [],
+};
+
+const MonitoringActivityEntitySchema = z.object({
+  id: z.string().default(""),
+  name: z.string().default(""),
+  load: z.number().default(0),
+  activity: z.number().default(0),
+}).loose();
+
+export const MonitoringActivitySchema = z.object({
+  agent_workload: z.array(MonitoringActivityEntitySchema).default([]),
+  team_activity: z.array(MonitoringActivityEntitySchema).default([]),
+}).loose();
+
+export const EMPTY_MONITORING_ACTIVITY: MonitoringActivity = {
+  agent_workload: [],
+  team_activity: [],
+};
+
+const MonitoringCommentPointSchema = z.object({
+  time: z.string().default(""),
+  count: z.number().default(0),
+}).loose();
+
+export const MonitoringCommentsSchema = z.object({
+  total: z.number().default(0),
+  today: z.number().default(0),
+  series: z.array(MonitoringCommentPointSchema).default([]),
+}).loose();
+
+export const EMPTY_MONITORING_COMMENTS: MonitoringComments = {
+  total: 0,
+  today: 0,
+  series: [],
+};
+
+const MonitoringCompletionPointSchema = z.object({
+  time: z.string().default(""),
+  completion: z.number().default(0),
+  delay: z.number().nullable().optional().transform((v) => v ?? null),
+}).loose();
+
+export const MonitoringCompletionSchema = z.object({
+  completion_rate: z.number().default(0),
+  completion_delta: z.number().default(0),
+  delay_rate: z.number().nullable().optional().transform((v) => v ?? null),
+  delay_delta: z.number().default(0),
+  has_due_date_tasks: z.boolean().default(false),
+  trend: z.array(MonitoringCompletionPointSchema).default([]),
+}).loose();
+
+export const EMPTY_MONITORING_COMPLETION: MonitoringCompletion = {
+  completion_rate: 0,
+  completion_delta: 0,
+  delay_rate: null,
+  delay_delta: 0,
+  has_due_date_tasks: false,
+  trend: [],
 };
