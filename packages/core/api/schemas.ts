@@ -1840,7 +1840,7 @@ export const MonitoringCompletionSchema = z.object({
   completion_rate: z.number().default(0),
   completion_delta: z.number().default(0),
   delay_rate: z.number().nullable().optional().transform((v) => v ?? null),
-  delay_delta: z.number().default(0),
+  delay_delta: z.number().nullable().optional().transform((v) => v ?? null),
   has_due_date_tasks: z.boolean().default(false),
   trend: z.array(MonitoringCompletionPointSchema).default([]),
 }).loose();

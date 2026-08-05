@@ -1322,6 +1322,14 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 				r.Get("/runtime/daily", h.GetDashboardRunTimeDaily)
 				r.Get("/failures/daily", h.GetDashboardFailuresDaily)
 				r.Get("/failures/by-agent", h.GetDashboardFailuresByAgent)
+
+				// Data-monitoring dashboard aggregation endpoints (CLO-170).
+				// ?days= (1/7/30, default 7) + ?tz= drive the count/trend
+				// modules; issue-distribution is a workspace snapshot.
+				r.Get("/issue-distribution", h.GetMonitoringIssueDistribution)
+				r.Get("/activity", h.GetMonitoringActivity)
+				r.Get("/comments", h.GetMonitoringComments)
+				r.Get("/completion", h.GetMonitoringCompletion)
 			})
 
 			// Runtimes
