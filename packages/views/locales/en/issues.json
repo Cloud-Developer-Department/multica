@@ -228,7 +228,12 @@
     "empty_column": "No issues",
     "empty_grouping": "No matching issues",
     "no_value": "No value",
-    "ordered_by": "Board ordered by {{field}}"
+    "ordered_by": "Board ordered by {{field}}",
+    "expand_subtree": "Expand sub-issues",
+    "collapse_subtree": "Collapse sub-issues",
+    "subtree_count": "+{{count}} sub-issues",
+    "detach_hint": "Will become a top-level issue",
+    "subtree_sync_failed": "Some sub-issues were not moved"
   },
   "detail": {
     "not_found": "This issue does not exist or has been deleted in this workspace.",

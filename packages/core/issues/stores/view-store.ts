@@ -197,6 +197,9 @@ export interface IssueViewState {
   tableCollapsedParents: string[];
   tableHierarchy: boolean;
   tableCalculation: TableCalculation;
+  /** Collapsed parent issue ids in the board tree view, isolated from the
+   *  table's collapse state so switching views doesn't share expansion state. */
+  boardCollapsedParents: string[];
   setViewMode: (mode: ViewMode) => void;
   setGanttZoom: (zoom: GanttZoom) => void;
   toggleGanttShowCompleted: () => void;
@@ -234,6 +237,7 @@ export interface IssueViewState {
   toggleTableParentCollapsed: (issueId: string) => void;
   toggleTableHierarchy: () => void;
   setTableCalculation: (calculation: TableCalculation) => void;
+  toggleBoardParentCollapsed: (issueId: string) => void;
 }
 
 export const viewStoreSlice = (set: StoreApi<IssueViewState>["setState"]): IssueViewState => ({
@@ -276,6 +280,7 @@ export const viewStoreSlice = (set: StoreApi<IssueViewState>["setState"]): Issue
   tableCollapsedParents: [],
   tableHierarchy: true,
   tableCalculation: "none",
+  boardCollapsedParents: [],
 
   setViewMode: (mode) => set({ viewMode: mode }),
   setGanttZoom: (zoom) => set({ ganttZoom: zoom }),
@@ -465,6 +470,12 @@ export const viewStoreSlice = (set: StoreApi<IssueViewState>["setState"]): Issue
   toggleTableHierarchy: () =>
     set((state) => ({ tableHierarchy: !state.tableHierarchy })),
   setTableCalculation: (tableCalculation) => set({ tableCalculation }),
+  toggleBoardParentCollapsed: (issueId) =>
+    set((state) => ({
+      boardCollapsedParents: state.boardCollapsedParents.includes(issueId)
+        ? state.boardCollapsedParents.filter((id) => id !== issueId)
+        : [...state.boardCollapsedParents, issueId],
+    })),
 });
 
 export const viewStorePersistOptions = (name: string) => ({
@@ -505,6 +516,7 @@ export const viewStorePersistOptions = (name: string) => ({
     tableCollapsedParents: state.tableCollapsedParents,
     tableHierarchy: state.tableHierarchy,
     tableCalculation: state.tableCalculation,
+    boardCollapsedParents: state.boardCollapsedParents,
   }),
   // Default Zustand merge is shallow, so a persisted `cardProperties` snapshot
   // saved before a new toggle was introduced wins entirely and the new key is
@@ -568,6 +580,9 @@ export function mergeViewStatePersisted<T extends IssueViewState>(
     tableCollapsedParents: Array.isArray(p.tableCollapsedParents)
       ? p.tableCollapsedParents
       : current.tableCollapsedParents,
+    boardCollapsedParents: Array.isArray(p.boardCollapsedParents)
+      ? p.boardCollapsedParents
+      : current.boardCollapsedParents,
   };
 }
 
