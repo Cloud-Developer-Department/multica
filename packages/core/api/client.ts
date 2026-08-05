@@ -1864,8 +1864,9 @@ export class ApiClient {
     const search = this.analyticsSearch(params);
     if (params.limit) search.set("limit", String(params.limit));
     const raw = await this.fetch<unknown>(`/api/analytics/activity/top-members?${search}`);
+    // Contract A3 returns `{ "items": [...] }` — unwrap before parsing the array.
     return parseWithFallback<AnalyticsTopMember[]>(
-      raw,
+      (raw as { items?: unknown } | null)?.items,
       AnalyticsTopMemberListSchema,
       [],
       { endpoint: "GET /api/analytics/activity/top-members" },
@@ -1890,8 +1891,9 @@ export class ApiClient {
   ): Promise<AnalyticsAdoptionTrendPoint[]> {
     const search = this.analyticsSearch(params);
     const raw = await this.fetch<unknown>(`/api/analytics/adoption/trend?${search}`);
+    // Contract A5 returns `{ "points": [...] }` — unwrap before parsing the array.
     return parseWithFallback<AnalyticsAdoptionTrendPoint[]>(
-      raw,
+      (raw as { points?: unknown } | null)?.points,
       AnalyticsAdoptionTrendPointListSchema,
       [],
       { endpoint: "GET /api/analytics/adoption/trend" },
@@ -1938,8 +1940,9 @@ export class ApiClient {
     const search = this.analyticsSearch(params);
     if (params.limit) search.set("limit", String(params.limit));
     const raw = await this.fetch<unknown>(`/api/analytics/agents/top?${search}`);
+    // Contract B3 returns `{ "items": [...] }` — unwrap before parsing the array.
     return parseWithFallback<AnalyticsAgentTopItem[]>(
-      raw,
+      (raw as { items?: unknown } | null)?.items,
       AnalyticsAgentTopItemListSchema,
       [],
       { endpoint: "GET /api/analytics/agents/top" },
@@ -1984,8 +1987,9 @@ export class ApiClient {
     const search = this.analyticsSearch(params);
     if (params.limit) search.set("limit", String(params.limit));
     const raw = await this.fetch<unknown>(`/api/analytics/collaboration/blockers?${search}`);
+    // Contract B6 returns `{ "items": [...] }` — unwrap before parsing the array.
     return parseWithFallback<AnalyticsBlockerItem[]>(
-      raw,
+      (raw as { items?: unknown } | null)?.items,
       AnalyticsBlockerItemListSchema,
       [],
       { endpoint: "GET /api/analytics/collaboration/blockers" },

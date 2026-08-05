@@ -10,6 +10,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Rocket, Timer, TriangleAlert } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@multica/ui/components/ui/button";
+import { NumberFlow } from "@multica/ui/components/ui/number-flow";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@multica/ui/components/ui/tooltip";
 import {
   analyticsLeadTimeOptions,
@@ -81,7 +82,20 @@ export function Tab4Dora({ wsId, days, tz }: Tab4DoraProps) {
     return [
       {
         label: t(($) => $.kpi.deploy_frequency),
-        value: formatDurationEn(d?.deploy_frequency_weekly != null ? d.deploy_frequency_weekly * 86400 : null),
+        value:
+          d?.deploy_frequency_weekly != null ? (
+            <span className="flex items-baseline gap-1">
+              <NumberFlow
+                value={d.deploy_frequency_weekly}
+                format={{ maximumFractionDigits: 1, minimumFractionDigits: 1 }}
+              />
+              <span className="text-xs text-muted-foreground">
+                {t(($) => $.kpi.deploy_frequency_unit)}
+              </span>
+            </span>
+          ) : (
+            MISSING
+          ),
         hint:
           dReady && d
             ? t(($) => $.kpi.deploy_frequency_hint, { count: d.total_deployments })

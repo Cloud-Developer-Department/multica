@@ -88,6 +88,7 @@
     "eloc_total": "Total ELOC (human/agent)",
     "eloc_total_hint": "human {{human}} / agent {{agent}}",
     "deploy_frequency": "Deploy frequency (weekly)",
+    "deploy_frequency_unit": "/week",
     "deploy_frequency_hint": "{{count}} deploys in window",
     "change_failure_rate": "Change failure rate",
     "change_failure_rate_hint": "{{failed}} failed / {{total}}",

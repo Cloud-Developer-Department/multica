@@ -88,6 +88,7 @@
     "eloc_total": "ELOC 총량(사람/에이전트)",
     "eloc_total_hint": "사람 {{human}} / 에이전트 {{agent}}",
     "deploy_frequency": "배포 빈도(주간)",
+    "deploy_frequency_unit": "회/주",
     "deploy_frequency_hint": "기간 내 배포 {{count}}",
     "change_failure_rate": "변경 실패율",
     "change_failure_rate_hint": "실패 {{failed}} / {{total}}",

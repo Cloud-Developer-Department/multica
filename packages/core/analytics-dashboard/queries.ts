@@ -37,8 +37,6 @@ export const analyticsKeys = {
     [...analyticsKeys.all(wsId), "funnel", days, tz, departmentId] as const,
   agentPerformance: (wsId: string, days: number, tz: string) =>
     [...analyticsKeys.all(wsId), "agent-performance", days, tz] as const,
-  topAgents: (wsId: string, days: number, tz: string) =>
-    [...analyticsKeys.all(wsId), "top-agents", days, tz] as const,
   skillsOverview: (wsId: string, days: number, tz: string) =>
     [...analyticsKeys.all(wsId), "skills-overview", days, tz] as const,
   collaborationSummary: (wsId: string, days: number, tz: string) =>
@@ -224,17 +222,6 @@ export function analyticsAgentPerformanceOptions(wsId: string, days: number, tz:
   return queryOptions({
     queryKey,
     queryFn: () => api.getAnalyticsAgentPerformance({ days, tz }),
-    enabled: !!wsId,
-    staleTime: STALE_TIME,
-    placeholderData: scopePlaceholder(queryKey),
-  });
-}
-
-export function analyticsTopAgentsOptions(wsId: string, days: number, tz: string) {
-  const queryKey = analyticsKeys.topAgents(wsId, days, tz);
-  return queryOptions({
-    queryKey,
-    queryFn: () => api.getAnalyticsTopAgents({ days, tz, limit: 10 }),
     enabled: !!wsId,
     staleTime: STALE_TIME,
     placeholderData: scopePlaceholder(queryKey),

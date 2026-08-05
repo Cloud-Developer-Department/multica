@@ -88,6 +88,7 @@
     "eloc_total": "ELOC合計(人/機)",
     "eloc_total_hint": "人 {{human}} / 機 {{agent}}",
     "deploy_frequency": "デプロイ頻度(週間)",
+    "deploy_frequency_unit": "回/週",
     "deploy_frequency_hint": "期間内デプロイ {{count}}",
     "change_failure_rate": "変更失敗率",
     "change_failure_rate_hint": "失敗 {{failed}} / {{total}}",

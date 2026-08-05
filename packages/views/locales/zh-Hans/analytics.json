@@ -88,6 +88,7 @@
     "eloc_total": "ELOC总量(人/机)",
     "eloc_total_hint": "人 {{human}} / 机 {{agent}}",
     "deploy_frequency": "部署频率(周)",
+    "deploy_frequency_unit": "次/周",
     "deploy_frequency_hint": "窗口部署 {{count}} 次",
     "change_failure_rate": "变更失败率",
     "change_failure_rate_hint": "失败 {{failed}} / 总 {{total}}",
