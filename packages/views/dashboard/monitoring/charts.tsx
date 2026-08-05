@@ -26,7 +26,6 @@ import {
   ChartContainer,
   ChartTooltip,
   ChartTooltipContent,
-  ChartLegendContent,
   type ChartConfig,
 } from "@multica/ui/components/ui/chart";
 import { useT } from "../../i18n";
@@ -154,6 +153,18 @@ export function ProjectProgressStackedBar({
   // live in `row.counts` — flatten them so each status stacks as its own
   // series (regression caught in stage-4 review: bars rendered at 0 height).
   const data = rows.map((row) => ({ name: row.name, ...row.counts }));
+  // Legend click toggles a status series (design-spec §5.2「图例可点击显隐」).
+  // `hide` keeps the hidden series in the legend so it can be restored; a
+  // dimmed label marks the hidden state.
+  const [hidden, setHidden] = React.useState<ReadonlySet<string>>(new Set());
+  const toggle = React.useCallback((key: string) => {
+    setHidden((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }, []);
   return (
     <ChartContainer config={config} className="aspect-[3/1] w-full">
       <BarChart data={data} margin={{ left: 0, right: 0, top: 4, bottom: 0 }}>
@@ -167,7 +178,23 @@ export function ProjectProgressStackedBar({
         />
         <YAxis tickLine={false} axisLine={false} tickMargin={8} width={42} />
         <ChartTooltip content={<ChartTooltipContent />} />
-        <Legend content={<ChartLegendContent className="flex-wrap" />} />
+        <Legend
+          iconType="circle"
+          iconSize={8}
+          onClick={(entry) => toggle(String(entry.dataKey))}
+          formatter={(value) => {
+            const key = String(value);
+            const label = config[key]?.label;
+            return (
+              <span
+                className={`text-xs text-muted-foreground ${hidden.has(key) ? "line-through opacity-50" : ""}`}
+              >
+                {label ?? key}
+              </span>
+            );
+          }}
+          wrapperStyle={{ paddingTop: 8 }}
+        />
         {/* Bottom-up stack order per design-spec §5.2: done at the base →
             in_progress → in_review → todo → blocked → cancelled on top. */}
         {PROJECT_STACK_ORDER.map((status, index) => {
@@ -181,6 +208,7 @@ export function ProjectProgressStackedBar({
               stackId="project"
               fill={`var(--color-${status})`}
               radius={isLast ? [3, 3, 0, 0] : [0, 0, 0, 0]}
+              hide={hidden.has(status)}
             />
           );
         })}
@@ -243,6 +271,17 @@ export function CompletionTrendChart({
   data: MonitoringCompletionPoint[];
   config: ChartConfig;
 }) {
+  // Legend click toggles completion/delay visibility (§5.5); `hide` keeps the
+  // series in the legend so it can be restored.
+  const [hidden, setHidden] = React.useState<ReadonlySet<string>>(new Set());
+  const toggle = React.useCallback((key: string) => {
+    setHidden((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }, []);
   return (
     <ChartContainer config={config} className="aspect-[3/1] w-full">
       <LineChart data={data} margin={{ left: 0, right: 0, top: 4, bottom: 0 }}>
@@ -271,13 +310,31 @@ export function CompletionTrendChart({
             />
           }
         />
-        <Legend content={<ChartLegendContent />} />
+        {/* Legend click toggles completion/delay series (§5.5). */}
+        <Legend
+          iconType="circle"
+          iconSize={8}
+          onClick={(entry) => toggle(String(entry.dataKey))}
+          formatter={(value) => {
+            const key = String(value);
+            const label = config[key]?.label;
+            return (
+              <span
+                className={`text-xs text-muted-foreground ${hidden.has(key) ? "line-through opacity-50" : ""}`}
+              >
+                {label ?? key}
+              </span>
+            );
+          }}
+          wrapperStyle={{ paddingTop: 8 }}
+        />
         <Line
           type="monotone"
           dataKey="completion"
           stroke="var(--success)"
           strokeWidth={2}
           dot={false}
+          hide={hidden.has("completion")}
         />
         <Line
           type="monotone"
@@ -286,6 +343,7 @@ export function CompletionTrendChart({
           strokeWidth={2}
           dot={false}
           connectNulls
+          hide={hidden.has("delay")}
         />
       </LineChart>
     </ChartContainer>
