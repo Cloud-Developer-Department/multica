@@ -150,9 +150,13 @@ export function ProjectProgressStackedBar({
   rows: ProjectStackRow[];
   config: ChartConfig;
 }) {
+  // Recharts Bar reads its dataKey from the row's top level, but the counts
+  // live in `row.counts` — flatten them so each status stacks as its own
+  // series (regression caught in stage-4 review: bars rendered at 0 height).
+  const data = rows.map((row) => ({ name: row.name, ...row.counts }));
   return (
     <ChartContainer config={config} className="aspect-[3/1] w-full">
-      <BarChart data={rows} margin={{ left: 0, right: 0, top: 4, bottom: 0 }}>
+      <BarChart data={data} margin={{ left: 0, right: 0, top: 4, bottom: 0 }}>
         <CartesianGrid vertical={false} />
         <XAxis
           dataKey="name"

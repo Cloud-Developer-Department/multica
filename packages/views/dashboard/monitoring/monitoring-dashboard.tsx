@@ -580,7 +580,7 @@ export function MonitoringDashboardPage() {
                   paused={!autoRefresh || autoPaused}
                   error={commentsQuery.isError}
                   loading={commentsQuery.isPending}
-                  empty={commentSeries.length === 0}
+                  empty={(comments?.total ?? 0) === 0}
                   emptyIcon={<Inbox className="h-5 w-5" />}
                   emptyTitle={t(($) => $.module.comments_empty)}
                   emptyDescription={t(($) => $.module.comments_empty_desc)}
