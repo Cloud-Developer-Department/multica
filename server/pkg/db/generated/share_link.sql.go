@@ -51,6 +51,17 @@ func (q *Queries) CreateShareLink(ctx context.Context, arg CreateShareLinkParams
 	return i, err
 }
 
+const deactivateWorkspaceShareLinks = `-- name: DeactivateWorkspaceShareLinks :exec
+UPDATE workspace_share_link
+SET is_active = false
+WHERE workspace_id = $1 AND is_active = true
+`
+
+func (q *Queries) DeactivateWorkspaceShareLinks(ctx context.Context, workspaceID pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, deactivateWorkspaceShareLinks, workspaceID)
+	return err
+}
+
 const getShareLinkByCode = `-- name: GetShareLinkByCode :one
 SELECT id, workspace_id, code, created_by, role, expires_at, max_uses, use_count, is_active, created_at FROM workspace_share_link
 WHERE code = $1 AND is_active = true
@@ -143,17 +154,6 @@ func (q *Queries) ListShareLinksByWorkspace(ctx context.Context, workspaceID pgt
 		return nil, err
 	}
 	return items, nil
-}
-
-const deactivateWorkspaceShareLinks = `-- name: DeactivateWorkspaceShareLinks :exec
-UPDATE workspace_share_link
-SET is_active = false
-WHERE workspace_id = $1 AND is_active = true
-`
-
-func (q *Queries) DeactivateWorkspaceShareLinks(ctx context.Context, workspaceID pgtype.UUID) error {
-	_, err := q.db.Exec(ctx, deactivateWorkspaceShareLinks, workspaceID)
-	return err
 }
 
 const revokeShareLink = `-- name: RevokeShareLink :exec

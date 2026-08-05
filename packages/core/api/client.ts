@@ -77,6 +77,28 @@ import type {
   MonitoringActivity,
   MonitoringComments,
   MonitoringCompletion,
+  AnalyticsActivitySummary,
+  AnalyticsActivityHeatmap,
+  AnalyticsHeatmapMetric,
+  AnalyticsTopMember,
+  AnalyticsAdoptionSummary,
+  AnalyticsAdoptionTrendPoint,
+  AnalyticsFunnel,
+  AnalyticsAgentPerformance,
+  AnalyticsAgentTopItem,
+  AnalyticsSkillsOverview,
+  AnalyticsCollaborationSummary,
+  AnalyticsBlockerItem,
+  AnalyticsEloc,
+  AnalyticsElocGroupBy,
+  AnalyticsQuality,
+  AnalyticsRepoActivity,
+  AnalyticsPrs,
+  AnalyticsLeadTime,
+  AnalyticsLeadTimeMetric,
+  AnalyticsDeployments,
+  AnalyticsLifecycle,
+  AnalyticsDepartments,
   RuntimeUpdate,
   RuntimeModelListRequest,
   RuntimeLocalSkillListRequest,
@@ -211,6 +233,40 @@ import {
   MonitoringCommentsSchema,
   MonitoringCompletionSchema,
   MonitoringIssueDistributionSchema,
+  AnalyticsActivitySummarySchema,
+  AnalyticsActivityHeatmapSchema,
+  AnalyticsAdoptionSummarySchema,
+  AnalyticsFunnelSchema,
+  AnalyticsAgentPerformanceSchema,
+  AnalyticsSkillsOverviewSchema,
+  AnalyticsCollaborationSummarySchema,
+  AnalyticsElocSchema,
+  AnalyticsQualitySchema,
+  AnalyticsRepoActivitySchema,
+  AnalyticsPrsSchema,
+  AnalyticsLeadTimeSchema,
+  AnalyticsDeploymentsSchema,
+  AnalyticsLifecycleSchema,
+  AnalyticsDepartmentsSchema,
+  AnalyticsTopMemberListSchema,
+  AnalyticsAdoptionTrendPointListSchema,
+  AnalyticsAgentTopItemListSchema,
+  AnalyticsBlockerItemListSchema,
+  EMPTY_ANALYTICS_ACTIVITY_SUMMARY,
+  EMPTY_ANALYTICS_ACTIVITY_HEATMAP,
+  EMPTY_ANALYTICS_ADOPTION_SUMMARY,
+  EMPTY_ANALYTICS_FUNNEL,
+  EMPTY_ANALYTICS_AGENT_PERFORMANCE,
+  EMPTY_ANALYTICS_SKILLS_OVERVIEW,
+  EMPTY_ANALYTICS_COLLABORATION_SUMMARY,
+  EMPTY_ANALYTICS_ELOC,
+  EMPTY_ANALYTICS_QUALITY,
+  EMPTY_ANALYTICS_REPO_ACTIVITY,
+  EMPTY_ANALYTICS_PRS,
+  EMPTY_ANALYTICS_LEAD_TIME,
+  EMPTY_ANALYTICS_DEPLOYMENTS,
+  EMPTY_ANALYTICS_LIFECYCLE,
+  EMPTY_ANALYTICS_DEPARTMENTS,
   EMPTY_AGENT_TEMPLATE_DETAIL,
   EMPTY_AGENT_TEMPLATE_SUMMARY_LIST,
   EMPTY_APP_CONFIG,
@@ -1734,6 +1790,338 @@ export class ApiClient {
       MonitoringCompletionSchema,
       EMPTY_MONITORING_COMPLETION,
       { endpoint: "GET /api/dashboard/completion" },
+    );
+  }
+
+  // -------------------------------------------------------------------------
+  // Engineering analytics platform — `/{slug}/analytics` (CLO-228 v2.0).
+  // All endpoints live under `/api/analytics` and require a workspace member.
+  // A1–A5 / B1–B6 accept an optional `department_id`; G/D/L series never do.
+  // Lenient parse + empty fallbacks keep a missing endpoint / contract drift
+  // inside a module's error/empty state instead of taking the page down.
+  // -------------------------------------------------------------------------
+
+  private analyticsSearch(
+    params: {
+      days?: number;
+      tz?: string;
+      project_id?: string | null;
+      department_id?: string | null;
+    } = {},
+  ): URLSearchParams {
+    const search = new URLSearchParams();
+    if (params.days) search.set("days", String(params.days));
+    if (params.tz) search.set("tz", params.tz);
+    if (params.project_id) search.set("project_id", params.project_id);
+    if (params.department_id) search.set("department_id", params.department_id);
+    return search;
+  }
+
+  // --- Tab1 活跃度与渗透 (A1–A5) -------------------------------------------
+
+  async getAnalyticsActivitySummary(
+    params: { days?: number; tz?: string; project_id?: string | null; department_id?: string | null },
+  ): Promise<AnalyticsActivitySummary> {
+    const search = this.analyticsSearch(params);
+    const raw = await this.fetch<unknown>(`/api/analytics/activity/summary?${search}`);
+    return parseWithFallback<AnalyticsActivitySummary>(
+      raw,
+      AnalyticsActivitySummarySchema,
+      EMPTY_ANALYTICS_ACTIVITY_SUMMARY,
+      { endpoint: "GET /api/analytics/activity/summary" },
+    );
+  }
+
+  async getAnalyticsActivityHeatmap(
+    params: {
+      days?: number;
+      tz?: string;
+      project_id?: string | null;
+      department_id?: string | null;
+      metric?: AnalyticsHeatmapMetric;
+    },
+  ): Promise<AnalyticsActivityHeatmap> {
+    const search = this.analyticsSearch(params);
+    if (params.metric) search.set("metric", params.metric);
+    const raw = await this.fetch<unknown>(`/api/analytics/activity/heatmap?${search}`);
+    return parseWithFallback<AnalyticsActivityHeatmap>(
+      raw,
+      AnalyticsActivityHeatmapSchema,
+      EMPTY_ANALYTICS_ACTIVITY_HEATMAP,
+      { endpoint: "GET /api/analytics/activity/heatmap" },
+    );
+  }
+
+  async getAnalyticsTopMembers(
+    params: {
+      days?: number;
+      tz?: string;
+      project_id?: string | null;
+      department_id?: string | null;
+      limit?: number;
+    },
+  ): Promise<AnalyticsTopMember[]> {
+    const search = this.analyticsSearch(params);
+    if (params.limit) search.set("limit", String(params.limit));
+    const raw = await this.fetch<unknown>(`/api/analytics/activity/top-members?${search}`);
+    return parseWithFallback<AnalyticsTopMember[]>(
+      raw,
+      AnalyticsTopMemberListSchema,
+      [],
+      { endpoint: "GET /api/analytics/activity/top-members" },
+    );
+  }
+
+  async getAnalyticsAdoptionSummary(
+    params: { days?: number; tz?: string; project_id?: string | null; department_id?: string | null },
+  ): Promise<AnalyticsAdoptionSummary> {
+    const search = this.analyticsSearch(params);
+    const raw = await this.fetch<unknown>(`/api/analytics/adoption/summary?${search}`);
+    return parseWithFallback<AnalyticsAdoptionSummary>(
+      raw,
+      AnalyticsAdoptionSummarySchema,
+      EMPTY_ANALYTICS_ADOPTION_SUMMARY,
+      { endpoint: "GET /api/analytics/adoption/summary" },
+    );
+  }
+
+  async getAnalyticsAdoptionTrend(
+    params: { days?: number; tz?: string; project_id?: string | null; department_id?: string | null },
+  ): Promise<AnalyticsAdoptionTrendPoint[]> {
+    const search = this.analyticsSearch(params);
+    const raw = await this.fetch<unknown>(`/api/analytics/adoption/trend?${search}`);
+    return parseWithFallback<AnalyticsAdoptionTrendPoint[]>(
+      raw,
+      AnalyticsAdoptionTrendPointListSchema,
+      [],
+      { endpoint: "GET /api/analytics/adoption/trend" },
+    );
+  }
+
+  // --- Tab2 Agent 效能 (B1–B6) --------------------------------------------
+
+  async getAnalyticsFunnel(
+    params: { days?: number; tz?: string; project_id?: string | null; department_id?: string | null },
+  ): Promise<AnalyticsFunnel> {
+    const search = this.analyticsSearch(params);
+    const raw = await this.fetch<unknown>(`/api/analytics/agents/funnel?${search}`);
+    return parseWithFallback<AnalyticsFunnel>(
+      raw,
+      AnalyticsFunnelSchema,
+      EMPTY_ANALYTICS_FUNNEL,
+      { endpoint: "GET /api/analytics/agents/funnel" },
+    );
+  }
+
+  async getAnalyticsAgentPerformance(
+    params: { days?: number; tz?: string; project_id?: string | null; department_id?: string | null },
+  ): Promise<AnalyticsAgentPerformance> {
+    const search = this.analyticsSearch(params);
+    const raw = await this.fetch<unknown>(`/api/analytics/agents/performance?${search}`);
+    return parseWithFallback<AnalyticsAgentPerformance>(
+      raw,
+      AnalyticsAgentPerformanceSchema,
+      EMPTY_ANALYTICS_AGENT_PERFORMANCE,
+      { endpoint: "GET /api/analytics/agents/performance" },
+    );
+  }
+
+  async getAnalyticsTopAgents(
+    params: {
+      days?: number;
+      tz?: string;
+      project_id?: string | null;
+      department_id?: string | null;
+      limit?: number;
+    },
+  ): Promise<AnalyticsAgentTopItem[]> {
+    const search = this.analyticsSearch(params);
+    if (params.limit) search.set("limit", String(params.limit));
+    const raw = await this.fetch<unknown>(`/api/analytics/agents/top?${search}`);
+    return parseWithFallback<AnalyticsAgentTopItem[]>(
+      raw,
+      AnalyticsAgentTopItemListSchema,
+      [],
+      { endpoint: "GET /api/analytics/agents/top" },
+    );
+  }
+
+  async getAnalyticsSkillsOverview(
+    params: { days?: number; tz?: string; project_id?: string | null; department_id?: string | null },
+  ): Promise<AnalyticsSkillsOverview> {
+    const search = this.analyticsSearch(params);
+    const raw = await this.fetch<unknown>(`/api/analytics/skills/overview?${search}`);
+    return parseWithFallback<AnalyticsSkillsOverview>(
+      raw,
+      AnalyticsSkillsOverviewSchema,
+      EMPTY_ANALYTICS_SKILLS_OVERVIEW,
+      { endpoint: "GET /api/analytics/skills/overview" },
+    );
+  }
+
+  async getAnalyticsCollaborationSummary(
+    params: { days?: number; tz?: string; project_id?: string | null; department_id?: string | null },
+  ): Promise<AnalyticsCollaborationSummary> {
+    const search = this.analyticsSearch(params);
+    const raw = await this.fetch<unknown>(`/api/analytics/collaboration/summary?${search}`);
+    return parseWithFallback<AnalyticsCollaborationSummary>(
+      raw,
+      AnalyticsCollaborationSummarySchema,
+      EMPTY_ANALYTICS_COLLABORATION_SUMMARY,
+      { endpoint: "GET /api/analytics/collaboration/summary" },
+    );
+  }
+
+  async getAnalyticsBlockers(
+    params: {
+      days?: number;
+      tz?: string;
+      project_id?: string | null;
+      department_id?: string | null;
+      limit?: number;
+    },
+  ): Promise<AnalyticsBlockerItem[]> {
+    const search = this.analyticsSearch(params);
+    if (params.limit) search.set("limit", String(params.limit));
+    const raw = await this.fetch<unknown>(`/api/analytics/collaboration/blockers?${search}`);
+    return parseWithFallback<AnalyticsBlockerItem[]>(
+      raw,
+      AnalyticsBlockerItemListSchema,
+      [],
+      { endpoint: "GET /api/analytics/collaboration/blockers" },
+    );
+  }
+
+  // --- Tab3 Git 贡献 (G1–G4) -----------------------------------------------
+
+  async getAnalyticsEloc(
+    params: {
+      days?: number;
+      tz?: string;
+      project_id?: string | null;
+      group_by?: AnalyticsElocGroupBy;
+    },
+  ): Promise<AnalyticsEloc> {
+    const search = this.analyticsSearch(params);
+    if (params.group_by) search.set("group_by", params.group_by);
+    const raw = await this.fetch<unknown>(`/api/analytics/git/eloc?${search}`);
+    return parseWithFallback<AnalyticsEloc>(
+      raw,
+      AnalyticsElocSchema,
+      EMPTY_ANALYTICS_ELOC,
+      { endpoint: "GET /api/analytics/git/eloc" },
+    );
+  }
+
+  async getAnalyticsQuality(
+    params: { days?: number; tz?: string; project_id?: string | null; repo?: string },
+  ): Promise<AnalyticsQuality> {
+    const search = this.analyticsSearch(params);
+    if (params.repo) search.set("repo", params.repo);
+    const raw = await this.fetch<unknown>(`/api/analytics/git/quality?${search}`);
+    return parseWithFallback<AnalyticsQuality>(
+      raw,
+      AnalyticsQualitySchema,
+      EMPTY_ANALYTICS_QUALITY,
+      { endpoint: "GET /api/analytics/git/quality" },
+    );
+  }
+
+  async getAnalyticsRepoActivity(
+    params: { days?: number; tz?: string; project_id?: string | null },
+  ): Promise<AnalyticsRepoActivity> {
+    const search = this.analyticsSearch(params);
+    const raw = await this.fetch<unknown>(`/api/analytics/git/repos?${search}`);
+    return parseWithFallback<AnalyticsRepoActivity>(
+      raw,
+      AnalyticsRepoActivitySchema,
+      EMPTY_ANALYTICS_REPO_ACTIVITY,
+      { endpoint: "GET /api/analytics/git/repos" },
+    );
+  }
+
+  async getAnalyticsPrs(
+    params: {
+      days?: number;
+      tz?: string;
+      project_id?: string | null;
+      repo: string;
+      state?: string;
+      limit?: number;
+    },
+  ): Promise<AnalyticsPrs> {
+    const search = this.analyticsSearch(params);
+    search.set("repo", params.repo);
+    if (params.state) search.set("state", params.state);
+    if (params.limit) search.set("limit", String(params.limit));
+    const raw = await this.fetch<unknown>(`/api/analytics/git/prs?${search}`);
+    return parseWithFallback<AnalyticsPrs>(
+      raw,
+      AnalyticsPrsSchema,
+      EMPTY_ANALYTICS_PRS,
+      { endpoint: "GET /api/analytics/git/prs" },
+    );
+  }
+
+  // --- Tab4 DORA (D1–D2) ---------------------------------------------------
+
+  async getAnalyticsLeadTime(
+    params: {
+      days?: number;
+      tz?: string;
+      project_id?: string | null;
+      metric?: AnalyticsLeadTimeMetric;
+    },
+  ): Promise<AnalyticsLeadTime> {
+    const search = this.analyticsSearch(params);
+    if (params.metric) search.set("metric", params.metric);
+    const raw = await this.fetch<unknown>(`/api/analytics/dora/lead-time?${search}`);
+    return parseWithFallback<AnalyticsLeadTime>(
+      raw,
+      AnalyticsLeadTimeSchema,
+      EMPTY_ANALYTICS_LEAD_TIME,
+      { endpoint: "GET /api/analytics/dora/lead-time" },
+    );
+  }
+
+  async getAnalyticsDeployments(
+    params: { days?: number; tz?: string; project_id?: string | null },
+  ): Promise<AnalyticsDeployments> {
+    const search = this.analyticsSearch(params);
+    const raw = await this.fetch<unknown>(`/api/analytics/dora/deployments?${search}`);
+    return parseWithFallback<AnalyticsDeployments>(
+      raw,
+      AnalyticsDeploymentsSchema,
+      EMPTY_ANALYTICS_DEPLOYMENTS,
+      { endpoint: "GET /api/analytics/dora/deployments" },
+    );
+  }
+
+  // --- Tab1 ⑥⑦⑧ 身份与部门 (L1–L2) -----------------------------------------
+
+  async getAnalyticsLifecycle(
+    params: { days?: number; tz?: string; project_id?: string | null; department_id?: string | null },
+  ): Promise<AnalyticsLifecycle> {
+    const search = this.analyticsSearch(params);
+    const raw = await this.fetch<unknown>(`/api/analytics/identity/lifecycle?${search}`);
+    return parseWithFallback<AnalyticsLifecycle>(
+      raw,
+      AnalyticsLifecycleSchema,
+      EMPTY_ANALYTICS_LIFECYCLE,
+      { endpoint: "GET /api/analytics/identity/lifecycle" },
+    );
+  }
+
+  async getAnalyticsDepartments(
+    params: { days?: number; tz?: string; project_id?: string | null },
+  ): Promise<AnalyticsDepartments> {
+    const search = this.analyticsSearch(params);
+    const raw = await this.fetch<unknown>(`/api/analytics/identity/departments?${search}`);
+    return parseWithFallback<AnalyticsDepartments>(
+      raw,
+      AnalyticsDepartmentsSchema,
+      EMPTY_ANALYTICS_DEPARTMENTS,
+      { endpoint: "GET /api/analytics/identity/departments" },
     );
   }
 

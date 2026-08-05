@@ -494,6 +494,22 @@ type DaemonToken struct {
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 }
 
+type DeploymentEvent struct {
+	ID           pgtype.UUID        `json:"id"`
+	WorkspaceID  pgtype.UUID        `json:"workspace_id"`
+	DeploymentID string             `json:"deployment_id"`
+	App          pgtype.Text        `json:"app"`
+	Env          pgtype.Text        `json:"env"`
+	StartedAt    pgtype.Timestamptz `json:"started_at"`
+	FinishedAt   pgtype.Timestamptz `json:"finished_at"`
+	Result       string             `json:"result"`
+	RecoveredAt  pgtype.Timestamptz `json:"recovered_at"`
+	IssueIds     []byte             `json:"issue_ids"`
+	Sha          pgtype.Text        `json:"sha"`
+	Reason       pgtype.Text        `json:"reason"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+}
+
 type Feedback struct {
 	ID          pgtype.UUID        `json:"id"`
 	UserID      pgtype.UUID        `json:"user_id"`
@@ -589,6 +605,17 @@ type GithubPullRequestCheckSuite struct {
 	Conclusion pgtype.Text        `json:"conclusion"`
 	Status     string             `json:"status"`
 	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
+}
+
+type IdentityImport struct {
+	ID          pgtype.UUID        `json:"id"`
+	WorkspaceID pgtype.UUID        `json:"workspace_id"`
+	EventType   string             `json:"event_type"`
+	MemberName  string             `json:"member_name"`
+	Department  pgtype.Text        `json:"department"`
+	OccurredAt  pgtype.Timestamptz `json:"occurred_at"`
+	Result      string             `json:"result"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 }
 
 type InboxItem struct {
@@ -799,6 +826,7 @@ type Member struct {
 	UserID      pgtype.UUID        `json:"user_id"`
 	Role        string             `json:"role"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	Department  pgtype.Text        `json:"department"`
 }
 
 type NotificationPreference struct {
@@ -857,6 +885,17 @@ type ProjectResource struct {
 	Position     int32              `json:"position"`
 	CreatedAt    pgtype.Timestamptz `json:"created_at"`
 	CreatedBy    pgtype.UUID        `json:"created_by"`
+}
+
+type RepoQualitySnapshot struct {
+	ID              pgtype.UUID        `json:"id"`
+	WorkspaceID     pgtype.UUID        `json:"workspace_id"`
+	Repo            string             `json:"repo"`
+	Coverage        pgtype.Numeric     `json:"coverage"`
+	Vulnerabilities pgtype.Int4        `json:"vulnerabilities"`
+	DuplicationRate pgtype.Numeric     `json:"duplication_rate"`
+	SnapshotAt      pgtype.Timestamptz `json:"snapshot_at"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 }
 
 type RuntimeProfile struct {
@@ -1062,6 +1101,15 @@ type UserComposioConnection struct {
 	LastUsedAt         pgtype.Timestamptz `json:"last_used_at"`
 	CreatedAt          pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt          pgtype.Timestamptz `json:"updated_at"`
+}
+
+type VcsAuthorMapping struct {
+	ID          pgtype.UUID        `json:"id"`
+	WorkspaceID pgtype.UUID        `json:"workspace_id"`
+	Author      string             `json:"author"`
+	EntityType  string             `json:"entity_type"`
+	EntityID    pgtype.UUID        `json:"entity_id"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 }
 
 type VcsCommitStatus struct {

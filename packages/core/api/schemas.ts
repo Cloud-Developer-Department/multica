@@ -38,6 +38,21 @@ import type {
   MonitoringActivity,
   MonitoringComments,
   MonitoringCompletion,
+  AnalyticsActivitySummary,
+  AnalyticsActivityHeatmap,
+  AnalyticsAdoptionSummary,
+  AnalyticsFunnel,
+  AnalyticsAgentPerformance,
+  AnalyticsSkillsOverview,
+  AnalyticsCollaborationSummary,
+  AnalyticsEloc,
+  AnalyticsQuality,
+  AnalyticsRepoActivity,
+  AnalyticsPrs,
+  AnalyticsLeadTime,
+  AnalyticsDeployments,
+  AnalyticsLifecycle,
+  AnalyticsDepartments,
   NotificationPreferenceResponse,
   ResourceLabelsResponse,
   SearchIssuesResponse,
@@ -1853,3 +1868,462 @@ export const EMPTY_MONITORING_COMPLETION: MonitoringCompletion = {
   has_due_date_tasks: false,
   trend: [],
 };
+
+// ---------------------------------------------------------------------------
+// Engineering analytics platform (CLO-228 API contract v2.0) — A/B/G/D/L.
+//
+// Lenient parse with `.loose()` + per-field defaults so a partially-missing
+// or older backend degrades to the module's empty/guide state instead of
+// taking the page down (same policy as the dashboard/monitoring modules).
+// `source_status` is mandatory on G/D/L series and defaults to not-ready.
+// ---------------------------------------------------------------------------
+
+export const AnalyticsSourceStatusSchema = z.object({
+  ready: z.boolean().default(false),
+  reason: z.string().nullable().optional().transform((v) => v ?? null),
+  updated_at: z.string().nullable().optional().transform((v) => v ?? null),
+}).loose();
+
+const AnalyticsNullableNumber = z
+  .number()
+  .nullable()
+  .optional()
+  .transform((v) => v ?? null);
+
+// --- A1 activity/summary ---------------------------------------------------
+
+export const AnalyticsActivitySummarySchema = z.object({
+  window: z
+    .object({
+      start: z.string().default(""),
+      end: z.string().default(""),
+    })
+    .default({ start: "", end: "" }),
+  total_members: z.number().default(0),
+  active_members: z.number().default(0),
+  active_days_avg: AnalyticsNullableNumber,
+  dau: z.number().default(0),
+  mau: z.number().default(0),
+  dau_mau_ratio: AnalyticsNullableNumber,
+  active_user_ratio: AnalyticsNullableNumber,
+  total_issues: z.number().default(0),
+  per_capita_issue_volume: AnalyticsNullableNumber,
+}).loose();
+
+export const EMPTY_ANALYTICS_ACTIVITY_SUMMARY: AnalyticsActivitySummary = {
+  window: { start: "", end: "" },
+  total_members: 0,
+  active_members: 0,
+  active_days_avg: null,
+  dau: 0,
+  mau: 0,
+  dau_mau_ratio: null,
+  active_user_ratio: null,
+  total_issues: 0,
+  per_capita_issue_volume: null,
+};
+
+// --- A2 activity/heatmap ---------------------------------------------------
+
+export const AnalyticsHeatmapHourSchema = z.object({
+  hour: z.number().default(0),
+  value: AnalyticsNullableNumber,
+}).loose();
+
+export const AnalyticsHeatmapDaySchema = z.object({
+  date: z.string().default(""),
+  hours: z.array(AnalyticsHeatmapHourSchema).default([]),
+}).loose();
+
+export const AnalyticsActivityHeatmapSchema = z.object({
+  metric: z.string().default("activity_events"),
+  days: z.array(AnalyticsHeatmapDaySchema).default([]),
+  max_value: z.number().default(0),
+}).loose();
+
+export const EMPTY_ANALYTICS_ACTIVITY_HEATMAP: AnalyticsActivityHeatmap = {
+  metric: "activity_events",
+  days: [],
+  max_value: 0,
+};
+
+// --- A3 activity/top-members -----------------------------------------------
+
+export const AnalyticsTopMemberSchema = z.object({
+  member_id: z.string().default(""),
+  name: z.string().default(""),
+  active_days: z.number().default(0),
+  issue_count: z.number().default(0),
+  last_active_at: z.string().nullable().optional().transform((v) => v ?? null),
+}).loose();
+
+// --- A4 adoption/summary ---------------------------------------------------
+
+export const AnalyticsAdoptionSummarySchema = z.object({
+  total_issues: z.number().default(0),
+  agent_assigned_issues: z.number().default(0),
+  assignment_ratio: AnalyticsNullableNumber,
+  agent_covered_issues: z.number().default(0),
+  coverage_ratio: AnalyticsNullableNumber,
+}).loose();
+
+export const EMPTY_ANALYTICS_ADOPTION_SUMMARY: AnalyticsAdoptionSummary = {
+  total_issues: 0,
+  agent_assigned_issues: 0,
+  assignment_ratio: null,
+  agent_covered_issues: 0,
+  coverage_ratio: null,
+};
+
+// --- A5 adoption/trend -----------------------------------------------------
+
+export const AnalyticsAdoptionTrendPointSchema = z.object({
+  date: z.string().default(""),
+  total_issues: z.number().default(0),
+  assignment_ratio: AnalyticsNullableNumber,
+  coverage_ratio: AnalyticsNullableNumber,
+}).loose();
+
+// --- B1 agents/funnel ------------------------------------------------------
+
+export const AnalyticsFunnelSchema = z.object({
+  assign_count: z.number().default(0),
+  issue_assigned_count: z.number().default(0),
+  execute_count: z.number().default(0),
+  execute_ratio: AnalyticsNullableNumber,
+  merged_count: AnalyticsNullableNumber,
+  merged_ratio: AnalyticsNullableNumber,
+}).loose();
+
+export const EMPTY_ANALYTICS_FUNNEL: AnalyticsFunnel = {
+  assign_count: 0,
+  issue_assigned_count: 0,
+  execute_count: 0,
+  execute_ratio: null,
+  merged_count: null,
+  merged_ratio: null,
+};
+
+// --- B2 agents/performance -------------------------------------------------
+
+export const AnalyticsAgentPerformanceSchema = z.object({
+  terminal_count: z.number().default(0),
+  completed_count: z.number().default(0),
+  failed_count: z.number().default(0),
+  success_rate: AnalyticsNullableNumber,
+  avg_duration_seconds: AnalyticsNullableNumber,
+  p50_duration_seconds: AnalyticsNullableNumber,
+  p95_duration_seconds: AnalyticsNullableNumber,
+  failure_classes: z
+    .array(
+      z.object({
+        reason: z.string().default(""),
+        count: z.number().default(0),
+      }).loose(),
+    )
+    .default([]),
+}).loose();
+
+export const EMPTY_ANALYTICS_AGENT_PERFORMANCE: AnalyticsAgentPerformance = {
+  terminal_count: 0,
+  completed_count: 0,
+  failed_count: 0,
+  success_rate: null,
+  avg_duration_seconds: null,
+  p50_duration_seconds: null,
+  p95_duration_seconds: null,
+  failure_classes: [],
+};
+
+// --- B4 skills/overview ----------------------------------------------------
+
+export const AnalyticsSkillAccumulationSchema = z.object({
+  bucket: z.string().default(""),
+  count: z.number().default(0),
+}).loose();
+
+export const AnalyticsSkillTopReusedSchema = z.object({
+  skill_id: z.string().default(""),
+  name: z.string().default(""),
+  reuse_count: z.number().default(0),
+  bound_agents: z.number().default(0),
+}).loose();
+
+export const AnalyticsSkillsOverviewSchema = z.object({
+  total_skills: z.number().default(0),
+  new_skills: z.number().default(0),
+  accumulation: z.array(AnalyticsSkillAccumulationSchema).default([]),
+  top_reused: z.array(AnalyticsSkillTopReusedSchema).default([]),
+}).loose();
+
+export const EMPTY_ANALYTICS_SKILLS_OVERVIEW: AnalyticsSkillsOverview = {
+  total_skills: 0,
+  new_skills: 0,
+  accumulation: [],
+  top_reused: [],
+};
+
+// --- B5 collaboration/summary ----------------------------------------------
+
+export const AnalyticsCollaborationSummarySchema = z.object({
+  collab_issue_count: z.number().default(0),
+  total_issues: z.number().default(0),
+  collab_issue_ratio: AnalyticsNullableNumber,
+  interaction_frequency: AnalyticsNullableNumber,
+  blocker_avg_seconds: AnalyticsNullableNumber,
+  blocker_p50_seconds: AnalyticsNullableNumber,
+  blocker_p95_seconds: AnalyticsNullableNumber,
+  blocker_open_count: z.number().default(0),
+}).loose();
+
+export const EMPTY_ANALYTICS_COLLABORATION_SUMMARY: AnalyticsCollaborationSummary = {
+  collab_issue_count: 0,
+  total_issues: 0,
+  collab_issue_ratio: null,
+  interaction_frequency: null,
+  blocker_avg_seconds: null,
+  blocker_p50_seconds: null,
+  blocker_p95_seconds: null,
+  blocker_open_count: 0,
+};
+
+// --- B3 agents/top ---------------------------------------------------------
+
+export const AnalyticsAgentTopItemSchema = z.object({
+  agent_id: z.string().default(""),
+  name: z.string().default(""),
+  completed_count: z.number().default(0),
+  failed_count: z.number().default(0),
+  success_rate: AnalyticsNullableNumber,
+  avg_duration_seconds: AnalyticsNullableNumber,
+}).loose();
+
+// --- B6 collaboration/blockers ---------------------------------------------
+
+export const AnalyticsBlockerItemSchema = z.object({
+  issue_id: z.string().default(""),
+  issue_title: z.string().default(""),
+  blocked_at: z.string().default(""),
+  resolved_at: z.string().nullable().optional().transform((v) => v ?? null),
+  response_seconds: AnalyticsNullableNumber,
+  status: z.enum(["resolved", "open"]).default("open"),
+}).loose();
+
+// --- Array-list schemas (A3 / A5 / B3 / B6) --------------------------------
+
+export const AnalyticsTopMemberListSchema = z.array(AnalyticsTopMemberSchema);
+export const AnalyticsAdoptionTrendPointListSchema = z.array(
+  AnalyticsAdoptionTrendPointSchema,
+);
+export const AnalyticsAgentTopItemListSchema = z.array(AnalyticsAgentTopItemSchema);
+export const AnalyticsBlockerItemListSchema = z.array(AnalyticsBlockerItemSchema);
+
+// --- G1 git/eloc -----------------------------------------------------------
+
+export const AnalyticsElocItemSchema = z.object({
+  entity_id: z.string().default(""),
+  name: z.string().default(""),
+  eloc: z.number().default(0),
+  ratio: AnalyticsNullableNumber,
+  commit_count: z.number().default(0),
+  repos: z.array(z.string()).default([]),
+}).loose();
+
+export const AnalyticsElocSchema = z.object({
+  source_status: AnalyticsSourceStatusSchema,
+  group_by: z.enum(["member", "agent"]).default("member"),
+  total_eloc: z.number().default(0),
+  human_eloc: z.number().default(0),
+  agent_eloc: z.number().default(0),
+  items: z.array(AnalyticsElocItemSchema).default([]),
+}).loose();
+
+export const EMPTY_ANALYTICS_ELOC: AnalyticsEloc = {
+  source_status: { ready: false, reason: null, updated_at: null },
+  group_by: "member",
+  total_eloc: 0,
+  human_eloc: 0,
+  agent_eloc: 0,
+  items: [],
+};
+
+// --- G2 git/quality --------------------------------------------------------
+
+export const AnalyticsQualitySchema = z.object({
+  source_status: AnalyticsSourceStatusSchema,
+  repo: z.string().default("all"),
+  snapshot_at: z.string().nullable().optional().transform((v) => v ?? null),
+  coverage: AnalyticsNullableNumber,
+  vulnerabilities: AnalyticsNullableNumber,
+  duplication_rate: AnalyticsNullableNumber,
+}).loose();
+
+export const EMPTY_ANALYTICS_QUALITY: AnalyticsQuality = {
+  source_status: { ready: false, reason: null, updated_at: null },
+  repo: "all",
+  snapshot_at: null,
+  coverage: null,
+  vulnerabilities: null,
+  duplication_rate: null,
+};
+
+// --- G3 git/repos ----------------------------------------------------------
+
+export const AnalyticsRepoActivityItemSchema = z.object({
+  repo: z.string().default(""),
+  active_commits: z.number().default(0),
+  active_prs: z.number().default(0),
+  activity: z.number().default(0),
+  open_pr_backlog: z.number().default(0),
+  mtm_p50_seconds: AnalyticsNullableNumber,
+  mtm_p95_seconds: AnalyticsNullableNumber,
+}).loose();
+
+export const AnalyticsRepoActivitySchema = z.object({
+  source_status: AnalyticsSourceStatusSchema,
+  items: z.array(AnalyticsRepoActivityItemSchema).default([]),
+}).loose();
+
+export const EMPTY_ANALYTICS_REPO_ACTIVITY: AnalyticsRepoActivity = {
+  source_status: { ready: false, reason: null, updated_at: null },
+  items: [],
+};
+
+// --- G4 git/prs ------------------------------------------------------------
+
+export const AnalyticsPrItemSchema = z.object({
+  pr_number: z.number().default(0),
+  title: z.string().default(""),
+  state: z.string().default("open"),
+  author_login: z.string().nullable().optional().transform((v) => v ?? null),
+  pr_created_at: z.string().default(""),
+  merged_at: z.string().nullable().optional().transform((v) => v ?? null),
+  closed_at: z.string().nullable().optional().transform((v) => v ?? null),
+  additions: z.number().default(0),
+  deletions: z.number().default(0),
+  html_url: z.string().default(""),
+}).loose();
+
+export const AnalyticsPrsSchema = z.object({
+  source_status: AnalyticsSourceStatusSchema,
+  items: z.array(AnalyticsPrItemSchema).default([]),
+}).loose();
+
+export const EMPTY_ANALYTICS_PRS: AnalyticsPrs = {
+  source_status: { ready: false, reason: null, updated_at: null },
+  items: [],
+};
+
+// --- D1 dora/lead-time -----------------------------------------------------
+
+export const AnalyticsLeadTimePointSchema = z.object({
+  week: z.string().default(""),
+  p50_seconds: AnalyticsNullableNumber,
+  p95_seconds: AnalyticsNullableNumber,
+  sample_count: z.number().default(0),
+}).loose();
+
+export const AnalyticsLeadTimeSchema = z.object({
+  source_status: AnalyticsSourceStatusSchema,
+  metric: z.enum(["deploy", "merged"]).default("deploy"),
+  points: z.array(AnalyticsLeadTimePointSchema).default([]),
+}).loose();
+
+export const EMPTY_ANALYTICS_LEAD_TIME: AnalyticsLeadTime = {
+  source_status: { ready: false, reason: null, updated_at: null },
+  metric: "deploy",
+  points: [],
+};
+
+// --- D2 dora/deployments ---------------------------------------------------
+
+export const AnalyticsDeploymentTrendPointSchema = z.object({
+  week: z.string().default(""),
+  deployments: z.number().default(0),
+  failed: z.number().default(0),
+  failure_rate: AnalyticsNullableNumber,
+  mttr_seconds: AnalyticsNullableNumber,
+}).loose();
+
+export const AnalyticsDeploymentFailureSchema = z.object({
+  deployment_id: z.string().default(""),
+  app: z.string().nullable().optional().transform((v) => v ?? null),
+  failed_at: z.string().default(""),
+  recovered_at: z.string().nullable().optional().transform((v) => v ?? null),
+  mttr_seconds: AnalyticsNullableNumber,
+  reason: z.string().nullable().optional().transform((v) => v ?? null),
+  status: z.enum(["resolved", "open"]).default("open"),
+}).loose();
+
+export const AnalyticsDeploymentsSchema = z.object({
+  source_status: AnalyticsSourceStatusSchema,
+  total_deployments: z.number().default(0),
+  failed_deployments: z.number().default(0),
+  deploy_frequency_weekly: AnalyticsNullableNumber,
+  change_failure_rate: AnalyticsNullableNumber,
+  mttr_seconds: AnalyticsNullableNumber,
+  trend: z.array(AnalyticsDeploymentTrendPointSchema).default([]),
+  failures: z.array(AnalyticsDeploymentFailureSchema).default([]),
+}).loose();
+
+export const EMPTY_ANALYTICS_DEPLOYMENTS: AnalyticsDeployments = {
+  source_status: { ready: false, reason: null, updated_at: null },
+  total_deployments: 0,
+  failed_deployments: 0,
+  deploy_frequency_weekly: null,
+  change_failure_rate: null,
+  mttr_seconds: null,
+  trend: [],
+  failures: [],
+};
+
+// --- L1 identity/lifecycle -------------------------------------------------
+
+export const AnalyticsLifecycleEventSchema = z.object({
+  event_type: z.enum(["onboard", "offboard", "cutoff"]).default("onboard"),
+  member_name: z.string().default(""),
+  occurred_at: z.string().default(""),
+  result: z.enum(["success", "failed"]).nullable().optional().transform((v) => v ?? null),
+}).loose();
+
+export const AnalyticsLifecycleSchema = z.object({
+  source_status: AnalyticsSourceStatusSchema,
+  onboarding_rate: AnalyticsNullableNumber,
+  onboarded_members: z.number().default(0),
+  new_hires_total: z.number().default(0),
+  cutoff_events: z.number().default(0),
+  cutoff_success_count: z.number().default(0),
+  cutoff_success_rate: AnalyticsNullableNumber,
+  recent_events: z.array(AnalyticsLifecycleEventSchema).default([]),
+}).loose();
+
+export const EMPTY_ANALYTICS_LIFECYCLE: AnalyticsLifecycle = {
+  source_status: { ready: false, reason: null, updated_at: null },
+  onboarding_rate: null,
+  onboarded_members: 0,
+  new_hires_total: 0,
+  cutoff_events: 0,
+  cutoff_success_count: 0,
+  cutoff_success_rate: null,
+  recent_events: [],
+};
+
+// --- L2 identity/departments -----------------------------------------------
+
+export const AnalyticsDepartmentSchema = z.object({
+  department_id: z.string().default(""),
+  name: z.string().default(""),
+  member_count: z.number().default(0),
+  active_members: z.number().default(0),
+}).loose();
+
+export const AnalyticsDepartmentsSchema = z.object({
+  source_status: AnalyticsSourceStatusSchema,
+  items: z.array(AnalyticsDepartmentSchema).default([]),
+}).loose();
+
+export const EMPTY_ANALYTICS_DEPARTMENTS: AnalyticsDepartments = {
+  source_status: { ready: false, reason: null, updated_at: null },
+  items: [],
+};
+
