@@ -629,6 +629,83 @@ multica issue update <issue-id> --project <project-id>
 multica issue list --project <project-id>
 ```
 
+## Workflows
+
+Workflows model a structured R&D pipeline (a `software_rd` template with 5 stages:
+需求分析 → 架构设计 → 开发实现 → 测试验证 → 部署交付). Creating a workflow
+instantiates the template, creates a child issue per node, and activates stage one.
+Advancement through the pipeline is gated by **human review** of the artifacts
+submitted for each node — agents can create and track workflows, but cannot advance
+them or approve artifacts.
+
+### Create Workflow
+
+```bash
+multica workflow create \
+  --name "学生管理系统开发流程" \
+  --issue-id CLO-123 \
+  --description "完成学生管理系统需求分析、开发、测试" \
+  --output json
+```
+
+Flags: `--name` (required), `--issue-id` (required; issue key like `CLO-123` or full
+UUID), `--description`, `--template` (default `software_rd`), `--output` (`json` default
+or `table`).
+
+### Get Workflow
+
+```bash
+multica workflow get <workflow-id>
+multica workflow get <workflow-id> --output table
+```
+
+Returns status, current stage/node/agent/task, stage progress, and the artifacts
+already submitted for the workflow (JSON includes an `artifacts` array; a failed
+artifact fetch degrades to an empty list instead of failing the command).
+
+## Artifacts
+
+Artifacts are the deliverables agents submit for a workflow node. Submitting an
+artifact to a review-required node moves the node (and its child issue) into
+`in_review`; a human must then approve or reject it before the workflow continues.
+
+### Submit Artifact
+
+```bash
+multica artifact submit \
+  --workflow-id <workflow-uuid> \
+  --node-id <node-uuid> \
+  --type requirement \
+  --name requirement.md \
+  --file ./requirement.md
+```
+
+Flags: `--workflow-id` (required), `--node-id` (required; get it from
+`multica workflow get`), `--type` (required; aliases are normalized, e.g.
+`requirement`→`requirements`, `code`→`development`, `test`→`testing`, `doc`→`documentation`,
+`deploy`→`deployment`), `--name` (required), `--file` (required; must be inside the
+current working directory unless `--allow-external-file` is set), `--allow-external-file`,
+`--output` (`json` default or `table`).
+
+Valid types: `requirements`, `architecture`, `development`, `testing`, `code_review`,
+`security`, `documentation`, `deployment`, `other`. Text files are inlined into the
+artifact content; binary or >5 MB files are uploaded as attachments first.
+
+### List Artifacts
+
+```bash
+multica artifact list --workflow-id <workflow-uuid>
+multica artifact list --workflow-id <workflow-uuid> --type requirements --status submitted --output json
+```
+
+Flags: `--workflow-id` (required), `--type`, `--status` (`draft`, `submitted`, `approved`,
+`rejected`, `superseded`), `--output` (`table` default or `json`).
+
+> **Human-only operations.** The CLI deliberately exposes no command to advance a
+> workflow, override a node status, or approve/reject an artifact. Those actions
+> require a human credential; the backend additionally blocks machine tokens
+> (`mat_`/`mcn_`) on the review and advance routes.
+
 ## Setup
 
 ```bash

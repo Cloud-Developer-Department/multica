@@ -168,6 +168,21 @@ import type {
   CreateBillingCheckoutSessionResponse,
   BillingCheckoutSessionStatus,
   CreateBillingPortalSessionResponse,
+  Workflow,
+  WorkflowListResponse,
+  WorkflowTransitionsResponse,
+  CreateWorkflowRequest,
+  AdvanceWorkflowResponse,
+  Artifact,
+  ArtifactListResponse,
+  ArtifactVersionsResponse,
+  ArtifactDiffResponse,
+  ArtifactReviewsResponse,
+  ArtifactStats,
+  ReviewQueueResponse,
+  ReviewArtifactRequest,
+  ReviewArtifactResponse,
+  CreateArtifactRequest,
 } from "../types";
 import type { OnboardingCompletionPath } from "../onboarding/types";
 import type { CreateFeedbackResponse, FeedbackKind } from "../feedback/types";
@@ -3020,6 +3035,135 @@ export class ApiClient {
       method: "POST",
       body: JSON.stringify({ token }),
     });
+  }
+
+  // Workflow state machine (CLO-146)
+  async listWorkflows(params?: { status?: string; limit?: number; offset?: number }): Promise<WorkflowListResponse> {
+    const search = new URLSearchParams();
+    if (params?.status) search.set("status", params.status);
+    if (params?.limit != null) search.set("limit", String(params.limit));
+    if (params?.offset != null) search.set("offset", String(params.offset));
+    const qs = search.toString();
+    return this.fetch(`/api/workflows${qs ? `?${qs}` : ""}`);
+  }
+
+  async getWorkflow(id: string): Promise<Workflow> {
+    return this.fetch(`/api/workflows/${id}`);
+  }
+
+  async updateWorkflow(id: string, data: { name?: string; description?: string }): Promise<Workflow> {
+    return this.fetch(`/api/workflows/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async createWorkflow(data: CreateWorkflowRequest): Promise<Workflow> {
+    return this.fetch(`/api/workflows`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async advanceWorkflow(id: string, reason?: string): Promise<AdvanceWorkflowResponse> {
+    return this.fetch(`/api/workflows/${id}/advance`, {
+      method: "POST",
+      body: JSON.stringify({ reason: reason ?? "" }),
+    });
+  }
+
+  async getWorkflowNodes(id: string, params?: { stage?: number; status?: string }): Promise<import("../types/workflow").WorkflowNode[]> {
+    const search = new URLSearchParams();
+    if (params?.stage != null) search.set("stage", String(params.stage));
+    if (params?.status) search.set("status", params.status);
+    const qs = search.toString();
+    return this.fetch(`/api/workflows/${id}/nodes${qs ? `?${qs}` : ""}`);
+  }
+
+  async getWorkflowTransitions(id: string, params?: { node_id?: string; limit?: number; offset?: number }): Promise<WorkflowTransitionsResponse> {
+    const search = new URLSearchParams();
+    if (params?.node_id) search.set("node_id", params.node_id);
+    if (params?.limit != null) search.set("limit", String(params.limit));
+    if (params?.offset != null) search.set("offset", String(params.offset));
+    const qs = search.toString();
+    return this.fetch(`/api/workflows/${id}/transitions${qs ? `?${qs}` : ""}`);
+  }
+
+  async overrideWorkflowNodeStatus(workflowId: string, nodeId: string, data: { status: string; reason: string }): Promise<{ id: string; node_id: string; status: string; issue_id: string }> {
+    return this.fetch(`/api/workflows/${workflowId}/nodes/${nodeId}/status`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  // Artifacts + review loop (CLO-146)
+  async listArtifacts(params?: {
+    type?: string;
+    status?: string;
+    node_id?: string;
+    workflow_id?: string;
+    author_id?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<ArtifactListResponse> {
+    const search = new URLSearchParams();
+    if (params?.type) search.set("type", params.type);
+    if (params?.status) search.set("status", params.status);
+    if (params?.node_id) search.set("node_id", params.node_id);
+    if (params?.workflow_id) search.set("workflow_id", params.workflow_id);
+    if (params?.author_id) search.set("author_id", params.author_id);
+    if (params?.limit != null) search.set("limit", String(params.limit));
+    if (params?.offset != null) search.set("offset", String(params.offset));
+    const qs = search.toString();
+    return this.fetch(`/api/artifacts${qs ? `?${qs}` : ""}`);
+  }
+
+  async createArtifact(data: CreateArtifactRequest): Promise<Artifact> {
+    return this.fetch(`/api/artifacts`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getArtifact(id: string): Promise<Artifact> {
+    return this.fetch(`/api/artifacts/${id}`);
+  }
+
+  async getArtifactVersions(id: string): Promise<ArtifactVersionsResponse> {
+    return this.fetch(`/api/artifacts/${id}/versions`);
+  }
+
+  async getArtifactDiff(id: string, params: { from: number; to?: number }): Promise<ArtifactDiffResponse> {
+    const search = new URLSearchParams({ from: String(params.from) });
+    if (params.to != null) search.set("to", String(params.to));
+    return this.fetch(`/api/artifacts/${id}/diff?${search.toString()}`);
+  }
+
+  async reviewArtifact(id: string, data: ReviewArtifactRequest): Promise<ReviewArtifactResponse> {
+    return this.fetch(`/api/artifacts/${id}/review`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getArtifactReviews(id: string): Promise<ArtifactReviewsResponse> {
+    return this.fetch(`/api/artifacts/${id}/reviews`);
+  }
+
+  async getArtifactStats(params?: { from?: string; to?: string }): Promise<ArtifactStats> {
+    const search = new URLSearchParams();
+    if (params?.from) search.set("from", params.from);
+    if (params?.to) search.set("to", params.to);
+    const qs = search.toString();
+    return this.fetch(`/api/artifacts/stats${qs ? `?${qs}` : ""}`);
+  }
+
+  async getReviewQueue(params?: { limit?: number; offset?: number }): Promise<ReviewQueueResponse> {
+    const search = new URLSearchParams();
+    if (params?.limit != null) search.set("limit", String(params.limit));
+    if (params?.offset != null) search.set("offset", String(params.offset));
+    const qs = search.toString();
+    return this.fetch(`/api/reviews/queue${qs ? `?${qs}` : ""}`);
   }
 
   // Issue templates (CLO-159): workspace-scoped presets that pre-fill an

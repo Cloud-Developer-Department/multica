@@ -90,6 +90,16 @@ const (
 	EventProjectResourceUpdated = "project_resource:updated"
 	EventProjectResourceDeleted = "project_resource:deleted"
 
+	// Workflow events (Workflow state machine domain, CLO-146)
+	EventWorkflowCreated      = "workflow:created"
+	EventWorkflowUpdated      = "workflow:updated"
+	EventWorkflowAdvanced     = "workflow:advanced"
+	EventWorkflowNodeUpdated  = "workflow:node:updated"
+
+	// Artifact events (Artifact review-loop domain, CLO-146)
+	EventArtifactCreated  = "artifact:created"
+	EventArtifactReviewed = "artifact:reviewed"
+
 	// Label events
 	EventLabelCreated       = "label:created"
 	EventLabelUpdated       = "label:updated"
