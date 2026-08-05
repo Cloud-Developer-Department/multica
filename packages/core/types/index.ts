@@ -194,6 +194,7 @@ export type {
 } from "./autopilot";
 export type {
   Squad,
+  SquadChild,
   SquadMember,
   SquadMemberType,
   SquadMemberPreview,

@@ -376,6 +376,9 @@
     "trigger_blocked_short_target_unavailable": "Unavailable",
     "trigger_blocked_short_runtime_offline": "Runtime offline",
     "trigger_blocked_short_generic": "Won't start",
+    "trigger_deferred_member": "This member belongs to a squad — the mention will wake the squad leader instead; this member's personal task is suspended until the leader delegates",
+    "trigger_deferred_member_short": "Task suspended · wakes leader",
+    "trigger_deferred_member_chip_aria": "{{name}}'s personal task is suspended; the squad leader will be woken",
     "send_reply_failed": "Failed to send reply",
     "delete_failed": "Failed to delete comment",
     "reply_count_one": "{{count}} reply",
@@ -416,7 +419,14 @@
       "bar_authors_more_other": "{{names}} and {{count}} others",
       "resolve_failed": "Failed to resolve thread",
       "unresolve_failed": "Failed to unresolve thread"
-    }
+    },
+    "trigger_blocked_invalid_command": "Invalid /delegate command",
+    "trigger_blocked_short_invalid_command": "Invalid command",
+    "trigger_delegation_will_create": "will create child issue",
+    "trigger_delegation_chip_aria": "{{name}} will get a delegated child issue",
+    "trigger_delegation_tooltip": "A child issue will be created for this squad and its leader will run there instead of on this issue",
+    "delegation_created": "Delegated to {{squad}} — child issue {{identifier}} created ({{title}})",
+    "delegation_target_default": "the squad"
   },
   "reply": {
     "placeholder": "Leave a reply..."

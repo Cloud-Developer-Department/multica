@@ -92,7 +92,16 @@
     "submitting": "创建中...",
     "toast_created": "Squad 已创建",
     "toast_failed": "创建 Squad 失败",
-    "toast_member_add_failed": "添加 {{name}} 失败：{{error}}"
+    "toast_member_add_failed": "添加 {{name}} 失败：{{error}}",
+    "include_squads_label": "并入小队",
+    "include_squads_optional": "（可选）",
+    "include_squads_hint": "将已有小队并入此小队，其 leader 与成员将由新小队 leader 统一调度。",
+    "include_squads_placeholder": "选择要并入此小队的小队",
+    "group_squads": "小队",
+    "member_role_label": "{{name}} 的角色",
+    "member_role_optional": "（可选）",
+    "member_role_placeholder": "例如 评审、前端负责人",
+    "toast_members_failed": "以下成员无效，Squad 未创建：{{names}}"
   },
   "create_project": {
     "title": "新建项目",

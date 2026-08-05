@@ -455,6 +455,14 @@ export const CommentTriggerOutcomeSchema = z.object({
   target_id: z.string(),
   status: z.string().default(""),
   reason_code: z.string().default(""),
+  // /delegate (LIU-13 §7.5): the child issue created for the target squad.
+  subissue: z
+    .object({
+      id: z.string(),
+      identifier: z.string().optional(),
+      title: z.string().optional(),
+    })
+    .optional(),
 }).loose();
 
 export const CommentTriggerPreviewSchema = z.object({
@@ -463,6 +471,19 @@ export const CommentTriggerPreviewSchema = z.object({
   // must not discard the whole set of valid blocked mentions. A non-array
   // degrades to []; each valid entry is kept, each malformed one dropped.
   blocked: z
+    .array(z.unknown())
+    .catch([])
+    .default([])
+    .transform((items) =>
+      items.flatMap((item) => {
+        const parsed = CommentTriggerOutcomeSchema.safeParse(item);
+        return parsed.success ? [parsed.data] : [];
+      }),
+    ),
+  // /delegate (LIU-13 §7.3): the squads this comment would create child
+  // issues for. Parsed like blocked, so a malformed entry is dropped
+  // individually rather than failing the whole preview.
+  delegations: z
     .array(z.unknown())
     .catch([])
     .default([])
@@ -1224,6 +1245,12 @@ const SquadMemberPreviewSchema = z.object({
   role: z.string().default(""),
 }).loose();
 
+const SquadChildSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  member_count: z.number().default(0),
+}).loose();
+
 export const SquadSchema = z.object({
   id: z.string(),
   workspace_id: z.string(),
@@ -1237,8 +1264,11 @@ export const SquadSchema = z.object({
   updated_at: z.string(),
   archived_at: z.string().nullable().optional().transform((v) => v ?? null),
   archived_by: z.string().nullable().optional().transform((v) => v ?? null),
+  parent_squad_id: z.string().nullable().optional().transform((v) => v ?? null),
+  upgrade_on_member_mention: z.boolean().default(true),
   member_count: z.number().default(0),
   member_preview: z.array(SquadMemberPreviewSchema).default([]),
+  child_squads: z.array(SquadChildSchema).default([]),
 }).loose();
 
 export const SquadListSchema = z.array(SquadSchema);
@@ -1256,8 +1286,11 @@ export const EMPTY_SQUAD: Squad = {
   updated_at: "",
   archived_at: null,
   archived_by: null,
+  parent_squad_id: null,
+  upgrade_on_member_mention: true,
   member_count: 0,
   member_preview: [],
+  child_squads: [],
 };
 
 // Squad member status — backs the Squad detail page's Members tab. status

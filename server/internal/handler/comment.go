@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"sort"
@@ -13,6 +14,7 @@ import (
 	"unicode"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/multica-ai/multica/server/internal/logger"
 	"github.com/multica-ai/multica/server/internal/service"
@@ -78,6 +80,19 @@ type CommentTriggerOutcome struct {
 	TargetID   string             `json:"target_id"`
 	Status     DispatchStatus     `json:"status"` // queued | coalesced | deferred | blocked
 	ReasonCode DispatchReasonCode `json:"reason_code"`
+	// Subissue is set only on a successful /delegate outcome (LIU-13 F5): the
+	// child issue created (or already existing, on an idempotent edit recompute)
+	// for the target squad. Additive: old clients ignore it.
+	Subissue *CommentSubissueRef `json:"subissue,omitempty"`
+}
+
+// CommentSubissueRef points at the child issue a /delegate command created for
+// one squad (LIU-13 §7.5). Identifier is the workspace-prefixed issue id
+// (e.g. "MUL-123") when the prefix can be resolved.
+type CommentSubissueRef struct {
+	ID         string `json:"id"`
+	Identifier string `json:"identifier"`
+	Title      string `json:"title"`
 }
 
 func commentToResponse(c db.Comment, reactions []ReactionResponse, attachments []AttachmentResponse) CommentResponse {
@@ -1009,8 +1024,15 @@ type CommentTriggerPreviewResponse struct {
 	// Blocked lists explicit @agent / @squad mentions that will NOT trigger if
 	// this comment is posted as-is (MUL-4525 §2). Additive: old clients ignore
 	// it. It lets the composer warn before sending instead of the user only
-	// discovering the silent no-op afterwards.
+	// discovering the silent no-op afterwards. For a /delegate comment this
+	// also carries the gate failures of delegated squads and the command-level
+	// invalid_command outcome (LIU-13 §7.3).
 	Blocked []CommentTriggerOutcome `json:"blocked,omitempty"`
+	// Delegations lists the squads a /delegate comment would create child
+	// issues for (LIU-13 §7.3 / AC-3.1), with the semantics "will create a
+	// child issue and delegate". Only gate-passing squads appear here; gate
+	// failures are in Blocked. Additive: old clients ignore it.
+	Delegations []CommentTriggerOutcome `json:"delegations,omitempty"`
 }
 
 type CommentTriggerAgentResponse struct {
@@ -1204,6 +1226,15 @@ func (h *Handler) PreviewCommentTriggers(w http.ResponseWriter, r *http.Request)
 	actorType, actorID := h.resolveActor(r, userID, uuidToString(issue.WorkspaceID))
 	opts.OriginatorUserID = h.invokeOriginatorFromRequest(r, actorType, actorID)
 	opts.AutopilotDelegationAuthorityUserID = h.autopilotDelegationAuthorityFromRequest(r, issue, actorType, actorID)
+	// LIU-13 §7.3: a /delegate draft gets the delegation preview — the
+	// delegated squads are never listed as "leaders triggered on this issue";
+	// gate-passing squads go to `delegations` ("will create a child issue and
+	// delegate"), gate failures and command errors go to `blocked`.
+	if isDelegationComment(content) {
+		resp := h.previewDelegationComment(r.Context(), issue, content, actorType, actorID, opts)
+		writeJSON(w, http.StatusOK, resp)
+		return
+	}
 	triggers, targets := h.computeCommentAgentTriggers(r.Context(), issue, content, parentComment, actorType, actorID, opts)
 	resp := CommentTriggerPreviewResponse{
 		Agents:  make([]CommentTriggerAgentResponse, 0, len(triggers)),
@@ -1212,7 +1243,83 @@ func (h *Handler) PreviewCommentTriggers(w http.ResponseWriter, r *http.Request)
 	for _, trigger := range triggers {
 		resp.Agents = append(resp.Agents, commentAgentTriggerToResponse(trigger))
 	}
+	if delegationTokenNotFirst(content) {
+		// AC-5.1: a misplaced /delegate token is an invalid command; the
+		// mentions below still preview normally.
+		resp.Blocked = append(resp.Blocked, delegationCommandBlockedOutcome(ReasonInvalidCommand))
+	}
 	writeJSON(w, http.StatusOK, resp)
+}
+
+// previewDelegationComment computes the trigger-preview projection for a
+// /delegate comment WITHOUT creating anything (LIU-13 §7.3 / AC-3.1):
+// gate-passing delegated squads appear in `delegations` (semantics: "will
+// create a child issue and delegate"), gate failures land in `blocked`, and
+// non-delegated mentions (@agent, self-squad) keep the normal `agents`
+// preview. The delegated squad leaders are never listed as triggered on the
+// main issue.
+func (h *Handler) previewDelegationComment(ctx context.Context, issue db.Issue, content string, actorType, actorID string, opts commentTriggerComputeOptions) CommentTriggerPreviewResponse {
+	resp := CommentTriggerPreviewResponse{
+		Agents:  []CommentTriggerAgentResponse{},
+		Blocked: []CommentTriggerOutcome{},
+	}
+	mentions := util.ParseMentions(content)
+	if util.HasMentionAll(mentions) {
+		// E7: @all suppresses the whole comment; /delegate with no squad
+		// mention is additionally an invalid command.
+		resp.Blocked = append(resp.Blocked, delegationCommandBlockedOutcome(ReasonInvalidCommand))
+		return resp
+	}
+	_, delegated := h.splitDelegationSquadMentions(issue, mentions)
+	// Non-delegated mentions keep the normal agents preview (E1/E6), even when
+	// the command itself is refused below.
+	triggers, targets := h.computeCommentAgentTriggers(ctx, issue, content, nil, actorType, actorID, opts)
+	for _, trigger := range triggers {
+		resp.Agents = append(resp.Agents, commentAgentTriggerToResponse(trigger))
+	}
+	resp.Blocked = commentBlockedTargetOutcomes(targets)
+	if code, ok := h.delegationAuthorized(ctx, issue, actorType, actorID); !ok {
+		resp.Blocked = append(resp.Blocked, delegationCommandBlockedOutcome(code))
+		return resp
+	}
+	hasSquadMention := false
+	for _, m := range mentions {
+		if m.Type == "squad" {
+			hasSquadMention = true
+			break
+		}
+	}
+	if !hasSquadMention {
+		resp.Blocked = append(resp.Blocked, delegationCommandBlockedOutcome(ReasonInvalidCommand))
+		return resp
+	}
+	for _, m := range delegated {
+		gated := h.gateDelegationSquad(ctx, issue, m, actorType, actorID, opts)
+		if gated.blocked != nil {
+			resp.Blocked = append(resp.Blocked, *gated.blocked)
+			continue
+		}
+		if gated.offline {
+			// §7.3: a gate-refused target lands in blocked[] with its reason.
+			// An offline leader produces blocked runtime_offline on submit (the
+			// child parks in backlog for the backlog→todo retry), so the
+			// preview must say the same instead of promising a queued dispatch.
+			resp.Blocked = append(resp.Blocked, CommentTriggerOutcome{
+				TargetType: "squad",
+				TargetID:   m.ID,
+				Status:     DispatchBlocked,
+				ReasonCode: ReasonRuntimeOffline,
+			})
+			continue
+		}
+		resp.Delegations = append(resp.Delegations, CommentTriggerOutcome{
+			TargetType: "squad",
+			TargetID:   m.ID,
+			Status:     DispatchQueued,
+			ReasonCode: ReasonQueued,
+		})
+	}
+	return resp
 }
 
 // taskCoversReplyParent reports whether parentID is a comment this task is
@@ -1456,6 +1563,100 @@ func isNoteComment(content string) bool {
 	return strings.EqualFold(firstToken, noteCommentPrefix)
 }
 
+// delegation command recognition (LIU-13 §7.1). A /delegate comment is one
+// whose FIRST whitespace-delimited token is the command (case-insensitive,
+// allowing leading whitespace), mirroring the /note prefix pattern. The
+// command short-circuits BEFORE the normal squad-mention trigger branch
+// (F1): the mentioned squads get child issues instead of a main-issue run.
+const (
+	delegationCommandPrefix    = "/delegate"
+	delegationCommandPrefixCJK = "/委派"
+)
+
+// isDelegationCommandToken reports whether a whitespace-delimited token is the
+// /delegate command (case-insensitive for the ASCII form; the CJK form has no
+// case).
+func isDelegationCommandToken(token string) bool {
+	return strings.EqualFold(token, delegationCommandPrefix) || token == delegationCommandPrefixCJK
+}
+
+// isDelegationComment reports whether content begins with the /delegate or
+// /委派 command as its first token.
+func isDelegationComment(content string) bool {
+	trimmed := strings.TrimLeft(content, " \t\r\n")
+	firstToken := trimmed
+	if i := strings.IndexFunc(trimmed, unicode.IsSpace); i >= 0 {
+		firstToken = trimmed[:i]
+	}
+	return isDelegationCommandToken(firstToken)
+}
+
+// delegationTokenNotFirst reports whether a /delegate token appears as a
+// non-first whitespace-delimited token in the comment. The syntax rule
+// requires the command to be the FIRST token; a misplaced token is reported
+// as blocked invalid_command while the comment itself still saves and its
+// mentions keep their normal behavior (AC-5.1).
+func delegationTokenNotFirst(content string) bool {
+	trimmed := strings.TrimLeft(content, " \t\r\n")
+	for i, token := range strings.Fields(trimmed) {
+		if i == 0 {
+			continue
+		}
+		if isDelegationCommandToken(token) {
+			return true
+		}
+	}
+	return false
+}
+
+// delegationCommandBlockedOutcome is the command-level blocked outcome for a
+// /delegate that cannot run at all (invalid_command, or target_unavailable
+// when the main issue itself cannot delegate). target_id stays empty — there
+// is no single squad target for a command-level failure.
+func delegationCommandBlockedOutcome(code DispatchReasonCode) CommentTriggerOutcome {
+	return CommentTriggerOutcome{
+		TargetType: "squad",
+		TargetID:   "",
+		Status:     DispatchBlocked,
+		ReasonCode: code,
+	}
+}
+
+// delegationEditIsStructural reports whether an edit to a delegation comment
+// changes the delegation's structure (LIU-13 O5 / AC-6.1): dropping the
+// /delegate prefix, or changing the delegated squad set. Such edits are
+// rejected with 409 once the comment has produced child issues; every other
+// (description-class) edit is allowed and never writes back.
+func delegationEditIsStructural(oldContent, newContent string) bool {
+	if isDelegationComment(oldContent) != isDelegationComment(newContent) {
+		return true
+	}
+	return !squadMentionSetEqual(oldContent, newContent)
+}
+
+// squadMentionSetEqual compares the squad mention sets of two comment bodies.
+func squadMentionSetEqual(a, b string) bool {
+	set := func(content string) map[string]struct{} {
+		out := make(map[string]struct{})
+		for _, m := range util.ParseMentions(content) {
+			if m.Type == "squad" {
+				out[m.ID] = struct{}{}
+			}
+		}
+		return out
+	}
+	sa, sb := set(a), set(b)
+	if len(sa) != len(sb) {
+		return false
+	}
+	for id := range sa {
+		if _, ok := sb[id]; !ok {
+			return false
+		}
+	}
+	return true
+}
+
 // triggerTasksForComment resolves and enqueues the comment's agent triggers and
 // returns the per-target outcomes for explicit @agent / @squad mentions
 // (MUL-4525 §2): blocked mentions from resolution plus queued / coalesced /
@@ -1465,6 +1666,12 @@ func (h *Handler) triggerTasksForComment(ctx context.Context, issue db.Issue, co
 	if isNoteComment(comment.Content) {
 		return nil
 	}
+	// LIU-13 F1: a /delegate comment takes the delegation pipeline instead of
+	// the normal mention resolution — the mentioned squads are dispatched on
+	// their own child issues, never on this one (F4).
+	if isDelegationComment(comment.Content) {
+		return h.triggerDelegationComment(ctx, issue, comment, parentComment, actorType, actorID, originatorUserID, delegationAuthorityUserID, suppressAgentIDs)
+	}
 	triggers, targets := h.computeCommentAgentTriggers(ctx, issue, comment.Content, parentComment, actorType, actorID, commentTriggerComputeOptions{
 		ExcludeTriggerCommentID:            comment.ID,
 		OriginatorUserID:                   originatorUserID,
@@ -1472,7 +1679,14 @@ func (h *Handler) triggerTasksForComment(ctx context.Context, issue db.Issue, co
 	})
 	triggers = filterSuppressedCommentAgentTriggers(triggers, suppressAgentIDs)
 	enqueued := h.enqueueCommentAgentTriggers(ctx, issue, comment.ID, triggers)
-	return commentTriggerOutcomes(targets, enqueued)
+	outcomes := commentTriggerOutcomes(targets, enqueued)
+	if delegationTokenNotFirst(comment.Content) {
+		// AC-5.1: a misplaced /delegate token is an invalid command — the
+		// comment still saves and its mentions still behave normally, but the
+		// command itself is reported blocked.
+		outcomes = append(outcomes, delegationCommandBlockedOutcome(ReasonInvalidCommand))
+	}
+	return outcomes
 }
 
 func filterSuppressedCommentAgentTriggers(triggers []commentAgentTrigger, suppressAgentIDs []pgtype.UUID) []commentAgentTrigger {
@@ -1496,6 +1710,375 @@ func filterSuppressedCommentAgentTriggers(triggers []commentAgentTrigger, suppre
 		filtered = append(filtered, trigger)
 	}
 	return filtered
+}
+
+// triggerDelegationComment is the /delegate create path (LIU-13 §7.2). It
+// short-circuits BEFORE the normal squad-mention resolution: each delegated
+// squad mention runs the gate→create→dispatch pipeline and produces its own
+// outcome with a subissue reference; every other mention (@agent, and the
+// self-squad whose leader already owns the main issue, E1/E6) keeps the
+// normal resolution so the main issue is never double-triggered (F4).
+func (h *Handler) triggerDelegationComment(ctx context.Context, issue db.Issue, comment db.Comment, parentComment *db.Comment, actorType, actorID, originatorUserID, delegationAuthorityUserID string, suppressAgentIDs []pgtype.UUID) []CommentTriggerOutcome {
+	opts := commentTriggerComputeOptions{
+		ExcludeTriggerCommentID:            comment.ID,
+		OriginatorUserID:                   originatorUserID,
+		AutopilotDelegationAuthorityUserID: delegationAuthorityUserID,
+	}
+	mentions := util.ParseMentions(comment.Content)
+	if util.HasMentionAll(mentions) {
+		// E7: @all suppresses the whole comment; a /delegate with no squad
+		// mention (only @all) is additionally an invalid command.
+		return []CommentTriggerOutcome{delegationCommandBlockedOutcome(ReasonInvalidCommand)}
+	}
+	_, delegated := h.splitDelegationSquadMentions(issue, mentions)
+	// Non-delegated mentions (@agent + self-squad) keep the normal resolution
+	// REGARDLESS of the command's authority (E6): an @agent mention in a
+	// /delegate comment always behaves like a normal mention, even when the
+	// command itself is refused. computeCommentAgentTriggers short-circuits the
+	// delegated squads itself.
+	triggers, targets := h.computeCommentAgentTriggers(ctx, issue, comment.Content, parentComment, actorType, actorID, opts)
+	triggers = filterSuppressedCommentAgentTriggers(triggers, suppressAgentIDs)
+	enqueued := h.enqueueCommentAgentTriggers(ctx, issue, comment.ID, triggers)
+	outcomes := commentTriggerOutcomes(targets, enqueued)
+	// Command-level authority preconditions (v1 scope, 1.3 / E2 / E2a): an
+	// agent author who is the main-issue leader, on a live issue with a leader
+	// assignee. A failure blocks the delegation only — the mentions above
+	// already ran.
+	if code, ok := h.delegationAuthorized(ctx, issue, actorType, actorID); !ok {
+		outcomes = append(outcomes, delegationCommandBlockedOutcome(code))
+		return outcomes
+	}
+	hasSquadMention := false
+	for _, m := range mentions {
+		if m.Type == "squad" {
+			hasSquadMention = true
+			break
+		}
+	}
+	if !hasSquadMention {
+		// AC-5.1: /delegate with no squad mention is an invalid command. The
+		// @agent mentions above still ran (E6); the command itself is blocked.
+		outcomes = append(outcomes, delegationCommandBlockedOutcome(ReasonInvalidCommand))
+		return outcomes
+	}
+	multiSquad := len(delegated) > 1
+	for _, m := range delegated {
+		outcomes = append(outcomes, h.delegateToSquad(ctx, issue, comment, m, actorType, actorID, opts, multiSquad))
+	}
+	return outcomes
+}
+
+// delegationAuthorized reports whether the /delegate command is usable on this
+// issue by this author at all (LIU-13 1.3 / E2 / E2a / AC-5.1). The v1 scope:
+// an AGENT author who is the main-issue leader (the assignee agent itself, or
+// the assignee squad's leader), on a main issue that is not done/cancelled and
+// carries a leader assignee. On failure it returns the reason code the caller
+// should surface as a command-level blocked outcome.
+func (h *Handler) delegationAuthorized(ctx context.Context, issue db.Issue, actorType, actorID string) (DispatchReasonCode, bool) {
+	if actorType != "agent" {
+		// member 作者不开放 (v1) — the author has no leader delegation identity.
+		return ReasonInvalidCommand, false
+	}
+	if issue.Status == "done" || issue.Status == "cancelled" {
+		return ReasonTargetUnavailable, false
+	}
+	if !issue.AssigneeType.Valid || !issue.AssigneeID.Valid {
+		return ReasonTargetUnavailable, false
+	}
+	switch issue.AssigneeType.String {
+	case "agent":
+		if uuidToString(issue.AssigneeID) != actorID {
+			return ReasonInvalidCommand, false
+		}
+	case "squad":
+		squad, err := h.Queries.GetSquadInWorkspace(ctx, db.GetSquadInWorkspaceParams{
+			ID:          issue.AssigneeID,
+			WorkspaceID: issue.WorkspaceID,
+		})
+		if err != nil || uuidToString(squad.LeaderID) != actorID {
+			return ReasonInvalidCommand, false
+		}
+	default:
+		// Assignee is a member (or an unknown kind): no leader identity to
+		// delegate from (E2a).
+		return ReasonTargetUnavailable, false
+	}
+	return "", true
+}
+
+// isSelfSquadMention reports whether a squad mention names the main issue's
+// own assignee squad. Delegating to your own squad is a no-op delegation
+// (LIU-13 E1): the mention keeps the normal @squad behavior — the leader is
+// triggered on the main issue, no child issue is created.
+func isSelfSquadMention(issue db.Issue, m util.Mention) bool {
+	return m.Type == "squad" &&
+		issue.AssigneeType.Valid && issue.AssigneeType.String == "squad" &&
+		uuidToString(issue.AssigneeID) == m.ID
+}
+
+// splitDelegationSquadMentions partitions the comment's squad mentions into
+// self-squad mentions (E1, treated as a normal @squad) and delegated squad
+// mentions (every other squad, which get child issues).
+func (h *Handler) splitDelegationSquadMentions(issue db.Issue, mentions []util.Mention) (self, delegated []util.Mention) {
+	for _, m := range mentions {
+		if m.Type != "squad" {
+			continue
+		}
+		if isSelfSquadMention(issue, m) {
+			self = append(self, m)
+			continue
+		}
+		delegated = append(delegated, m)
+	}
+	return self, delegated
+}
+
+// delegationGateResult is the outcome of the per-squad delegation gate
+// (LIU-13 §7.2 step 1). Either blocked is set (gate refused — NO child is
+// created) or squad/leader are set (gate passed; offline records that the
+// leader cannot accept work right now — no bound runtime or a bound runtime
+// that is not online — so the child must be parked in backlog).
+type delegationGateResult struct {
+	squad   *db.Squad
+	leader  *db.Agent
+	offline bool
+	blocked *CommentTriggerOutcome
+}
+
+// gateDelegationSquad runs the per-squad delegation gate in §7.2 step 1 order:
+// squad exists → private-leader gate (canEnqueueSquadLeader carrying the
+// effective invoker, so the autopilot delegation authority applies exactly as
+// in a normal @squad, O6 / AC-5.4) → archived → readiness. Every failure is
+// enumeration-safe and refuses creation (O3 / AC-5.2).
+func (h *Handler) gateDelegationSquad(ctx context.Context, issue db.Issue, mention util.Mention, actorType, actorID string, opts commentTriggerComputeOptions) delegationGateResult {
+	wsID := uuidToString(issue.WorkspaceID)
+	blocked := func(code DispatchReasonCode) delegationGateResult {
+		return delegationGateResult{blocked: &CommentTriggerOutcome{TargetType: "squad", TargetID: mention.ID, Status: DispatchBlocked, ReasonCode: code}}
+	}
+	squad, err := h.Queries.GetSquadInWorkspace(ctx, db.GetSquadInWorkspaceParams{
+		ID:          parseUUID(mention.ID),
+		WorkspaceID: issue.WorkspaceID,
+	})
+	if err != nil {
+		// Do not reveal whether the squad exists (enumeration-safety).
+		return blocked(ReasonTargetUnavailable)
+	}
+	leaderID := squad.LeaderID
+	// Private-leader gate FIRST, before any archived/runtime state is read —
+	// a caller who cannot invoke the leader learns only the generic code.
+	if !h.canEnqueueSquadLeader(ctx, leaderID, actorType, actorID, opts.effectiveInvoker(), wsID) {
+		return blocked(ReasonInvocationNotAllowed)
+	}
+	leader, err := h.Queries.GetAgentInWorkspace(ctx, db.GetAgentInWorkspaceParams{
+		ID:          leaderID,
+		WorkspaceID: issue.WorkspaceID,
+	})
+	if err != nil {
+		return blocked(ReasonTargetUnavailable)
+	}
+	if leader.ArchivedAt.Valid {
+		return blocked(ReasonTargetUnavailable)
+	}
+	// Offline detection MUST match the dispatch path exactly (AC-5.3 / O3.2,
+	// 缺陷 #2): service.AgentReadiness is the single source of truth shared by
+	// the squad-leader dispatch (isSquadLeaderReady). An agent whose bound
+	// runtime is not 'online' is offline for dispatch purposes too — otherwise
+	// the gate would create a todo child that the dispatch refuses, and the
+	// AC-5.5 post-create verification would misreport internal_error on a
+	// child that can never run. A runtime-row lookup failure fails closed as
+	// offline (matches isSquadLeaderReady's fail-closed behavior).
+	ready, _, err := service.AgentReadiness(ctx, h.Queries, leader)
+	if err != nil || !ready {
+		return delegationGateResult{squad: &squad, leader: &leader, offline: true}
+	}
+	return delegationGateResult{squad: &squad, leader: &leader}
+}
+
+// delegateToSquad runs the gate→create→dispatch pipeline for ONE delegated
+// squad mention (LIU-13 §7.2). The gate never creates on failure; after a
+// successful create the leader is auto-dispatched on the CHILD issue by
+// IssueService, and the outcome verifies the dispatch landed (AC-5.5) before
+// reporting queued. Edit recomputes are idempotent on (delegation_comment_id,
+// assignee_id): an existing active child is reported instead of re-created
+// (AC-6.3).
+func (h *Handler) delegateToSquad(ctx context.Context, issue db.Issue, comment db.Comment, mention util.Mention, actorType, actorID string, opts commentTriggerComputeOptions, multiSquad bool) CommentTriggerOutcome {
+	gated := h.gateDelegationSquad(ctx, issue, mention, actorType, actorID, opts)
+	if gated.blocked != nil {
+		return *gated.blocked
+	}
+	// AC-6.3: the edit recompute must not re-create a child that this comment
+	// already produced for this squad.
+	if existing, found, err := h.findActiveDelegatedChild(ctx, issue.WorkspaceID, comment.ID, gated.squad.ID); err == nil && found {
+		return CommentTriggerOutcome{
+			TargetType: "squad",
+			TargetID:   mention.ID,
+			Status:     DispatchQueued,
+			ReasonCode: ReasonQueued,
+			Subissue:   h.delegationSubissueRef(ctx, existing),
+		}
+	} else if err != nil {
+		slog.Warn("find active delegated child failed", "comment_id", uuidToString(comment.ID), "squad_id", uuidToString(gated.squad.ID), "error", err)
+		return CommentTriggerOutcome{TargetType: "squad", TargetID: mention.ID, Status: DispatchBlocked, ReasonCode: ReasonInternalError}
+	}
+	// Leader offline: report blocked runtime_offline AND park the child in
+	// backlog so the existing backlog→todo promotion retries the dispatch
+	// later (O3.2 / AC-5.3's "或落 backlog" option).
+	status := "todo"
+	blockedReason := DispatchReasonCode("")
+	if gated.offline {
+		status = "backlog"
+		blockedReason = ReasonRuntimeOffline
+	}
+	child, err := h.createDelegatedChildIssue(ctx, issue, comment, *gated.squad, actorType, actorID, status, multiSquad)
+	if err != nil {
+		slog.Warn("create delegated child issue failed",
+			"issue_id", uuidToString(issue.ID),
+			"squad_id", uuidToString(gated.squad.ID),
+			"error", err)
+		return CommentTriggerOutcome{TargetType: "squad", TargetID: mention.ID, Status: DispatchBlocked, ReasonCode: ReasonInternalError}
+	}
+	outcome := CommentTriggerOutcome{
+		TargetType: "squad",
+		TargetID:   mention.ID,
+		Status:     DispatchQueued,
+		ReasonCode: ReasonQueued,
+		Subissue:   h.delegationSubissueRef(ctx, child),
+	}
+	if blockedReason != "" {
+		outcome.Status = DispatchBlocked
+		outcome.ReasonCode = blockedReason
+		return outcome
+	}
+	// Verify the leader dispatch landed on the child (AC-5.5): a todo child
+	// with a ready leader must carry a pending task. Its absence means the
+	// post-create enqueue failed — the child is retained (never rolled back)
+	// and the outcome is blocked; a backlog→todo promotion is the retry path.
+	hasPending, err := h.Queries.HasPendingTaskForIssueAndAgent(ctx, db.HasPendingTaskForIssueAndAgentParams{
+		IssueID: child.ID,
+		AgentID: gated.squad.LeaderID,
+		HeadSha: h.TaskService.ResolveIssueReviewSHAParam(ctx, child.ID),
+	})
+	if err != nil {
+		slog.Warn("check delegated child dispatch failed",
+			"issue_id", uuidToString(child.ID), "squad_id", uuidToString(gated.squad.ID), "error", err)
+		outcome.Status = DispatchBlocked
+		outcome.ReasonCode = ReasonInternalError
+		return outcome
+	}
+	if !hasPending {
+		slog.Warn("delegated child created but leader dispatch did not land; child retained for backlog->todo retry",
+			"issue_id", uuidToString(child.ID), "squad_id", uuidToString(gated.squad.ID))
+		outcome.Status = DispatchBlocked
+		outcome.ReasonCode = ReasonInternalError
+		return outcome
+	}
+	return outcome
+}
+
+// createDelegatedChildIssue builds the child issue for one delegated squad and
+// hands it to IssueService.CreateDelegatedChildIssue (LIU-13 F3 / §7.2):
+// title per E8/O8, description with the full command text + backlinks, origin
+// agent_create + origin_id = the trigger comment's source_task_id (O2 /
+// MUL-4305 inheritance), delegation_comment_id = the trigger comment.
+func (h *Handler) createDelegatedChildIssue(ctx context.Context, issue db.Issue, comment db.Comment, squad db.Squad, actorType, actorID, status string, multiSquad bool) (db.Issue, error) {
+	res, err := h.IssueService.CreateDelegatedChildIssue(ctx, service.DelegatedChildIssueParams{
+		Parent:              issue,
+		Squad:               squad,
+		Title:               delegationChildTitle(comment.Content, squad.Name, multiSquad),
+		Description:         delegationChildDescription(comment.Content, issue.ID, comment.ID),
+		Status:              status,
+		CreatorType:         actorType,
+		CreatorID:           parseUUID(actorID),
+		OriginID:            comment.SourceTaskID,
+		DelegationCommentID: comment.ID,
+	})
+	if err != nil {
+		return db.Issue{}, err
+	}
+	return res.Issue, nil
+}
+
+// delegationSubissueRef builds the child-issue reference for a /delegate
+// outcome. Identifier is the workspace-prefixed issue id when the prefix can
+// be resolved; it is left empty otherwise (the id alone still links).
+func (h *Handler) delegationSubissueRef(ctx context.Context, child db.Issue) *CommentSubissueRef {
+	ref := &CommentSubissueRef{ID: uuidToString(child.ID), Title: child.Title}
+	if ws, err := h.Queries.GetWorkspace(ctx, child.WorkspaceID); err == nil {
+		ref.Identifier = ws.IssuePrefix + "-" + strconv.Itoa(int(child.Number))
+	}
+	return ref
+}
+
+// findActiveDelegatedChild looks up the active (non-terminal) child issue this
+// comment already created for a squad — the (delegation_comment_id,
+// assignee_id) edit-idempotency key (LIU-13 O5 / AC-6.3).
+func (h *Handler) findActiveDelegatedChild(ctx context.Context, workspaceID pgtype.UUID, commentID, assigneeID pgtype.UUID) (db.Issue, bool, error) {
+	child, err := h.Queries.FindActiveDelegatedChildIssue(ctx, db.FindActiveDelegatedChildIssueParams{
+		DelegationCommentID: commentID,
+		AssigneeID:          assigneeID,
+		WorkspaceID:         workspaceID,
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return db.Issue{}, false, nil
+		}
+		return db.Issue{}, false, err
+	}
+	return child, true, nil
+}
+
+// delegation title / description builders (LIU-13 E8 / O8 / §7.2).
+
+const (
+	// delegationTitleSummaryRunes bounds the task-summary portion of a
+	// delegated child title.
+	delegationTitleSummaryRunes = 80
+	// delegationTitleMaxRunes bounds the final title (summary + squad suffix).
+	delegationTitleMaxRunes = 120
+)
+
+// delegationChildTitle derives the delegated child's title: the task summary
+// (command body minus the command token and mention markup, rune-truncated)
+// plus "@<squad name>" when one comment delegates several squads, so the
+// children stay distinguishable (O8).
+func delegationChildTitle(content, squadName string, multiSquad bool) string {
+	summary := delegationTaskSummary(content)
+	if multiSquad {
+		summary = summary + " @" + squadName
+	}
+	if runes := []rune(summary); len(runes) > delegationTitleMaxRunes {
+		return string(runes[:delegationTitleMaxRunes])
+	}
+	return summary
+}
+
+// delegationTaskSummary strips the /delegate token and every mention from the
+// command, collapses whitespace, and truncates to the summary budget. Falls
+// back to a neutral label when the command carries no body text.
+func delegationTaskSummary(content string) string {
+	trimmed := strings.TrimLeft(content, " \t\r\n")
+	if i := strings.IndexFunc(trimmed, unicode.IsSpace); i >= 0 {
+		trimmed = trimmed[i:]
+	} else {
+		// The command token was the whole comment — no body text follows it.
+		trimmed = ""
+	}
+	noMentions := util.MentionRe.ReplaceAllString(trimmed, " ")
+	summary := strings.Join(strings.Fields(noMentions), " ")
+	if summary == "" {
+		return "Delegated task"
+	}
+	if runes := []rune(summary); len(runes) > delegationTitleSummaryRunes {
+		summary = string(runes[:delegationTitleSummaryRunes])
+	}
+	return summary
+}
+
+// delegationChildDescription embeds the full command text plus backlinks to
+// the main issue and the triggering comment (LIU-13 §7.2).
+func delegationChildDescription(content string, parentID, commentID pgtype.UUID) string {
+	return fmt.Sprintf("%s\n\n---\nDelegated from [main issue](mention://issue/%s) via comment %s",
+		content, uuidToString(parentID), uuidToString(commentID))
 }
 
 // commentEnqueueResult is the domain outcome of enqueuing ONE executing agent.
@@ -1724,11 +2307,14 @@ func commentTriggerOutcomes(targets []commentMentionTarget, enqueued map[string]
 // commentBlockedTargetOutcomes is the composer-preview projection: the explicit
 // mentions that will NOT trigger if the comment is posted as-is (MUL-4525 §2). A
 // resolvable/executing target instead appears in the preview `agents` list, so
-// only terminal blocked targets surface here.
+// only terminal blocked targets surface here — plus the F3 member-mention
+// upgrade (LIU-9 子任务A), whose deferred outcome tells the composer the
+// member's own task is suspended because the mention woke the squad leader.
 func commentBlockedTargetOutcomes(targets []commentMentionTarget) []CommentTriggerOutcome {
 	var blocked []CommentTriggerOutcome
 	for _, t := range targets {
-		if t.Status == DispatchBlocked {
+		if t.Status == DispatchBlocked ||
+			(t.Status == DispatchDeferred && t.ReasonCode == ReasonDeferredMember) {
 			blocked = append(blocked, CommentTriggerOutcome{TargetType: t.TargetType, TargetID: t.TargetID, Status: t.Status, ReasonCode: t.ReasonCode})
 		}
 	}
@@ -2122,6 +2708,16 @@ func (h *Handler) computeCommentAgentTriggers(ctx context.Context, issue db.Issu
 		return nil, nil
 	}
 
+	// LIU-13 F1/F4: a /delegate comment short-circuits BEFORE the squad
+	// trigger branch. Delegated squad mentions are consumed by the delegation
+	// flow (they dispatch on their own CHILD issues, never on this one); the
+	// self-squad mention (E1) and @agent mentions (E6) keep the normal
+	// resolution below. This also keeps edit-retrigger replays from waking a
+	// delegated squad leader on the main issue.
+	if isDelegationComment(content) {
+		return h.resolveDelegationCommentTriggers(ctx, issue, mentions, actorType, actorID, opts)
+	}
+
 	if hasAgentOrSquadMention(mentions) {
 		return h.resolveMentionedAgentCommentTriggers(ctx, issue, mentions, actorType, actorID, opts)
 	}
@@ -2420,6 +3016,62 @@ func (h *Handler) hasPendingTaskForIssueAndAgent(ctx context.Context, issueID, a
 	})
 }
 
+// resolveDelegationCommentTriggers resolves the triggers of a /delegate
+// comment EXCLUDING the delegated squad mentions (LIU-13 F1/F4/E1/E6): the
+// delegated squads will be dispatched on their own child issues by the
+// delegation flow, so they must never produce a trigger on the main issue;
+// the self-squad mention (the main issue's own assignee squad, E1) and any
+// @agent mentions (E6) keep the normal resolution.
+func (h *Handler) resolveDelegationCommentTriggers(ctx context.Context, issue db.Issue, mentions []util.Mention, authorType, authorID string, opts commentTriggerComputeOptions) ([]commentAgentTrigger, []commentMentionTarget) {
+	filtered := make([]util.Mention, 0, len(mentions))
+	for _, m := range mentions {
+		if m.Type == "squad" && !isSelfSquadMention(issue, m) {
+			continue
+		}
+		filtered = append(filtered, m)
+	}
+	if len(filtered) == 0 {
+		return nil, nil
+	}
+	triggers, targets := h.resolveMentionedAgentCommentTriggers(ctx, issue, filtered, authorType, authorID, opts)
+	// AC-2.2 / F4: a delegated squad's leader must never be dispatched on the
+	// main issue by this comment. The SR3 unique-leader upgrade (and the F3
+	// member-mention upgrade) can otherwise turn a redundant @agent mention of
+	// a delegated squad's leader/member into a squad-leader trigger here —
+	// drop it: the delegation already dispatches that leader on the child.
+	triggers = h.dropDelegatedSquadLeaderTriggers(issue, mentions, triggers)
+	return triggers, targets
+}
+
+// dropDelegatedSquadLeaderTriggers removes any squad-leader trigger whose squad
+// is being delegated by the same comment (LIU-13 AC-2.2 / F4): the delegation
+// already dispatches that leader on the child issue, so a main-issue squad
+// trigger would double-dispatch. Plain @agent (personal) triggers are
+// untouched (E6). The delegated squads come from the full mention set — a
+// mention of the main issue's own assignee squad (E1) is NOT delegated and
+// keeps its squad-leader semantics.
+func (h *Handler) dropDelegatedSquadLeaderTriggers(issue db.Issue, mentions []util.Mention, triggers []commentAgentTrigger) []commentAgentTrigger {
+	delegated := make(map[string]struct{})
+	for _, m := range mentions {
+		if m.Type == "squad" && !isSelfSquadMention(issue, m) {
+			delegated[m.ID] = struct{}{}
+		}
+	}
+	if len(delegated) == 0 {
+		return triggers
+	}
+	filtered := make([]commentAgentTrigger, 0, len(triggers))
+	for _, t := range triggers {
+		if t.Source == commentTriggerSourceMentionSquadLeader && t.Squad != nil {
+			if _, ok := delegated[uuidToString(t.Squad.ID)]; ok {
+				continue
+			}
+		}
+		filtered = append(filtered, t)
+	}
+	return filtered
+}
+
 // resolveMentionedAgentCommentTriggers parses explicit @agent and @squad
 // mentions from the current comment and returns the runnable agent recipients.
 // Skips agents with on_mention trigger disabled, and private agents mentioned
@@ -2589,10 +3241,215 @@ func (h *Handler) resolveMentionedAgentCommentTriggers(ctx context.Context, issu
 			blockTarget("agent", m.ID, ReasonInternalError)
 			continue
 		}
+		// SR3 (LIU-8 follow-up): a pure @agent mention of an agent who is the
+		// unique leader of exactly one non-archived squad in this workspace is
+		// upgraded to a squad-level leader task, so "委派子小队请 @唯一 leader"
+		// behaves like @小队 — the leader gets the Squad Operating Protocol +
+		// roster and coordinates members instead of doing the work alone.
+		// Escape hatch: when the same comment also explicitly @s another
+		// member (agent) of that squad, the leader mention stays personal —
+		// the author is addressing individuals, not delegating to the squad.
+		squadLevel, ledSquad, err := h.uniqueLedSquadForMention(ctx, issue, agent, mentions)
+		if err != nil {
+			blockTarget("agent", m.ID, ReasonInternalError)
+			continue
+		}
+		if squadLevel {
+			add(commentAgentTrigger{Agent: agent, Source: commentTriggerSourceMentionSquadLeader, Squad: &ledSquad, AlreadyPending: hasPending})
+			addTarget(commentMentionTarget{TargetType: "agent", TargetID: m.ID, ExecAgentID: uuidToString(agentUUID)})
+			continue
+		}
+		// F3 (LIU-9 子任务A): @ an ordinary squad member (non-leader) who belongs
+		// to exactly one non-archived squad → upgrade to a squad-level trigger
+		// that wakes that squad's leader, mirroring @小队. The member's own
+		// personal task is deferred (B01 serial semantics): it does NOT enqueue —
+		// only the leader task runs with the Squad Operating Protocol + roster,
+		// and the leader delegates back to the member via a later @mention.
+		memberUpgrade, memberSquad, err := h.memberSquadForMention(ctx, issue, agent, mentions, authorType, authorID)
+		if err != nil {
+			blockTarget("agent", m.ID, ReasonInternalError)
+			continue
+		}
+		if memberUpgrade {
+			leaderID := memberSquad.LeaderID
+			leaderAgent, err := h.Queries.GetAgentInWorkspace(ctx, db.GetAgentInWorkspaceParams{
+				ID:          leaderID,
+				WorkspaceID: issue.WorkspaceID,
+			})
+			leaderAvailable := err == nil &&
+				h.canInvokeAgent(ctx, leaderAgent, authorType, authorID, opts.effectiveInvoker(), wsID) &&
+				!leaderAgent.ArchivedAt.Valid &&
+				leaderAgent.RuntimeID.Valid
+			if !leaderAvailable {
+				// The squad leader cannot run (unresolvable / not invokable /
+				// archived / offline): fall back to the member's personal task so
+				// the explicit @mention still does something useful instead of
+				// silently dropping (upgrade is a convenience, not a trap).
+				add(commentAgentTrigger{Agent: agent, Source: commentTriggerSourceMentionAgent, AlreadyPending: hasPending})
+				addTarget(commentMentionTarget{TargetType: "agent", TargetID: m.ID, ExecAgentID: uuidToString(agentUUID)})
+				continue
+			}
+			hasPendingLeader, err := h.hasPendingTaskForIssueAndAgent(ctx, issue.ID, leaderID, opts)
+			if err != nil {
+				blockTarget("agent", m.ID, ReasonInternalError)
+				continue
+			}
+			add(commentAgentTrigger{Agent: leaderAgent, Source: commentTriggerSourceMentionSquadLeader, Squad: &memberSquad, AlreadyPending: hasPendingLeader})
+			// The member mention resolves to the leader's run; the member's own
+			// task is reported as deferred (suspended) so the preview and the
+			// post-send toast state "将唤醒 Leader、该成员任务挂起" (AC-2.2).
+			addTarget(commentMentionTarget{TargetType: "agent", TargetID: m.ID, Status: DispatchDeferred, ReasonCode: ReasonDeferredMember})
+			continue
+		}
 		add(commentAgentTrigger{Agent: agent, Source: commentTriggerSourceMentionAgent, AlreadyPending: hasPending})
 		addTarget(commentMentionTarget{TargetType: "agent", TargetID: m.ID, ExecAgentID: uuidToString(agentUUID)})
 	}
 	return triggers, targets
+}
+
+// uniqueLedSquadForMention implements the SR3 auto-upgrade rule (LIU-8
+// follow-up). It returns ok=true with the squad when the mentioned agent is
+// the unique leader of exactly one non-archived squad in this workspace AND
+// no other @agent mention in the same comment resolves to a member of that
+// squad. The member-mention condition is the documented personal-task escape
+// hatch: to give a unique squad leader a personal task, @ another member of
+// that squad in the same comment.
+func (h *Handler) uniqueLedSquadForMention(ctx context.Context, issue db.Issue, agent db.Agent, mentions []util.Mention) (bool, db.Squad, error) {
+	squads, err := h.Queries.ListSquadsLedByAgent(ctx, db.ListSquadsLedByAgentParams{
+		LeaderID:    agent.ID,
+		WorkspaceID: issue.WorkspaceID,
+	})
+	if err != nil {
+		return false, db.Squad{}, err
+	}
+	// Multi-squad leaders never auto-upgrade — pure @agent stays personal
+	// (leader's ruling: no guessing when the squad is ambiguous).
+	if len(squads) != 1 {
+		return false, db.Squad{}, nil
+	}
+	squad := squads[0]
+
+	// No other agent mention → nothing to suppress the upgrade with.
+	leaderID := uuidToString(agent.ID)
+	otherAgentMention := false
+	for _, m := range mentions {
+		if m.Type == "agent" && m.ID != leaderID {
+			otherAgentMention = true
+			break
+		}
+	}
+	if !otherAgentMention {
+		return true, squad, nil
+	}
+
+	members, err := h.Queries.ListSquadMembers(ctx, squad.ID)
+	if err != nil {
+		return false, db.Squad{}, err
+	}
+	for _, m := range mentions {
+		if m.Type != "agent" || m.ID == leaderID {
+			continue
+		}
+		for _, sm := range members {
+			if sm.MemberType == "agent" && uuidToString(sm.MemberID) == m.ID {
+				return false, db.Squad{}, nil
+			}
+		}
+	}
+	return true, squad, nil
+}
+
+// memberSquadForMention implements the F3 member-mention upgrade (LIU-9
+// 子任务A). It returns ok=true with the squad when the mentioned agent is an
+// ORDINARY member (not leader) of exactly one non-archived squad in this
+// workspace and that squad has the member-mention upgrade switch enabled.
+//
+// Priority (B06): SR3 leader upgrade > member upgrade > personal. Callers run
+// this only after uniqueLedSquadForMention missed, so an agent who IS a unique
+// leader never reaches the member branch. Squads the agent leads are excluded
+// from the uniqueness count — a leader of one squad who is also a member of
+// another upgrades only to the OTHER squad's leader.
+//
+// Guards that keep the mention personal (AC-2.1/2.6):
+//   - the agent belongs to more than one non-archived squad (no guessing);
+//   - the squad's upgrade_on_member_mention switch is off;
+//   - the comment also @s another member of the same squad (escape hatch — the
+//     author is addressing individuals, not delegating to the squad);
+//   - the author IS the squad's leader (the leader delegating to its own member
+//     via @mention is the B01 "leader re-triggers the member" path — the member's
+//     personal task must run, not a self-directed squad upgrade).
+func (h *Handler) memberSquadForMention(ctx context.Context, issue db.Issue, agent db.Agent, mentions []util.Mention, authorType, authorID string) (bool, db.Squad, error) {
+	led, err := h.Queries.ListSquadsLedByAgent(ctx, db.ListSquadsLedByAgentParams{
+		LeaderID:    agent.ID,
+		WorkspaceID: issue.WorkspaceID,
+	})
+	if err != nil {
+		return false, db.Squad{}, err
+	}
+	ledIDs := make(map[string]struct{}, len(led))
+	for _, s := range led {
+		ledIDs[uuidToString(s.ID)] = struct{}{}
+	}
+
+	memberSquads, err := h.Queries.ListSquadsByMember(ctx, db.ListSquadsByMemberParams{
+		MemberType:  "agent",
+		MemberID:    agent.ID,
+		WorkspaceID: issue.WorkspaceID,
+	})
+	if err != nil {
+		return false, db.Squad{}, err
+	}
+	// Only squads the agent does NOT lead count (R2: ListSquadsByMember already
+	// excludes archived squads, matching ListSquadsLedByAgent).
+	var candidates []db.Squad
+	for _, s := range memberSquads {
+		if _, isLeader := ledIDs[uuidToString(s.ID)]; isLeader {
+			continue
+		}
+		candidates = append(candidates, s)
+	}
+	if len(candidates) != 1 {
+		return false, db.Squad{}, nil
+	}
+	squad := candidates[0]
+	if !squad.UpgradeOnMemberMention {
+		return false, db.Squad{}, nil
+	}
+
+	// The leader delegating to its own member stays a personal mention.
+	if authorType == "agent" && authorID == uuidToString(squad.LeaderID) {
+		return false, db.Squad{}, nil
+	}
+
+	// Escape hatch: another @agent mention in the same comment that resolves to
+	// a member of this squad (including the leader, who is auto-added as a
+	// member) keeps the mention personal.
+	otherAgentMention := false
+	agentID := uuidToString(agent.ID)
+	for _, m := range mentions {
+		if m.Type == "agent" && m.ID != agentID {
+			otherAgentMention = true
+			break
+		}
+	}
+	if !otherAgentMention {
+		return true, squad, nil
+	}
+	members, err := h.Queries.ListSquadMembers(ctx, squad.ID)
+	if err != nil {
+		return false, db.Squad{}, err
+	}
+	for _, m := range mentions {
+		if m.Type != "agent" || m.ID == agentID {
+			continue
+		}
+		for _, sm := range members {
+			if sm.MemberType == "agent" && uuidToString(sm.MemberID) == m.ID {
+				return false, db.Squad{}, nil
+			}
+		}
+	}
+	return true, squad, nil
 }
 
 func (h *Handler) UpdateComment(w http.ResponseWriter, r *http.Request) {
@@ -2670,6 +3527,27 @@ func (h *Handler) UpdateComment(w http.ResponseWriter, r *http.Request) {
 	// NOTE: See CreateComment — Markdown is sanitized at render/edit time, not here.
 
 	oldContent := existing.Content
+	// LIU-13 O5 / AC-6.1: a comment that already produced delegated child
+	// issues cannot be structurally edited — changing the squad set or
+	// removing the /delegate prefix would silently desync the children that
+	// were created (and possibly already dispatched). Description-class edits
+	// remain allowed and never write back to the children (AC-6.2). Checked
+	// BEFORE the task cancellation below so a rejected edit cancels nothing.
+	if oldContent != req.Content {
+		hasChildren, err := h.Queries.HasDelegatedChildIssues(r.Context(), db.HasDelegatedChildIssuesParams{
+			DelegationCommentID: existing.ID,
+			WorkspaceID:         wsUUID,
+		})
+		if err != nil {
+			slog.Warn("check delegated children for edit failed", append(logger.RequestAttrs(r), "error", err, "comment_id", commentId)...)
+			writeError(w, http.StatusInternalServerError, "failed to prepare comment edit")
+			return
+		}
+		if hasChildren && delegationEditIsStructural(oldContent, req.Content) {
+			writeError(w, http.StatusConflict, "this comment already created delegated sub-issues; changing the delegation targets is not supported — post a new comment instead")
+			return
+		}
+	}
 	// Preserve the existing authority lineage by default — this path is taken only
 	// for an UNCHANGED edit (no re-trigger). When the content changes below, the
 	// lineage is re-derived from the EDIT action itself (MUL-4857), never carried
