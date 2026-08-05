@@ -52,17 +52,6 @@ export const STATUS_CHART_COLOR: Record<string, string> = {
   backlog: "#D1D5DB",
 };
 
-/** Status tag classes (10% tinted bg + matching text, per §2.1). */
-export const STATUS_TAG_CLASS: Record<string, string> = {
-  todo: "bg-muted text-muted-foreground",
-  in_progress: "bg-brand/10 text-brand",
-  in_review: "bg-violet/10 text-violet",
-  done: "bg-success/10 text-success",
-  blocked: "bg-destructive/10 text-destructive",
-  cancelled: "bg-muted text-muted-foreground",
-  backlog: "bg-muted text-muted-foreground",
-};
-
 export interface StatusSlice {
   status: string;
   count: number;

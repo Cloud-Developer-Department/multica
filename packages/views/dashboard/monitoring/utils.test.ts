@@ -1,7 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
   STATUS_CHART_COLOR,
-  STATUS_TAG_CLASS,
   donutSlices,
   bucketTopProjects,
   topN,
@@ -23,12 +22,6 @@ describe("status → colour mapping", () => {
       cancelled: "#9CA3AF",
       backlog: "#D1D5DB",
     });
-  });
-
-  it("gives every known status a tag class", () => {
-    for (const status of Object.keys(STATUS_CHART_COLOR)) {
-      expect(STATUS_TAG_CLASS[status]).toBeTruthy();
-    }
   });
 });
 

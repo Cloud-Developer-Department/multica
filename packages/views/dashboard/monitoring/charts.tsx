@@ -36,6 +36,7 @@ import type {
 } from "@multica/core/types";
 import {
   STATUS_DISPLAY_ORDER,
+  PROJECT_STACK_ORDER,
   STATUS_CHART_COLOR,
   type ProjectStackRow,
   type StatusSlice,
@@ -163,10 +164,12 @@ export function ProjectProgressStackedBar({
         <YAxis tickLine={false} axisLine={false} tickMargin={8} width={42} />
         <ChartTooltip content={<ChartTooltipContent />} />
         <Legend content={<ChartLegendContent className="flex-wrap" />} />
-        {STATUS_DISPLAY_ORDER.map((status, index) => {
+        {/* Bottom-up stack order per design-spec §5.2: done at the base →
+            in_progress → in_review → todo → blocked → cancelled on top. */}
+        {PROJECT_STACK_ORDER.map((status, index) => {
           const show = rows.some((r) => (r.counts[status] ?? 0) > 0);
           if (!show) return null;
-          const isLast = index === STATUS_DISPLAY_ORDER.length - 1;
+          const isLast = index === PROJECT_STACK_ORDER.length - 1;
           return (
             <Bar
               key={status}

@@ -231,7 +231,7 @@ describe("MonitoringDashboardPage — scope drives the query keys", () => {
     // The initial render captured days=7 keys; after the click a fresh render
     // appends days=30 keys. The last monitoring key reflects the new range.
     const keys = monitoringKeys();
-    const last = keys[keys.length - 1];
+    const last = keys[keys.length - 1]!;
     expect(last[3]).toBe(30);
   });
 });
