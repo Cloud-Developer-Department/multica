@@ -879,6 +879,7 @@ export function ManualCreatePanel({
             {/* Description — takes remaining space */}
             <div {...descDropZoneProps} className="relative flex flex-1 min-h-0 overflow-y-auto px-5">
               <ContentEditor
+                key={formResetKey}
                 ref={descEditorRef}
                 defaultValue={draft.description}
                 placeholder={t(($) => $.create_issue.description_placeholder)}
