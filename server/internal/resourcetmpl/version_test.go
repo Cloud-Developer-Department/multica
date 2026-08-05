@@ -8,14 +8,18 @@ func TestSupportsVersion(t *testing.T) {
 		want bool
 	}{
 		{"1.0", true},
-		{"1.7", true},   // same major, newer minor
-		{"1.0.0", true}, // trailing .patch tolerated by major check
-		{"2.0", false},  // major bump
-		{"0.9", false},  // different major
+		{"1.0.0", true},  // patch ignored
+		{"1.0.7", true},  // patch ignored
+		{"1.1", false},   // minor above server support
+		{"1.7", false},   // minor above server support
+		{"2.0", false},   // major bump
+		{"0.9", false},   // different major
 		{"", false},
 		{"abc", false},
 		{"1", false}, // not dotted
 		{"-1.0", false},
+		{"1.-1", false},
+		{"1.x", false},
 	}
 	for _, tc := range cases {
 		if got := SupportsVersion(tc.v); got != tc.want {

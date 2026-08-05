@@ -11,43 +11,54 @@ import (
 // against which incoming templates are compared.
 const SchemaVersion = "1.0"
 
-// supportedMajor is the only schema major version the current package accepts.
-// A template whose schema_version has a different major is rejected with
-// CodeTemplateVersionUnsupported — no compatibility shim, no silent downgrade.
-const supportedMajor = 1
+// supportedMajor and supportedMinor bound the schema versions this package
+// accepts. A template is compatible when its major equals supportedMajor AND
+// its minor is at most supportedMinor; patch is ignored entirely. A newer
+// minor means the template carries structure this build cannot interpret, so
+// it is refused rather than silently read as if the extra semantics were
+// absent — no compatibility shim, no downgrade guessing.
+const (
+	supportedMajor = 1
+	supportedMinor = 0
+)
 
 // SupportsVersion reports whether v is compatible with the current schema.
-// Compatibility is major-version based: the same major is accepted regardless
-// of minor (forward-compatible additions), while a different major is refused.
 // An empty or malformed version is not supported.
 //
-// Examples (supportedMajor == 1):
+// Examples (supported == 1.0):
 //
 //	SupportsVersion("1.0")   == true
-//	SupportsVersion("1.7")   == true   // same major, newer minor
+//	SupportsVersion("1.0.7") == true   // patch ignored
+//	SupportsVersion("1.1")   == false  // minor above what this build reads
 //	SupportsVersion("2.0")   == false  // major bump
+//	SupportsVersion("0.9")   == false  // older major
 //	SupportsVersion("")      == false
 //	SupportsVersion("abc")   == false
 func SupportsVersion(v string) bool {
-	major, ok := parseMajor(v)
-	return ok && major == supportedMajor
+	major, minor, ok := parseVersion(v)
+	return ok && major == supportedMajor && minor <= supportedMinor
 }
 
-// parseMajor extracts the leading integer segment of a "MAJOR.minor[.patch]"
-// style version string. It requires at least one digit and a "." separator
-// (so bare integers are rejected — schema_version is always dotted). The
-// remaining segments are intentionally ignored: minor/patch drift is allowed.
-func parseMajor(v string) (int, bool) {
+// parseVersion extracts the major and minor segments of a
+// "MAJOR.MINOR[.PATCH]" version string. Both segments are required and must be
+// non-negative integers (so a bare integer or a non-numeric minor is
+// rejected — schema_version is always dotted). Any further segment is ignored:
+// patch drift carries no format meaning.
+func parseVersion(v string) (int, int, bool) {
 	v = strings.TrimSpace(v)
-	dot := strings.IndexByte(v, '.')
-	if dot <= 0 {
-		return 0, false
+	parts := strings.Split(v, ".")
+	if len(parts) < 2 {
+		return 0, 0, false
 	}
-	major, err := strconv.Atoi(v[:dot])
+	major, err := strconv.Atoi(parts[0])
 	if err != nil || major < 0 {
-		return 0, false
+		return 0, 0, false
 	}
-	return major, true
+	minor, err := strconv.Atoi(parts[1])
+	if err != nil || minor < 0 {
+		return 0, 0, false
+	}
+	return major, minor, true
 }
 
 // versionError builds the structured error emitted for an unsupported or
@@ -57,6 +68,6 @@ func versionError(v string) Error {
 	return Error{
 		Code:    CodeTemplateVersionUnsupported,
 		Path:    "schema_version",
-		Message: fmt.Sprintf("schema_version %q is not supported (supported major: %d)", v, supportedMajor),
+		Message: fmt.Sprintf("schema_version %q is not supported (this build reads major %d, minor up to %d; patch ignored)", v, supportedMajor, supportedMinor),
 	}
 }
