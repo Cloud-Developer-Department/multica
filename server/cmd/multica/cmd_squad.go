@@ -50,13 +50,41 @@ func runSquadList(cmd *cobra.Command, _ []string) error {
 	}
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 4, 2, ' ', 0)
-	fmt.Fprintln(w, "ID\tNAME\tLEADER ID\tMEMBERS")
+	fmt.Fprintln(w, "ID\tNAME\tLEADER ID\tMEMBERS\tPARENT")
 	for _, s := range squads {
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n",
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n",
 			strVal(s, "id"), strVal(s, "name"), strVal(s, "leader_id"),
-			memberCountDisplay(s))
+			memberCountDisplay(s), parentSquadDisplay(s))
 	}
 	return w.Flush()
+}
+
+// parentSquadDisplay renders the parent_squad_id column for squad list rows,
+// or "-" when the squad is top-level.
+func parentSquadDisplay(m map[string]any) string {
+	v, ok := m["parent_squad_id"]
+	if !ok || v == nil {
+		return "-"
+	}
+	s, ok := v.(string)
+	if !ok || s == "" {
+		return "-"
+	}
+	return s
+}
+
+// childSquadCountDisplay renders the number of child squads for squad list
+// rows, or "-" when the squad has none.
+func childSquadCountDisplay(m map[string]any) string {
+	v, ok := m["child_squads"]
+	if !ok || v == nil {
+		return "-"
+	}
+	arr, ok := v.([]any)
+	if !ok {
+		return "-"
+	}
+	return strconv.Itoa(len(arr))
 }
 
 func memberCountDisplay(m map[string]any) string {
@@ -102,6 +130,8 @@ func runSquadGet(cmd *cobra.Command, args []string) error {
 	fmt.Printf("Name:         %s\n", strVal(squad, "name"))
 	fmt.Printf("Description:  %s\n", strVal(squad, "description"))
 	fmt.Printf("Leader ID:    %s\n", strVal(squad, "leader_id"))
+	fmt.Printf("Parent Squad: %s\n", parentSquadDisplay(squad))
+	fmt.Printf("Child Squads: %s\n", childSquadCountDisplay(squad))
 	fmt.Printf("Created:      %s\n", strVal(squad, "created_at"))
 	if inst := strVal(squad, "instructions"); inst != "" {
 		fmt.Printf("Instructions: %s\n", inst)
@@ -146,6 +176,9 @@ func runSquadCreate(cmd *cobra.Command, _ []string) error {
 	}
 	if v, _ := cmd.Flags().GetString("description"); v != "" {
 		body["description"] = v
+	}
+	if ids, _ := cmd.Flags().GetStringSlice("include-squad"); len(ids) > 0 {
+		body["included_squad_ids"] = ids
 	}
 
 	var result map[string]any
@@ -509,6 +542,7 @@ func init() {
 	squadCreateCmd.Flags().String("name", "", "Squad name (required)")
 	squadCreateCmd.Flags().String("description", "", "Squad description")
 	squadCreateCmd.Flags().String("leader", "", "Leader agent (name or ID) — required")
+	squadCreateCmd.Flags().StringSlice("include-squad", nil, "Squad IDs to nest under the new squad (repeatable; each must be unarchived and not already nested)")
 	squadCreateCmd.Flags().String("output", "json", "Output format: table or json")
 
 	// update

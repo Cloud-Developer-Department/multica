@@ -45,6 +45,14 @@ Important consequences:
 - squad members are not automatically fanned out;
 - squad `instructions` are leader briefing content, not member prompts.
 
+Squad nesting (v1, one level): a squad may be created with other squads merged
+under it (`included_squad_ids`). Nested squads stay independent routing
+objects — they can still be assigned / @-mentioned directly and answer through
+their own leaders — but the parent leader's briefing roster includes their
+members so the parent can delegate work across the whole tree. Each squad has
+at most one parent; an already-nested squad cannot be merged into another
+parent (one-level constraint).
+
 ## CLI
 
 Squad commands:
@@ -52,10 +60,15 @@ Squad commands:
 ```bash
 multica squad list --output json
 multica squad get <squad-id> --output json
-multica squad create --name <name> --leader <agent-name-or-id> --output json
+multica squad create --name <name> --leader <agent-name-or-id> [--include-squad <squad-id> ...] --output json
 multica squad update <squad-id> --instructions "<leader coordination policy>" --output json
 multica squad delete <squad-id>
 ```
+
+`--include-squad <squad-id>` is repeatable and nests the given squads under the
+new squad (v1 nesting, one level). Each included squad must exist in the same
+workspace, be unarchived, and not already belong to another parent — any
+invalid id fails the whole create with a 400.
 
 Member commands:
 
@@ -101,6 +114,11 @@ Prefer `--output json` for reads. Use `--help` before writes.
 - `creator_id` — creator of the squad.
 - `archived_at` / `archived_by` — archive metadata. Archived squads are rejected
   by assignment/autopilot routing paths.
+- `parent_squad_id` — parent squad id when this squad is nested under another
+  squad (v1 nesting); `null` for top-level squads.
+- `child_squads` — array of `{id, name, member_count}` summaries for squads
+  merged under this squad (empty for leaf squads). Present in create, get and
+  list responses.
 - `member_count` — list response count of squad members.
 - `member_preview` — list response preview of squad members.
 
@@ -128,6 +146,14 @@ On create, the backend attempts to add the leader as a squad member with role
 `leader`. When updating `leader_id`, if the new leader is not already a member,
 the backend adds the new leader as a squad member with role `leader`.
 
+Squad nesting lifecycle: creating a squad with `included_squad_ids` nests each
+included squad under the new parent in the same transaction (any invalid id
+fails the whole create). Archiving a parent squad detaches its children —
+their `parent_squad_id` is cleared and they become independent squads again;
+children are NOT archived along with the parent. Archiving a child squad just
+removes it from the parent's `child_squads` and the leader roster (both filter
+archived squads).
+
 ## Leader briefing
 
 For squad leader tasks, Multica appends a squad leader briefing to the leader
@@ -144,6 +170,16 @@ can delegate by capability instead of guessing from the role label; human
 members carry no skills segment. Builtin `multica-*` skills are not listed —
 only the workspace skills explicitly attached to the agent. Archived agent
 members are skipped from the briefing roster.
+
+For squads with nested child squads (v1), the briefing also includes a
+`## Child Squads (merged roster)` section listing, first, every non-archived
+child squad as a direct delegation target with a usable `@squad` mention and
+member count (SR1) — `[@Dev Team](mention://squad/<uuid>)` — and second, every
+non-archived member of the child squads, each row annotated with its origin
+squad name (`Name (Child Squad Name)`) and a usable mention, so the parent
+leader can delegate to a whole sub-squad or to any descendant. A member who
+also appears in the parent's direct roster is listed once, under the direct
+roster.
 
 ## Issue assignment behavior
 
@@ -193,6 +229,20 @@ Current behavior: resolve the squad, read `leader_id`, enqueue a leader task,
 and use the current comment as the trigger comment. It does not enqueue every
 squad member.
 
+Unique-leader upgrade (SR3): a pure `mention://agent/<id>` of an agent who is
+the unique leader of exactly one non-archived squad in the workspace is
+upgraded to a squad-level leader task — same as `@squad` — so "委派子小队请
+@唯一 leader" behaves like mentioning the squad and the leader gets the
+briefing + roster. Rules:
+
+- an agent leading multiple squads never upgrades — pure `@agent` stays
+  personal (no guessing);
+- to give a unique squad leader a PERSONAL task, also `@` another agent
+  member of that squad in the same comment — the leader mention then stays
+  personal;
+- an explicit `mention://squad/<id>` of the same squad merges to the same
+  squad-level result (leader-role-wins).
+
 ## Autopilot behavior
 
 Autopilots can be assigned to squads. For `assignee_type = "squad"`:
@@ -240,7 +290,7 @@ These actions can trigger agent work or mutate durable state:
 - mentioning a squad;
 - creating or triggering squad-assigned autopilots;
 - recording squad activity with `multica squad activity`;
-- deleting/archive squad.
+- deleting/archive squad (archiving a parent also detaches its child squads).
 
 Do not perform side-effecting actions as tests unless the user explicitly
 authorizes them.

@@ -368,6 +368,9 @@
     "trigger_blocked_short_target_unavailable": "사용 불가",
     "trigger_blocked_short_runtime_offline": "런타임 오프라인",
     "trigger_blocked_short_generic": "트리거 안 됨",
+    "trigger_deferred_member": "이 멤버는 스쿼드에 속해 있습니다 — 이 언급은 스쿼드 리더를 기동합니다. 이 멤버의 개인 작업은 리더가 위임할 때까지 보류됩니다",
+    "trigger_deferred_member_short": "작업 보류 · 리더 기동",
+    "trigger_deferred_member_chip_aria": "{{name}}의 개인 작업이 보류되고 스쿼드 리더가 기동됩니다",
     "send_reply_failed": "답글을 보내지 못했습니다",
     "delete_failed": "댓글을 삭제하지 못했습니다",
     "reply_count_other": "답글 {{count}}개",
@@ -403,7 +406,14 @@
       "bar_authors_more_other": "{{names}} 외 {{count}}명",
       "resolve_failed": "스레드를 해결하지 못했습니다",
       "unresolve_failed": "스레드 해결을 취소하지 못했습니다"
-    }
+    },
+    "trigger_blocked_invalid_command": "유효하지 않은 /delegate 명령",
+    "trigger_blocked_short_invalid_command": "명령 무효",
+    "trigger_delegation_will_create": "하위 이슈를 생성합니다",
+    "trigger_delegation_chip_aria": "{{name}}에 위임된 하위 이슈가 생성됩니다",
+    "trigger_delegation_tooltip": "이 스쿼드의 하위 이슈를 생성하고 리더는 이 이슈가 아닌 그곳에서 실행됩니다",
+    "delegation_created": "{{squad}}에 위임 — 하위 이슈 {{identifier}} 생성됨 ({{title}})",
+    "delegation_target_default": "해당 스쿼드"
   },
   "reply": {
     "placeholder": "답글 남기기..."

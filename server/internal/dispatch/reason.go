@@ -20,6 +20,14 @@ const (
 	ReasonCoalesced ReasonCode = "coalesced"
 	ReasonDeferred  ReasonCode = "deferred"
 
+	// ReasonDeferredMember: the mentioned squad member's personal task was
+	// deferred (not executed) because the mention upgraded to a squad-level
+	// leader trigger (F3 / B01 serial semantics, LIU-9 subtask A). Only the
+	// squad Leader runs; the member waits for the Leader to delegate. Surfaced
+	// in the comment-trigger preview and trigger_outcomes so the client can
+	// show "will wake the Leader, member task suspended".
+	ReasonDeferredMember ReasonCode = "deferred_member"
+
 	// ReasonInvocationNotAllowed: the acting principal may not trigger this
 	// target under the invocation-permission model. Deliberately generic — it
 	// does not distinguish "target is private" from "target does not exist".
@@ -43,6 +51,12 @@ const (
 	// success: nothing new runs. (Named to avoid implying the NEW comment was
 	// already processed.)
 	ReasonSelfTriggerSuppressed ReasonCode = "self_trigger_suppressed"
+	// ReasonInvalidCommand: the /delegate command (LIU-13) is syntactically or
+	// authoritatively invalid — the token was not the comment's first token,
+	// the comment carried no squad mention to delegate to, or the author lacks
+	// the delegation authority (not the main-issue leader / not an agent). The
+	// comment itself is still saved; only the delegation does not fire.
+	ReasonInvalidCommand ReasonCode = "invalid_command"
 	// ReasonInternalError: an unexpected server error prevented a clean decision.
 	ReasonInternalError ReasonCode = "internal_error"
 )

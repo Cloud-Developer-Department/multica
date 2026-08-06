@@ -368,6 +368,9 @@
     "trigger_blocked_short_target_unavailable": "利用不可",
     "trigger_blocked_short_runtime_offline": "ランタイム オフライン",
     "trigger_blocked_short_generic": "トリガーされません",
+    "trigger_deferred_member": "このメンバーはスカッドに所属しています — この言及はスカッドのリーダーを起動します。このメンバーの個人タスクはリーダーの委任まで保留されます",
+    "trigger_deferred_member_short": "タスク保留 · リーダー起動",
+    "trigger_deferred_member_chip_aria": "{{name}} の個人タスクは保留され、スカッドのリーダーが起動されます",
     "send_reply_failed": "返信を送信できませんでした",
     "delete_failed": "コメントを削除できませんでした",
     "reply_count_other": "返信 {{count}} 件",
@@ -403,7 +406,14 @@
       "bar_authors_more_other": "{{names}} 他 {{count}} 名",
       "resolve_failed": "スレッドを解決できませんでした",
       "unresolve_failed": "スレッドの解決を取り消せませんでした"
-    }
+    },
+    "trigger_blocked_invalid_command": "無効な /delegate コマンド",
+    "trigger_blocked_short_invalid_command": "コマンド無効",
+    "trigger_delegation_will_create": "子 issue を作成",
+    "trigger_delegation_chip_aria": "{{name}} に委任された子 issue が作成されます",
+    "trigger_delegation_tooltip": "このスコード用に子 issue を作成し、リーダーはこの issue ではなくそちらで実行されます",
+    "delegation_created": "{{squad}} に委任 — 子 issue {{identifier}} を作成しました（{{title}}）",
+    "delegation_target_default": "スコード"
   },
   "reply": {
     "placeholder": "返信を残す..."

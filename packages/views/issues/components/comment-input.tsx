@@ -231,6 +231,7 @@ function CommentInput({ issueId, onSubmit }: CommentInputProps) {
         <CommentTriggerChips
           agents={triggerPreview.agents}
           blocked={triggerPreview.blocked}
+          delegations={triggerPreview.delegations}
           draftContent={content}
           suppressedAgentIds={suppressedAgentIds}
           onToggle={toggleSuppressedAgent}
