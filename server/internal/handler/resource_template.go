@@ -1213,10 +1213,25 @@ func (h *Handler) ApplyResourceTemplate(w http.ResponseWriter, r *http.Request) 
 						fmt.Sprintf("permission_mode %q must be %q or %q", *pm, resourcetmpl.PermissionPrivate, resourcetmpl.PermissionPublicTo))
 				}
 			}
-			if req.Overrides.PermissionMode != nil && *req.Overrides.PermissionMode != "" &&
-				*req.Overrides.PermissionMode != resourcetmpl.PermissionPrivate && *req.Overrides.PermissionMode != resourcetmpl.PermissionPublicTo {
-				v.addError(resourcetmpl.CodeTemplateInvalid, "overrides.permission_mode",
-					fmt.Sprintf("permission_mode %q must be %q or %q", *req.Overrides.PermissionMode, resourcetmpl.PermissionPrivate, resourcetmpl.PermissionPublicTo))
+			if req.Overrides.PermissionMode != nil && *req.Overrides.PermissionMode != "" {
+				if v.tmpl.Spec.Squad != nil {
+					// Architect ruling (CLO-245): model / permission_mode are
+					// agent-level concepts. A squad has no runtime and is not a
+					// permission subject — its members are. Rejecting here
+					// (instead of silently ignoring or writing dead columns)
+					// is what makes the top-level override contract honest:
+					// CONFIG_NOT_ALLOWED is the same code the validate pass
+					// uses for non-portable template config.
+					v.addError(resourcetmpl.ErrorCode(CodeConfigNotAllowed), "overrides.permission_mode",
+						"permission_mode is not allowed for squad templates; a squad's visibility is determined by its member agents")
+				} else if *req.Overrides.PermissionMode != resourcetmpl.PermissionPrivate && *req.Overrides.PermissionMode != resourcetmpl.PermissionPublicTo {
+					v.addError(resourcetmpl.CodeTemplateInvalid, "overrides.permission_mode",
+						fmt.Sprintf("permission_mode %q must be %q or %q", *req.Overrides.PermissionMode, resourcetmpl.PermissionPrivate, resourcetmpl.PermissionPublicTo))
+				}
+			}
+			if v.tmpl.Spec.Squad != nil && req.Overrides.Model != nil && *req.Overrides.Model != "" {
+				v.addError(resourcetmpl.ErrorCode(CodeConfigNotAllowed), "overrides.model",
+					"model is not allowed for squad templates; a squad has no runtime of its own (model lives on the member agents)")
 			}
 		}
 		for _, url := range req.InstallMissingSkills {
@@ -1421,13 +1436,30 @@ func (h *Handler) ApplyResourceTemplate(w http.ResponseWriter, r *http.Request) 
 			writeJSON(w, http.StatusInternalServerError, applyRolledBackResponse(fmt.Errorf("leader ref %q did not resolve to a created agent", leaderRef)))
 			return
 		}
+		// Squad overrides (CLO-250 DEF-4, architect ruling): top-level
+		// overrides.{Description, Instructions} are materialised on the squad
+		// row; name is consumed earlier by the conflict-resolution pass.
+		// model / permission_mode were rejected for squad templates by the
+		// apply-only checks above (CONFIG_NOT_ALLOWED), so no dead columns
+		// are written here — the squad keeps its members' semantics.
+		squadDescription := spec.Description
+		squadInstructions := spec.Instructions
+		if req.Overrides != nil {
+			if req.Overrides.Description != nil {
+				squadDescription = *req.Overrides.Description
+			}
+			if req.Overrides.Instructions != nil {
+				squadInstructions = *req.Overrides.Instructions
+			}
+		}
 		squad, err := qtx.CreateSquad(r.Context(), db.CreateSquadParams{
-			WorkspaceID: wsUUID,
-			Name:        decision.squad.finalName,
-			Description: spec.Description,
-			LeaderID:    leaderID,
-			CreatorID:   member.UserID,
-			AvatarUrl:   pgtype.Text{},
+			WorkspaceID:  wsUUID,
+			Name:         decision.squad.finalName,
+			Description:  squadDescription,
+			LeaderID:     leaderID,
+			CreatorID:    member.UserID,
+			AvatarUrl:    pgtype.Text{},
+			Instructions: squadInstructions,
 		})
 		if err != nil {
 			slog.Error("template apply: create squad failed",
@@ -1730,10 +1762,18 @@ func (h *Handler) createAgentFromSpecInTx(ctx context.Context, qtx *db.Queries, 
 		}
 	}
 
+	// Permission-mode resolution order (CLO-250 DEF-5, architect ruling):
+	// per-ref override > top-level override > spec value > private default.
+	// Both override sources are validated against the private/public_to
+	// allowlist in the apply-only checks before this point, so this
+	// resolution reuses that same enforcement path and cannot bypass
+	// CONFIG_NOT_ALLOWED.
 	mode := spec.PermissionMode
 	if req.Overrides != nil {
 		if ao, ok := req.Overrides.Agents[ref]; ok && ao.PermissionMode != nil && *ao.PermissionMode != "" {
 			mode = *ao.PermissionMode
+		} else if req.Overrides.PermissionMode != nil && *req.Overrides.PermissionMode != "" {
+			mode = *req.Overrides.PermissionMode
 		}
 	}
 	if mode == "" {
@@ -1747,20 +1787,28 @@ func (h *Handler) createAgentFromSpecInTx(ctx context.Context, qtx *db.Queries, 
 		perm.targets = []targetSpec{{targetType: invocationTargetWorkspace, targetID: wsUUID}}
 	}
 
+	// Top-level overrides act on the top-level resource of this apply, so
+	// for kind=agent templates they also feed the agent itself; per-ref
+	// overrides win over top-level ones (architect ruling).
 	description := spec.Description
 	instructions := spec.Instructions
 	model := spec.Model
 	if req.Overrides != nil {
-		if ao, ok := req.Overrides.Agents[ref]; ok {
-			if ao.Description != nil {
-				description = *ao.Description
-			}
-			if ao.Instructions != nil {
-				instructions = *ao.Instructions
-			}
-			if ao.Model != nil {
-				model = *ao.Model
-			}
+		perRef := req.Overrides.Agents[ref]
+		if perRef.Description != nil {
+			description = *perRef.Description
+		} else if req.Overrides.Description != nil {
+			description = *req.Overrides.Description
+		}
+		if perRef.Instructions != nil {
+			instructions = *perRef.Instructions
+		} else if req.Overrides.Instructions != nil {
+			instructions = *req.Overrides.Instructions
+		}
+		if perRef.Model != nil {
+			model = *perRef.Model
+		} else if req.Overrides.Model != nil {
+			model = *req.Overrides.Model
 		}
 	}
 
