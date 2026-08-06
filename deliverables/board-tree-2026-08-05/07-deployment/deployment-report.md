@@ -1,11 +1,11 @@
-# Board 看板树状结构 — 部署报告（CLO-226）
+# Board 看板树状结构 — 部署报告（CLO-226 / CLO-273）
 
 **日期**: 2026-08-06
 **角色**: DevOps（姚明）
-**Issue**: CLO-226 【发布】看板树状结构 PR 与部署
+**Issue**: CLO-226 【发布】看板树状结构 PR 与部署；CLO-273 【发布】合并 PR #12 并确认部署稳定
 **父 Issue**: CLO-218 看板视图支持父子 issue 树状结构
 **部署版本**: `feature/board-tree` @ `d14d3805`（含 `101ec0c6` 文档 + `d5f8245a` W2 测试）
-**PR**: https://github.com/patrickstar179/multica/pull/12
+**PR**: https://github.com/patrickstar179/multica/pull/12（**已合入**）
 
 ---
 
@@ -13,10 +13,10 @@
 
 | 项 | 值 |
 |----|----|
-| 分支 | `feature/board-tree`（head `d14d3805`） |
+| 分支 | `feature/board-tree`（head `d14d3805`，**已于 PR #12 合入主干**） |
 | 基线 | `Equipment_Department_Exploration` |
 | 核心提交 | `23c6ed5c`（CLO-222 前端实现）、`f8d9eef2`（CLO-198 后端 hierarchy）、`d5f8245a`（CLO-264 W2 测试）、`101ec0c6`（CLO-225 文档）、`d14d3805`（README 索引） |
-| PR 状态 | **OPEN / MERGEABLE**（`gh pr view 12`） |
+| PR 状态 | **MERGED**（merge commit `0cd16cde`，2026-08-06 02:47Z） |
 
 ## 二、部署环境
 
@@ -27,7 +27,7 @@
 | Node / pnpm | v22.22.3 / 10.28.2 |
 | PostgreSQL | pgvector/pgvector:pg17（Docker，127.0.0.1:5432，迁移版本 276/276） |
 | 后端 | `server/bin/server`（:8080，PID 293881） |
-| 前端 | `apps/web` Next.js 16.2.6 生产构建（:3000，PID 293946） |
+| 前端 | `apps/web` Next.js 16.2.6 生产构建（:3000，PID 302745，CLO-273 重建后重启） |
 | 部署目录 | `/home/patrick-sha/multica_workspaces/.../dc6284a5/workdir/multica` |
 
 ## 三、部署过程
@@ -106,3 +106,51 @@ cd apps/web && nohup pnpm exec next start -p 3000 &
 - ✅ 本地部署上线，健康检查通过
 - ✅ 功能冒烟验证通过（hierarchy 全链路）
 - ⏳ 观察期：部署后需持续观察 Error Rate / CPU / Memory / 告警（见 AGENTS.md 第五原则）
+
+---
+
+# 合入后复核（CLO-273，2026-08-06）
+
+## 十、合入记录
+
+- **PR #12 合入**：`0cd16cde Merge pull request #12 from patrickstar179/feature/board-tree`（2026-08-06 02:47:44Z，GitHub），base `Equipment_Department_Exploration`，head `feature/board-tree`。
+- **主干最新 tip**：`origin/Equipment_Department_Exploration` @ `0cd16cde`（`gh pr view 12` state=**MERGED**，merge_commit=`0cd16cde`）。
+- **冗余分支清理**：`feature/board-tree` 已合入，按规范删除远端分支 `git push origin --delete feature/board-tree` ✅（远端现仅剩 `Equipment_Department_Exploration` / `main` / `master`）。
+- **本地部署基线**：部署 worktree HEAD `015452d4`，经 `git merge-base --is-ancestor` 确认已被主干包含，部署代码与合入内容一致。
+
+## 十一、合入后部署健康检查
+
+> 复核发现部署目录 `node_modules` / `.next` 被清理导致前端部分路由 500（`next/dist/compiled/cookie` MODULE_NOT_FOUND）。已按部署流程恢复：`pnpm install --frozen-lockfile`（4.9s，热 store）→ `pnpm --filter @multica/web build`（成功，含 board-tree 符号）→ 重启前端 `next start -p 3000`（PID 302745）。后端 PID 293881 未动。
+
+| 检查项 | 结果 |
+|--------|------|
+| 后端 `/health` | ✅ 200 `{"status":"ok"}` |
+| 前端 `GET /login` | ✅ 200 |
+| 前端 `GET /` | ✅ 200 |
+| 前端 `/api/config` | ✅ 200 |
+| 看板路由 `/issues/board`（未登录 → 307 /login） | ✅ 重定向正常 |
+| `/issues/board`（登录 + `last_workspace_slug`） | ✅ 307 → `/{slug}/issues/board` |
+| `/board-smoke-ws/issues/board`（登录） | ✅ 200 |
+| 静态 chunk（board-tree 符号） | ✅ `53796` / `36556` 含 `board-tree-model`、`boardCollapsedParents` |
+| 前端日志 | ✅ 无 error / MODULE_NOT_FOUND |
+
+## 十二、合入后功能冒烟（hierarchy 全链路复验）
+
+| # | 场景 | 结果 |
+|---|------|------|
+| 1 | dev 验证码登录 | ✅ JWT |
+| 2 | 创建工作区 `board-smoke-ws`（prefix `BSM`） | ✅ 201 |
+| 3 | 创建父任务 BSM-1 | ✅ `parent_issue_id` 空 |
+| 4 | 创建子任务 BSM-2（parent=BSM-1） | ✅ 父子链路建立 |
+| 5 | `POST /api/issues/table/rows`（`hierarchy.enabled=true`，group=status） | ✅ 根行 BSM-1 `direct_child_count: 1`，子项不落根 |
+| 6 | 带 `parent_id=BSM-1` 查询 | ✅ 返回 BSM-2（`direct_child_count: 0`） |
+| 7 | 清理冒烟数据 | ✅ 204 删除 BSM-1/BSM-2 |
+
+> 结论：合入主干后本地部署保持健康，Board 树状结构数据层与前端路由全部可用。
+
+## 十三、合入后风险与回滚
+
+| 项 | 说明 |
+|----|------|
+| 风险 | 🟢 部署环境共享目录曾出现 node_modules 被清理（外部环境行为），已重建并恢复；观察期继续监控 |
+| 回滚 | 前端可 `git checkout 0cd16cde^`（或旧分支）重建；后端已有 `server.bin.bak-20260806` 备份，见第八节 |
