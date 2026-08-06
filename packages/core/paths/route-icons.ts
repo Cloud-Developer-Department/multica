@@ -29,6 +29,7 @@ export type RouteIconName =
   | "Bot"
   | "Users"
   | "BarChart3"
+  | "Gauge"
   | "Monitor"
   | "Server"
   | "BookOpenText"
@@ -55,6 +56,8 @@ export type NavLabelKey =
   | "agents"
   | "squads"
   | "usage"
+  | "monitoring"
+  | "analytics"
   | "runtimes"
   | "skills"
   | "settings"
@@ -73,6 +76,8 @@ export type WorkspacePageKey =
   | "agents"
   | "squads"
   | "usage"
+  | "monitoring"
+  | "analytics"
   | "runtimes"
   | "skills"
   | "settings"
@@ -103,6 +108,8 @@ export const WORKSPACE_PAGES: Record<WorkspacePageKey, WorkspacePage> = {
   agents: { segment: "agents", icon: "Bot", navKey: "agents" },
   squads: { segment: "squads", icon: "Users", navKey: "squads" },
   usage: { segment: "usage", icon: "BarChart3", navKey: "usage" },
+  monitoring: { segment: "dashboard", icon: "BarChart3", navKey: "monitoring" },
+  analytics: { segment: "analytics", icon: "Gauge", navKey: "analytics" },
   runtimes: { segment: "runtimes", icon: "Monitor", navKey: "runtimes" },
   skills: { segment: "skills", icon: "BookOpenText", navKey: "skills" },
   settings: { segment: "settings", icon: "Settings", navKey: "settings" },

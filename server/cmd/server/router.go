@@ -1333,6 +1333,60 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 				r.Get("/runtime/daily", h.GetDashboardRunTimeDaily)
 				r.Get("/failures/daily", h.GetDashboardFailuresDaily)
 				r.Get("/failures/by-agent", h.GetDashboardFailuresByAgent)
+
+				// Data-monitoring dashboard aggregation endpoints (CLO-170).
+				// ?days= (1/7/30, default 7) + ?tz= drive the count/trend
+				// modules; issue-distribution is a workspace snapshot.
+				r.Get("/issue-distribution", h.GetMonitoringIssueDistribution)
+				r.Get("/activity", h.GetMonitoringActivity)
+				r.Get("/comments", h.GetMonitoringComments)
+				r.Get("/completion", h.GetMonitoringCompletion)
+
+				// Personal-dimension usage dashboard (CLO-206 / CLO-212).
+				// ?range=today|week|month + ?tz=; personal endpoints read the
+				// session user (X-User-ID) and never accept a client-supplied
+				// user_id. /rates is the realtime USD→CNY rate (live fetch +
+				// default fallback).
+				r.Get("/personal/summary", h.GetPersonalUsageSummary)
+				r.Get("/personal/trend", h.GetPersonalUsageTrend)
+				r.Get("/personal/models", h.GetPersonalUsageModels)
+				r.Get("/personal/duration", h.GetPersonalUsageDuration)
+				r.Get("/personal/runtime-trend", h.GetPersonalRuntimeTrend)
+				r.Get("/personal/errors", h.GetPersonalUsageErrors)
+				r.Get("/personal/rank", h.GetPersonalUsageRank)
+				r.Get("/rates", h.GetDashboardRates)
+			})
+
+			// Engineering-analytics platform (CLO-239) — the "/{slug}/analytics"
+			// four-dashboard page (Adoption & Activity / Agent Performance /
+			// Git Contributions / DORA / Identity). Contract: API-CLO-228 v2.0.
+			// G/D/L endpoints self-report external-source readiness via a
+			// top-level `source_status`; never 4xx/5xx for an unconnected source.
+			r.Route("/api/analytics", func(r chi.Router) {
+				// Tab1 Adoption & Activity (A1–A5)
+				r.Get("/activity/summary", h.GetAnalyticsActivitySummary)
+				r.Get("/activity/heatmap", h.GetAnalyticsActivityHeatmap)
+				r.Get("/activity/top-members", h.GetAnalyticsActivityTopMembers)
+				r.Get("/adoption/summary", h.GetAnalyticsAdoptionSummary)
+				r.Get("/adoption/trend", h.GetAnalyticsAdoptionTrend)
+				// Tab2 Agent Performance (B1–B6)
+				r.Get("/agents/funnel", h.GetAnalyticsAgentsFunnel)
+				r.Get("/agents/performance", h.GetAnalyticsAgentsPerformance)
+				r.Get("/agents/top", h.GetAnalyticsAgentsTop)
+				r.Get("/skills/overview", h.GetAnalyticsSkillsOverview)
+				r.Get("/collaboration/summary", h.GetAnalyticsCollaborationSummary)
+				r.Get("/collaboration/blockers", h.GetAnalyticsCollaborationBlockers)
+				// Tab3 Git Contributions (G1–G4)
+				r.Get("/git/eloc", h.GetAnalyticsGitEloc)
+				r.Get("/git/quality", h.GetAnalyticsGitQuality)
+				r.Get("/git/repos", h.GetAnalyticsGitRepos)
+				r.Get("/git/prs", h.GetAnalyticsGitPRs)
+				// Tab4 DORA (D1–D2)
+				r.Get("/dora/lead-time", h.GetAnalyticsDoraLeadTime)
+				r.Get("/dora/deployments", h.GetAnalyticsDoraDeployments)
+				// Identity & departments (L1–L2)
+				r.Get("/identity/lifecycle", h.GetAnalyticsIdentityLifecycle)
+				r.Get("/identity/departments", h.GetAnalyticsIdentityDepartments)
 			})
 
 			// Runtimes

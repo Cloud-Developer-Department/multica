@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>研发效能分析 · 「数据源未接入」引导态全场景 · 高保真设计稿</title>
+<style>
+  :root{
+    color-scheme: light;
+    --page-canvas: oklch(0.988087 0 0);
+    --surface: oklch(1 0 0);
+    --surface-raised: oklch(1 0 0);
+    --surface-hover: oklch(0.967 0.001 286.375);
+    --surface-border: oklch(0.92 0.004 286.32);
+    --foreground: oklch(0.141 0.005 285.823);
+    --muted: oklch(0.967 0.001 286.375);
+    --muted-foreground: oklch(0.552 0.016 285.938);
+    --border: oklch(0.945 0.003 286.32);
+    --input: oklch(0.92 0.004 286.32);
+    --brand: oklch(0.55 0.16 255);
+    --success: oklch(0.55 0.16 145);
+    --warning: oklch(0.75 0.16 85);
+    --destructive: oklch(0.577 0.245 27.325);
+    --info: oklch(0.55 0.18 250);
+    --chart-1: oklch(0.55 0.16 255);
+    --chart-2: oklch(0.66 0.13 255);
+    --chart-3: oklch(0.76 0.10 255);
+    --chart-4: oklch(0.85 0.06 255);
+    --chart-5: oklch(0.92 0.03 255);
+    --radius: 0.625rem;
+    --surface-shadow: 0 1px 2px rgb(15 23 42 / 0.04), 0 1px 1px rgb(15 23 42 / 0.03);
+    --font-sans: "Inter", "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:var(--font-sans);background:var(--page-canvas);color:var(--foreground);font-size:14px;padding:32px}
+  .page-title{font-size:14px;font-weight:500;margin-bottom:4px}
+  .page-sub{font-size:12px;color:var(--muted-foreground);margin-bottom:24px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:24px;max-width:1152px}
+  .card{border:1px solid var(--surface-border);border-radius:10px;background:var(--surface);box-shadow:var(--surface-shadow);overflow:hidden}
+  .card-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px 8px}
+  .card-title{font-size:14px;font-weight:500}
+  .card-desc{font-size:12px;color:var(--muted-foreground);margin-top:2px}
+  .badge{font-size:11px;font-weight:500;border-radius:999px;padding:1px 7px;background:var(--muted);color:var(--muted-foreground);border:1px solid var(--border)}
+  .guide{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:36px 16px;text-align:center;color:var(--muted-foreground)}
+  .guide .big{width:32px;height:32px;color:var(--muted-foreground);opacity:.6;margin-bottom:4px}
+  .guide .t{font-size:14px;font-weight:500;color:var(--foreground)}
+  .guide .d{font-size:12px;max-width:430px}
+  .guide .sync{font-size:10px;color:var(--muted-foreground);margin-top:2px}
+  .btn{border:1px solid var(--input);background:var(--surface);border-radius:8px;padding:5px 12px;font-size:12px;font-weight:500;color:var(--foreground);cursor:pointer;font-family:inherit;margin-top:8px}
+  .footnote{font-size:12px;color:var(--muted-foreground);margin-top:24px}
+</style>
+</head>
+<body>
+  <div class="page-title">「数据源未接入」引导态全场景（SourceGuideState）</div>
+  <div class="page-sub">触发：接口 `source_status.ready=false`。引导态 ≠ 空态：含配置入口按钮，表达「功能存在但数据源未接」。文案逐字对齐 PRD §7。</div>
+  <div class="grid">
+
+    <div class="card">
+      <div class="card-head">
+        <div><div class="card-title">Git 数据源未接入（Tab3 全模块 / G1·G3）</div></div>
+        <span class="badge">Git</span>
+      </div>
+      <div class="guide">
+        <svg class="big" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="6" r="3"/><path d="M18 6v6a4 4 0 0 1-4 4H9"/><path d="M9 6h3"/></svg>
+        <div class="t">Git 数据源未接入</div>
+        <div class="d">请在「仓库接入」中连接 GitCode / 配置本地仓库路径。</div>
+        <button class="btn">前往配置</button>
+        <div class="sync">最近同步：—</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <div><div class="card-title">ELOC 工具链未配置（Tab3 ② / G1）</div></div>
+        <span class="badge">Git</span>
+      </div>
+      <div class="guide">
+        <svg class="big" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7V4h16v3"/><path d="M9 20h6"/><path d="M12 4v16"/><path d="M4 7h16"/></svg>
+        <div class="t">ELOC 代码当量工具链未配置</div>
+        <div class="d">ELOC 代码当量工具链未配置。配置工具链后展示人/机代码当量排名。</div>
+        <button class="btn">前往配置</button>
+        <div class="sync">最近同步：—</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <div><div class="card-title">提交质量扫描未配置（Tab3 ③ / G2）</div></div>
+        <span class="badge">Git</span>
+      </div>
+      <div class="guide">
+        <svg class="big" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h4l3 8 4-16 3 8h4"/></svg>
+        <div class="t">提交质量扫描未配置</div>
+        <div class="d">提交质量扫描未配置，暂无覆盖率/漏洞/重复率数据。导入扫描报告后展示。</div>
+        <button class="btn">前往配置</button>
+        <div class="sync">最近同步：—</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <div><div class="card-title">部署流水线数据未接入（Tab4 / D1·D2）</div></div>
+        <span class="badge">DORA</span>
+      </div>
+      <div class="guide">
+        <svg class="big" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></svg>
+        <div class="t">部署流水线数据未接入</div>
+        <div class="d">部署流水线数据未接入：可通过 Webhook / 文件导入 / 手动录入接入。当前以「Issue→Merged」替代口径展示交付周期。</div>
+        <button class="btn">前往配置</button>
+        <div class="sync">最近同步：—</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <div><div class="card-title">用户身份数据源未接入（Tab1 ⑥⑦ / L1）</div></div>
+        <span class="badge">LDAP</span>
+      </div>
+      <div class="guide">
+        <svg class="big" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        <div class="t">用户身份数据源未接入</div>
+        <div class="d">接入 LDAP/IDP 或配置部门映射后启用。</div>
+        <button class="btn">前往配置</button>
+        <div class="sync">最近同步：—</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <div><div class="card-title">已接入但有数据（对照示例，非引导态）</div></div>
+        <span class="badge ok">已就绪</span>
+      </div>
+      <div class="guide" style="opacity:.55">
+        <svg class="big" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg>
+        <div class="t">数据源已就绪</div>
+        <div class="d">`source_status.ready=true` 时渲染正常数据态，不显示引导态。</div>
+        <div class="sync">最近同步：2026-08-05 07:00</div>
+      </div>
+    </div>
+
+  </div>
+  <div class="footnote">高保真设计稿（示意）· 全部样式基于 packages/ui 组件与 docs/design.md token，实现时禁止硬编码 · 引导态统一组件 SourceGuideState</div>
+</body>
+</html>

@@ -164,6 +164,11 @@ type Handler struct {
 	Storage                storage.Storage
 	CFSigner               *auth.CloudFrontSigner
 	Analytics              analytics.Client
+	// DashboardRates serves GET /api/dashboard/rates (realtime USD→CNY with
+	// live-fetch + default fallback + short TTL cache). Constructed
+	// unconditionally in New; a nil value degrades to a fresh service so the
+	// endpoint works even when the Handler was built by hand in tests.
+	DashboardRates *DashboardRatesService
 	// Metrics is the shared business-metrics collector built by main.go.
 	// May be nil in tests / self-hosted with the metrics listener disabled;
 	// every Record* method is nil-safe and obsmetrics.RecordEvent treats a
@@ -334,7 +339,8 @@ func New(queries *db.Queries, txStarter txStarter, hub *realtime.Hub, bus *event
 			BaseURL:      cfg.LLMBaseURL,
 			DefaultModel: cfg.LLMDefaultModel,
 		}),
-		cfg: cfg,
+		DashboardRates: NewDashboardRatesService(),
+		cfg:            cfg,
 	}
 	h.WebhookDeliveryWorker = NewWebhookDeliveryWorker(h)
 

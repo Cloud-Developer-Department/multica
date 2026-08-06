@@ -8,10 +8,12 @@
     "autopilots": "오토파일럿",
     "agents": "에이전트",
     "squads": "스쿼드",
+    "monitoring": "모니터링",
     "usage": "사용량",
     "runtimes": "런타임",
     "skills": "스킬",
     "settings": "설정",
+    "analytics": "효능 분석",
     "workflows": "워크플로우",
     "artifacts": "아티팩트",
     "reviews": "검토"

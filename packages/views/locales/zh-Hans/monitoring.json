@@ -1,0 +1,84 @@
+{
+  "range": {
+    "1": "近24小时",
+    "7": "近7天",
+    "30": "近30天"
+  },
+  "page": {
+    "title": "数据监控看板"
+  },
+  "toolbar": {
+    "data_updated": "数据更新时间",
+    "auto_refresh": "自动刷新",
+    "refresh": "刷新",
+    "refreshing": "刷新中…",
+    "no_update": "数据无更新",
+    "auto_refresh_paused_badge": "自动刷新已暂停",
+    "enabled": "已开启自动刷新（60s）",
+    "disabled": "已关闭自动刷新",
+    "paused_toast": "连续失败已达上限，已暂停自动刷新",
+    "up_to_date": "数据已是最新（{{time}}）",
+    "refresh_partial_failed": "部分数据刷新失败，已保留上次数据"
+  },
+  "kpi": {
+    "section": "关键指标",
+    "total_label": "总 Issue",
+    "in_progress_label": "进行中",
+    "in_progress_sub": "占总数 {{pct}}",
+    "completion_label": "完成率",
+    "delay_label": "延期率",
+    "delay_no_data": "无到期任务口径数据",
+    "online_runtime_label": "在线运行时",
+    "online_runtime_sub": "共 {{total}} 个运行时",
+    "online_rate_label": "在线率",
+    "online_rate_sub": "在线 {{online}}/{{total}}"
+  },
+  "module": {
+    "section": "数据模块",
+    "other": "其他",
+    "issue_distribution_title": "Issue 状态分布",
+    "issue_distribution_empty": "暂无 Issue 数据",
+    "issue_distribution_empty_desc": "创建 Issue 后这里将展示分布",
+    "project_progress_title": "项目进度分布",
+    "project_progress_empty": "暂无项目数据",
+    "project_progress_empty_desc": "创建项目后这里将展示进度",
+    "agent_workload_title": "智能体工作量",
+    "agent_workload_empty": "暂无活跃记录",
+    "team_activity_title": "团队活跃度",
+    "team_activity_empty": "暂无活跃记录",
+    "comments_title": "评论热度",
+    "comments_total": "总评论 {{count}}",
+    "comments_today": "今日 {{count}}",
+    "comments_series": "评论数",
+    "comments_empty": "暂无评论数据",
+    "comments_empty_desc": "产生评论后这里将展示热度",
+    "completion_title": "完成率 / 延期率趋势",
+    "completion_empty": "暂无趋势数据",
+    "completion_empty_desc": "有到期任务后这里将展示趋势",
+    "completion_series": "完成率",
+    "delay_series": "延期率"
+  },
+  "donut": {
+    "total_label": "总 Issue"
+  },
+  "runtime": {
+    "title": "运行时状态",
+    "summary": "在线 {{online}} / 共 {{total}}",
+    "empty_title": "暂未发现运行时",
+    "col_name": "运行时名称",
+    "col_type": "类型",
+    "col_status": "状态",
+    "col_heartbeat": "最近心跳",
+    "col_resources": "资源占用",
+    "minutes_ago": "{{minutes}} 分钟前",
+    "prev_page": "上一页",
+    "next_page": "下一页"
+  },
+  "error": {
+    "module_title": "数据加载失败",
+    "page_title": "数据加载失败",
+    "page_desc": "请稍后重试或检查网络连接",
+    "retry": "重试",
+    "reload": "重新加载"
+  }
+}

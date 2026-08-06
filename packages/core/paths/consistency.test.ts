@@ -18,6 +18,8 @@ describe("paths.workspace() shape", () => {
       new Set([
         "root",
         "usage",
+        "monitoring",
+        "analytics",
         "issues",
         "projects",
         "autopilots",
@@ -31,6 +33,10 @@ describe("paths.workspace() shape", () => {
         "skills",
         "squads",
         "settings",
+        "workflows",
+        "artifacts",
+        "artifactStats",
+        "reviews",
       ]),
     );
   });
@@ -41,6 +47,8 @@ describe("paths.workspace() shape", () => {
     // that each method emits its explicitly registered workspace subpath.
     const expectedSegments: Array<[string, string]> = [
       ["usage", "usage"],
+      ["monitoring", "dashboard"],
+      ["analytics", "analytics"],
       ["issues", "issues"],
       ["projects", "projects"],
       ["autopilots", "autopilots"],
@@ -54,6 +62,10 @@ describe("paths.workspace() shape", () => {
       ["skills", "skills"],
       ["squads", "squads"],
       ["settings", "settings"],
+      ["workflows", "workflows"],
+      ["artifacts", "artifacts"],
+      ["artifactStats", "artifacts/stats"],
+      ["reviews", "reviews"],
     ];
     const wsAsAny = ws as unknown as Record<string, () => string>;
     for (const [method, segment] of expectedSegments) {
