@@ -13,6 +13,7 @@
 | `03-code/` | Frontend-Coding | 前端实现（board-tree-model / board-view / drag-utils / view-store） |
 | `04-tests/` | Validation | 测试报告（基于 `f9b602d6`，注：分支后续重写为 `23c6ed5c`，需重跑） |
 | `05-review/` | Review | 代码审查报告（基于最终 tip `23c6ed5c`，含独立复验） |
+| `06-docs/` | Documentation | 用户交互指南 / API 契约 / Release Notes / Changelog（CLO-225） |
 
 ## 关键结论
 
