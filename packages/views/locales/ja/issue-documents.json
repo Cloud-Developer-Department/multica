@@ -1,0 +1,55 @@
+{
+  "page": {
+    "title": "イシュー文書",
+    "tagline": "イシュー処理フローで生成された中間ドキュメントをイシュー単位で統合",
+    "empty": {
+      "title": "イシュー文書はまだありません",
+      "description": "イシューフローで生成されたドキュメント（要件、アーキテクチャ、テストレポートなど）がここに表示されます。"
+    },
+    "list_error": {
+      "title": "読み込みに失敗しました",
+      "fallback": "イシュー文書の読み込み中にエラーが発生しました。",
+      "retry": "再試行"
+    },
+    "load_more": "さらに読み込む"
+  },
+  "table": {
+    "issue": "イシュー",
+    "type": "種類",
+    "title": "タイトル",
+    "version": "バージョン",
+    "status": "ステータス",
+    "author": "作成者",
+    "updated": "更新日時",
+    "no_matches": "フィルター条件に一致する文書がありません。"
+  },
+  "types": {
+    "requirements": "要件定義",
+    "architecture": "アーキテクチャ",
+    "development": "開発",
+    "testing": "テスト",
+    "code_review": "コードレビュー",
+    "security": "セキュリティ監査",
+    "documentation": "ドキュメント",
+    "deployment": "デプロイ",
+    "other": "その他"
+  },
+  "statuses": {
+    "draft": "下書き",
+    "submitted": "提出済み",
+    "approved": "承認済み",
+    "rejected": "却下",
+    "superseded": "置換済み"
+  },
+  "filters": {
+    "all_types": "すべての種類",
+    "all_statuses": "すべてのステータス",
+    "search": "タイトルまたはイシューを検索..."
+  },
+  "detail": {
+    "versions": "バージョン",
+    "download": "ダウンロード",
+    "view": "開く",
+    "no_content": "この文書にはインラインコンテンツがありません。"
+  }
+}

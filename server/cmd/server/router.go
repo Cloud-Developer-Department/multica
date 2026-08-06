@@ -1133,6 +1133,18 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 				})
 			})
 
+			// Issue-flow intermediate documents (Issue Documents tab, CLO-278).
+			// Read-only for workspace members; the POST registration is the write
+			// channel used by the CLI / flow agents to submit stage documents.
+			r.Route("/api/issue-documents", func(r chi.Router) {
+				r.Get("/", h.ListIssueDocuments)
+				r.Post("/", h.CreateIssueDocument)
+				r.Route("/{documentId}", func(r chi.Router) {
+					r.Get("/", h.GetIssueDocument)
+					r.Get("/versions", h.ListIssueDocumentVersions)
+				})
+			})
+
 			// Task messages (user-facing, not daemon auth)
 			r.Get("/api/tasks/{taskId}/messages", h.ListTaskMessagesByUser)
 

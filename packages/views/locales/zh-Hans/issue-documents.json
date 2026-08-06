@@ -1,0 +1,55 @@
+{
+  "page": {
+    "title": "Issue 流程文档",
+    "tagline": "按 issue 整合软件研发流程各阶段产出的中间文档",
+    "empty": {
+      "title": "暂无 Issue 流程文档",
+      "description": "issue 流程各阶段产出的文档（需求、架构、测试报告等）将在此集中展示。"
+    },
+    "list_error": {
+      "title": "加载失败",
+      "fallback": "加载 Issue 流程文档时出错。",
+      "retry": "重试"
+    },
+    "load_more": "加载更多"
+  },
+  "table": {
+    "issue": "Issue",
+    "type": "类型",
+    "title": "标题",
+    "version": "版本",
+    "status": "状态",
+    "author": "作者",
+    "updated": "更新时间",
+    "no_matches": "没有符合过滤条件的文档。"
+  },
+  "types": {
+    "requirements": "需求文档",
+    "architecture": "架构文档",
+    "development": "开发产物",
+    "testing": "测试报告",
+    "code_review": "代码审查",
+    "security": "安全审计",
+    "documentation": "文档",
+    "deployment": "部署",
+    "other": "其他"
+  },
+  "statuses": {
+    "draft": "草稿",
+    "submitted": "已提交",
+    "approved": "已通过",
+    "rejected": "已驳回",
+    "superseded": "已取代"
+  },
+  "filters": {
+    "all_types": "全部类型",
+    "all_statuses": "全部状态",
+    "search": "搜索标题或 issue..."
+  },
+  "detail": {
+    "versions": "版本历史",
+    "download": "下载",
+    "view": "打开",
+    "no_content": "该文档没有内联内容。"
+  }
+}

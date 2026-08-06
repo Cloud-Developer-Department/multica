@@ -152,6 +152,10 @@ type Handler struct {
 	IssueService           *service.IssueService
 	AutopilotService       *service.AutopilotService
 	EmailService           *service.EmailService
+	// IssueDocumentService owns the write side of the Issue Documents domain
+	// (CLO-278): atomic new-version + supersede registration. Nil in tests that
+	// don't exercise document submission.
+	IssueDocumentService *service.IssueDocumentService
 	UpdateStore            UpdateStore
 	ModelListStore         ModelListStore
 	LocalSkillListStore    LocalSkillListStore
@@ -307,6 +311,7 @@ func New(queries *db.Queries, txStarter txStarter, hub *realtime.Hub, bus *event
 		IssueService:                 service.NewIssueService(queries, txStarter, bus, analyticsClient, taskSvc),
 		AutopilotService:             service.NewAutopilotService(queries, txStarter, bus, taskSvc),
 		EmailService:                 emailService,
+		IssueDocumentService:         service.NewIssueDocumentService(queries, txStarter),
 		UpdateStore:                  NewInMemoryUpdateStore(),
 		ModelListStore:               NewInMemoryModelListStore(),
 		LocalSkillListStore:          NewInMemoryLocalSkillListStore(),

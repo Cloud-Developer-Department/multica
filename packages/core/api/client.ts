@@ -113,6 +113,11 @@ import type {
   IssueLabelsResponse,
   LabelResourceType,
   ResourceLabelsResponse,
+  IssueDocumentDetail,
+  IssueDocumentListResponse,
+  IssueDocumentVersionsResponse,
+  ListIssueDocumentsParams,
+  CreateIssueDocumentRequest,
   PinnedItem,
   CreatePinRequest,
   PinnedItemType,
@@ -283,6 +288,12 @@ import {
   EMPTY_ISSUE_PROPERTY,
   EMPTY_LIST_PROPERTIES_RESPONSE,
   EMPTY_ISSUE_PROPERTIES_RESPONSE,
+  IssueDocumentListResponseSchema,
+  IssueDocumentDetailResponseSchema,
+  IssueDocumentVersionsResponseSchema,
+  EMPTY_ISSUE_DOCUMENT_LIST_RESPONSE,
+  EMPTY_ISSUE_DOCUMENT_DETAIL,
+  EMPTY_ISSUE_DOCUMENT_VERSIONS_RESPONSE,
   EMPTY_ISSUE_PULL_REQUESTS_RESPONSE,
   IssuePullRequestsResponseSchema,
   ResourceLabelsResponseSchema,
@@ -775,6 +786,46 @@ export class ApiClient {
 
   async getIssue(id: string): Promise<Issue> {
     return this.fetch(`/api/issues/${id}`);
+  }
+
+  // Issue-flow intermediate documents (Issue Documents tab, CLO-278).
+
+  async listIssueDocuments(params?: ListIssueDocumentsParams): Promise<IssueDocumentListResponse> {
+    const search = new URLSearchParams();
+    if (params?.type) search.set("type", params.type);
+    if (params?.status) search.set("status", params.status);
+    if (params?.issue_id) search.set("issue_id", params.issue_id);
+    if (params?.q?.trim()) search.set("q", params.q.trim());
+    if (params?.limit !== undefined) search.set("limit", String(params.limit));
+    if (params?.offset !== undefined) search.set("offset", String(params.offset));
+    const raw = await this.fetch<unknown>(`/api/issue-documents?${search}`);
+    return parseWithFallback(raw, IssueDocumentListResponseSchema, EMPTY_ISSUE_DOCUMENT_LIST_RESPONSE, {
+      endpoint: "GET /api/issue-documents",
+    });
+  }
+
+  async getIssueDocument(id: string): Promise<IssueDocumentDetail> {
+    const raw = await this.fetch<unknown>(`/api/issue-documents/${id}`);
+    return parseWithFallback(raw, IssueDocumentDetailResponseSchema, EMPTY_ISSUE_DOCUMENT_DETAIL, {
+      endpoint: "GET /api/issue-documents/{id}",
+    });
+  }
+
+  async getIssueDocumentVersions(id: string): Promise<IssueDocumentVersionsResponse> {
+    const raw = await this.fetch<unknown>(`/api/issue-documents/${id}/versions`);
+    return parseWithFallback(raw, IssueDocumentVersionsResponseSchema, EMPTY_ISSUE_DOCUMENT_VERSIONS_RESPONSE, {
+      endpoint: "GET /api/issue-documents/{id}/versions",
+    });
+  }
+
+  async createIssueDocument(data: CreateIssueDocumentRequest): Promise<IssueDocumentDetail> {
+    const raw = await this.fetch<unknown>("/api/issue-documents", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+    return parseWithFallback(raw, IssueDocumentDetailResponseSchema, EMPTY_ISSUE_DOCUMENT_DETAIL, {
+      endpoint: "POST /api/issue-documents",
+    });
   }
 
   async createIssue(data: CreateIssueRequest): Promise<Issue> {

@@ -1,0 +1,55 @@
+{
+  "page": {
+    "title": "이슈 문서",
+    "tagline": "이슈 처리 흐름 단계에서 생성된 중간 문서를 이슈별로 통합",
+    "empty": {
+      "title": "이슈 문서가 없습니다",
+      "description": "이슈 처리 흐름에서 생성된 문서(요구사항, 아키텍처, 테스트 보고서 등)가 여기에 표시됩니다."
+    },
+    "list_error": {
+      "title": "불러오기 실패",
+      "fallback": "이슈 문서를 불러오는 중 오류가 발생했습니다.",
+      "retry": "다시 시도"
+    },
+    "load_more": "더 보기"
+  },
+  "table": {
+    "issue": "이슈",
+    "type": "유형",
+    "title": "제목",
+    "version": "버전",
+    "status": "상태",
+    "author": "작성자",
+    "updated": "업데이트",
+    "no_matches": "필터 조건과 일치하는 문서가 없습니다."
+  },
+  "types": {
+    "requirements": "요구사항",
+    "architecture": "아키텍처",
+    "development": "개발",
+    "testing": "테스트",
+    "code_review": "코드 리뷰",
+    "security": "보안 감사",
+    "documentation": "문서",
+    "deployment": "배포",
+    "other": "기타"
+  },
+  "statuses": {
+    "draft": "초안",
+    "submitted": "제출됨",
+    "approved": "승인됨",
+    "rejected": "거부됨",
+    "superseded": "대체됨"
+  },
+  "filters": {
+    "all_types": "모든 유형",
+    "all_statuses": "모든 상태",
+    "search": "제목 또는 이슈 검색..."
+  },
+  "detail": {
+    "versions": "버전",
+    "download": "다운로드",
+    "view": "열기",
+    "no_content": "이 문서에는 인라인 콘텐츠가 없습니다."
+  }
+}

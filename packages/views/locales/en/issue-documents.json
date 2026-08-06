@@ -1,0 +1,55 @@
+{
+  "page": {
+    "title": "Issue Documents",
+    "tagline": "Flow documents produced for issues across the R&D pipeline",
+    "empty": {
+      "title": "No issue documents yet",
+      "description": "Documents produced during issue flows (requirements, architecture, test reports, ...) will appear here."
+    },
+    "list_error": {
+      "title": "Failed to load documents",
+      "fallback": "Something went wrong while loading issue documents.",
+      "retry": "Retry"
+    },
+    "load_more": "Load more"
+  },
+  "table": {
+    "issue": "Issue",
+    "type": "Type",
+    "title": "Title",
+    "version": "Version",
+    "status": "Status",
+    "author": "Author",
+    "updated": "Updated",
+    "no_matches": "No documents match your filters."
+  },
+  "types": {
+    "requirements": "Requirements",
+    "architecture": "Architecture",
+    "development": "Development",
+    "testing": "Testing",
+    "code_review": "Code Review",
+    "security": "Security Audit",
+    "documentation": "Documentation",
+    "deployment": "Deployment",
+    "other": "Other"
+  },
+  "statuses": {
+    "draft": "Draft",
+    "submitted": "Submitted",
+    "approved": "Approved",
+    "rejected": "Rejected",
+    "superseded": "Superseded"
+  },
+  "filters": {
+    "all_types": "All types",
+    "all_statuses": "All statuses",
+    "search": "Search title or issue..."
+  },
+  "detail": {
+    "versions": "Versions",
+    "download": "Download",
+    "view": "Open",
+    "no_content": "This document has no inline content."
+  }
+}
