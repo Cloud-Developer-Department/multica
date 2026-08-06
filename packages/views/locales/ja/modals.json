@@ -92,7 +92,16 @@
     "submitting": "作成中...",
     "toast_created": "スクワッドを作成しました",
     "toast_failed": "スクワッドを作成できませんでした",
-    "toast_member_add_failed": "{{name}} を追加できませんでした: {{error}}"
+    "toast_member_add_failed": "{{name}} を追加できませんでした: {{error}}",
+    "include_squads_label": "スカッドを含める",
+    "include_squads_optional": "（任意）",
+    "include_squads_hint": "既存のスカッドをこのスカッドに統合します。そのリーダーとメンバーは新しいスカッドのリーダーが統括します。",
+    "include_squads_placeholder": "統合するスカッドを選択",
+    "group_squads": "スカッド",
+    "member_role_label": "{{name}} の役割",
+    "member_role_optional": "（任意）",
+    "member_role_placeholder": "例：レビュアー、フロントエンドリード",
+    "toast_members_failed": "無効なメンバーのためスカッドは作成されませんでした：{{names}}"
   },
   "create_project": {
     "title": "新規プロジェクト",
@@ -143,6 +152,7 @@
     "sr_agent": "イシューをクイック作成",
     "manual_breadcrumb": "手動で作成",
     "agent_breadcrumb": "エージェントで作成",
+    "template_button": "テンプレート",
     "title_placeholder": "イシューのタイトル",
     "description_placeholder": "説明を追加...",
     "more_options_aria": "その他のオプション",

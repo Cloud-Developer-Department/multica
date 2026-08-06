@@ -36,6 +36,7 @@ import {
 import { sortTimelineEntriesAsc } from "@multica/core/issues/timeline-sort";
 import {
   unhandledCommentTriggerOutcomes,
+  delegationSubissueOutcomes,
   mentionLabelsByTarget,
 } from "@multica/core/issues/comment-trigger-outcomes";
 import { useWSEvent, useWSReconnect } from "@multica/core/realtime";
@@ -297,6 +298,33 @@ export function useIssueTimeline(issueId: string, userId?: string) {
     [t],
   );
 
+  // The comment posted and /delegate created child issues (LIU-13 AC-3.3):
+  // surface each created child by identifier so the delegating leader can
+  // jump to the sub-squad's own issue instead of hunting for it. The squad is
+  // labeled from the user's own mention markup; the wire omits its name.
+  const notifyDelegatedSubissues = useCallback(
+    (triggerOutcomes: unknown, content?: string) => {
+      const delegated = delegationSubissueOutcomes(triggerOutcomes);
+      if (delegated.length === 0) return;
+      const labels = mentionLabelsByTarget(content ?? "");
+      for (const outcome of delegated) {
+        const sub = outcome.subissue;
+        if (!sub) continue;
+        const squad =
+          labels.get(`${outcome.target_type}:${outcome.target_id}`) ??
+          t(($) => $.comment.delegation_target_default);
+        toast.success(
+          t(($) => $.comment.delegation_created, {
+            squad,
+            identifier: sub.identifier ?? sub.id,
+            title: sub.title ?? "",
+          }),
+        );
+      }
+    },
+    [t],
+  );
+
   // Returns true on success, false on failure. The composer keeps the user's
   // text (editor locked + button spinning) until this settles and clears only
   // on success — so a slow send no longer leaves the box full next to an
@@ -307,6 +335,7 @@ export function useIssueTimeline(issueId: string, userId?: string) {
       try {
         const comment = await createComment({ content, attachmentIds, suppressAgentIds });
         warnUnhandledTriggers(comment?.trigger_outcomes, comment?.content);
+        notifyDelegatedSubissues(comment?.trigger_outcomes, comment?.content);
         return true;
       } catch (err) {
         toast.error(

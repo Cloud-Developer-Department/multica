@@ -85,10 +85,10 @@ INSERT INTO issue (
     workspace_id, title, description, status, priority,
     assignee_type, assignee_id, creator_type, creator_id,
     parent_issue_id, position, start_date, due_date, number, project_id,
-    stage
+    stage, delegation_comment_id
 ) VALUES (
     $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,
-    sqlc.narg('stage')
+    sqlc.narg('stage'), sqlc.narg('delegation_comment_id')
 ) RETURNING *;
 
 -- name: GetIssueByNumber :one
@@ -126,11 +126,36 @@ INSERT INTO issue (
     workspace_id, title, description, status, priority,
     assignee_type, assignee_id, creator_type, creator_id,
     parent_issue_id, position, start_date, due_date, number, project_id,
-    origin_type, origin_id, stage
+    origin_type, origin_id, stage, delegation_comment_id
 ) VALUES (
     $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,
-    sqlc.narg('origin_type'), sqlc.narg('origin_id'), sqlc.narg('stage')
+    sqlc.narg('origin_type'), sqlc.narg('origin_id'), sqlc.narg('stage'),
+    sqlc.narg('delegation_comment_id')
 ) RETURNING *;
+
+-- name: HasDelegatedChildIssues :one
+-- Reports whether a /delegate comment (LIU-13) already produced any child
+-- issue, so UpdateComment can reject a structural edit of that comment
+-- (O5 / AC-6.1). The workspace_id predicate is a tenant guard; comment ids
+-- are globally unique so it is belt-and-braces.
+SELECT EXISTS (
+    SELECT 1 FROM issue
+    WHERE delegation_comment_id = $1
+      AND workspace_id = $2
+) AS has_children;
+
+-- name: FindActiveDelegatedChildIssue :one
+-- Returns the active (non-terminal) child issue a /delegate comment already
+-- created for one squad — the (delegation_comment_id, assignee_id) edit
+-- recompute idempotency key (O5 / AC-6.3). Backed by the partial index
+-- idx_issue_delegation_comment (migration 236). ErrNoRows when none exists.
+SELECT * FROM issue
+WHERE delegation_comment_id = $1
+  AND assignee_id = $2
+  AND workspace_id = $3
+  AND status NOT IN ('done', 'cancelled')
+ORDER BY created_at ASC
+LIMIT 1;
 
 -- name: LockIssueDuplicateKey :exec
 SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0));

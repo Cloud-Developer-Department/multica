@@ -13,7 +13,10 @@
     "runtimes": "Runtimes",
     "skills": "Skills",
     "settings": "Settings",
-    "analytics": "Analytics"
+    "analytics": "Analytics",
+    "workflows": "Workflows",
+    "artifacts": "Artifacts",
+    "reviews": "Reviews"
   },
   "tab": {
     "issue": "Issue",

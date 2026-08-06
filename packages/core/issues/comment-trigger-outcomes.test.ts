@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   parseCommentTriggerOutcomes,
   unhandledCommentTriggerOutcomes,
+  delegationSubissueOutcomes,
   mentionLabelsByTarget,
   blockedTriggerLabel,
 } from "./comment-trigger-outcomes";
@@ -47,6 +48,41 @@ describe("comment trigger outcomes", () => {
     ];
     const unhandled = unhandledCommentTriggerOutcomes(raw);
     expect(unhandled.map((o) => o.target_id).sort()).toEqual(["empty", "future"]);
+  });
+});
+
+// LIU-13 §7.5: a successful /delegate outcome carries the created child issue
+// in `subissue`, surfaced after posting so the delegating leader can jump to
+// the sub-squad's issue (AC-3.3). Queued outcomes without the ref (idempotent
+// edit recompute) stay handled and never surface as unhandled.
+describe("delegationSubissueOutcomes", () => {
+  it("returns only outcomes carrying a subissue reference", () => {
+    const raw = [
+      {
+        target_type: "squad",
+        target_id: "squad-a",
+        status: "queued",
+        reason_code: "queued",
+        subissue: { id: "child-1", identifier: "MUL-100", title: "Task @Squad A" },
+      },
+      {
+        target_type: "squad",
+        target_id: "squad-b",
+        status: "blocked",
+        reason_code: "runtime_offline",
+      },
+      {
+        target_type: "squad",
+        target_id: "squad-c",
+        status: "queued",
+        reason_code: "queued",
+      },
+    ];
+    const delegated = delegationSubissueOutcomes(raw);
+    expect(delegated).toHaveLength(1);
+    expect(delegated[0]!.subissue?.identifier).toBe("MUL-100");
+    // The ref-less queued outcome is handled, not unhandled.
+    expect(unhandledCommentTriggerOutcomes(raw).map((o) => o.target_id)).toEqual(["squad-b"]);
   });
 });
 

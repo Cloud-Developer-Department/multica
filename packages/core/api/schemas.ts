@@ -27,6 +27,8 @@ import type {
   IssueProperty,
   ListPropertiesResponse,
   IssuePropertiesResponse,
+  IssueTemplate,
+  ListIssueTemplatesResponse,
   IssueTableGroupDescriptor,
   IssueTableFacetsResponse,
   IssueTableGroupsResponse,
@@ -474,6 +476,14 @@ export const CommentTriggerOutcomeSchema = z.object({
   target_id: z.string(),
   status: z.string().default(""),
   reason_code: z.string().default(""),
+  // /delegate (LIU-13 §7.5): the child issue created for the target squad.
+  subissue: z
+    .object({
+      id: z.string(),
+      identifier: z.string().optional(),
+      title: z.string().optional(),
+    })
+    .optional(),
 }).loose();
 
 export const CommentTriggerPreviewSchema = z.object({
@@ -482,6 +492,19 @@ export const CommentTriggerPreviewSchema = z.object({
   // must not discard the whole set of valid blocked mentions. A non-array
   // degrades to []; each valid entry is kept, each malformed one dropped.
   blocked: z
+    .array(z.unknown())
+    .catch([])
+    .default([])
+    .transform((items) =>
+      items.flatMap((item) => {
+        const parsed = CommentTriggerOutcomeSchema.safeParse(item);
+        return parsed.success ? [parsed.data] : [];
+      }),
+    ),
+  // /delegate (LIU-13 §7.3): the squads this comment would create child
+  // issues for. Parsed like blocked, so a malformed entry is dropped
+  // individually rather than failing the whole preview.
+  delegations: z
     .array(z.unknown())
     .catch([])
     .default([])
@@ -1243,6 +1266,12 @@ const SquadMemberPreviewSchema = z.object({
   role: z.string().default(""),
 }).loose();
 
+const SquadChildSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  member_count: z.number().default(0),
+}).loose();
+
 export const SquadSchema = z.object({
   id: z.string(),
   workspace_id: z.string(),
@@ -1256,8 +1285,11 @@ export const SquadSchema = z.object({
   updated_at: z.string(),
   archived_at: z.string().nullable().optional().transform((v) => v ?? null),
   archived_by: z.string().nullable().optional().transform((v) => v ?? null),
+  parent_squad_id: z.string().nullable().optional().transform((v) => v ?? null),
+  upgrade_on_member_mention: z.boolean().default(true),
   member_count: z.number().default(0),
   member_preview: z.array(SquadMemberPreviewSchema).default([]),
+  child_squads: z.array(SquadChildSchema).default([]),
 }).loose();
 
 export const SquadListSchema = z.array(SquadSchema);
@@ -1275,8 +1307,11 @@ export const EMPTY_SQUAD: Squad = {
   updated_at: "",
   archived_at: null,
   archived_by: null,
+  parent_squad_id: null,
+  upgrade_on_member_mention: true,
   member_count: 0,
   member_preview: [],
+  child_squads: [],
 };
 
 // Squad member status — backs the Squad detail page's Members tab. status
@@ -2327,3 +2362,60 @@ export const EMPTY_ANALYTICS_DEPARTMENTS: AnalyticsDepartments = {
   items: [],
 };
 
+// Issue templates (CLO-159) — workspace-scoped presets that pre-fill an
+// issue's fields on creation. Kept lenient (.loose()) so newer servers can
+// add fields without breaking installed clients; nullable fields default
+// to null so a pre-template-feature server response still parses cleanly.
+export const IssueTemplateSchema = z.object({
+  id: z.string(),
+  workspace_id: z.string(),
+  name: z.string(),
+  description: z.string().optional().default(""),
+  title_template: z.string().optional().default(""),
+  body_template: z.string().optional().default(""),
+  status: z.string().optional().default("todo"),
+  priority: z.string().optional().default("none"),
+  assignee_type: z.string().nullable().optional().default(null),
+  assignee_id: z.string().nullable().optional().default(null),
+  project_id: z.string().nullable().optional().default(null),
+  stage: z.number().nullable().optional().default(null),
+  label_ids: z.array(z.string()).nullish().transform((v) => v ?? []),
+  icon: z.string().optional().default(""),
+  category: z.string().optional().default(""),
+  is_preset: z.boolean().optional().default(false),
+  created_by: z.string(),
+  created_at: z.string(),
+  updated_at: z.string(),
+}).loose();
+
+export const EMPTY_ISSUE_TEMPLATE: IssueTemplate = {
+  id: "",
+  workspace_id: "",
+  name: "",
+  description: "",
+  title_template: "",
+  body_template: "",
+  status: "todo",
+  priority: "none",
+  assignee_type: null,
+  assignee_id: null,
+  project_id: null,
+  stage: null,
+  label_ids: [],
+  icon: "",
+  category: "",
+  is_preset: false,
+  created_by: "",
+  created_at: "",
+  updated_at: "",
+};
+
+export const ListIssueTemplatesResponseSchema = z.object({
+  issue_templates: z.array(IssueTemplateSchema).default([]),
+  total: z.number().default(0),
+}).loose();
+
+export const EMPTY_LIST_ISSUE_TEMPLATES_RESPONSE: ListIssueTemplatesResponse = {
+  issue_templates: [],
+  total: 0,
+};

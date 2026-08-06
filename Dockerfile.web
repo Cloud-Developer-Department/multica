@@ -14,6 +14,8 @@ COPY packages/views/package.json packages/views/
 COPY packages/tsconfig/package.json packages/tsconfig/
 COPY packages/eslint-config/package.json packages/eslint-config/
 
+# Use a China mirror for pnpm/corepack downloads (registry.npmjs.org is unreachable from mainland networks)
+ENV COREPACK_NPM_REGISTRY=https://registry.npmmirror.com
 RUN corepack enable && \
     PNPM_VERSION="$(node -p 'require("./package.json").packageManager')" && \
     corepack prepare "$PNPM_VERSION" --activate
@@ -27,6 +29,7 @@ WORKDIR /app
 # Activate the same pnpm version declared by the repository before the
 # offline frozen install validates package-manager metadata in pnpm-lock.yaml.
 COPY package.json ./
+ENV COREPACK_NPM_REGISTRY=https://registry.npmmirror.com
 RUN corepack enable && \
     PNPM_VERSION="$(node -p 'require("./package.json").packageManager')" && \
     corepack prepare "$PNPM_VERSION" --activate

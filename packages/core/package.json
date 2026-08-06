@@ -127,7 +127,14 @@
     "./workspace/hooks": "./workspace/hooks.ts",
     "./workspace/mutations": "./workspace/mutations.ts",
     "./workspace/queries": "./workspace/queries.ts",
-    "./workspace/workspace-url": "./workspace/workspace-url.ts"
+    "./workspace/workspace-url": "./workspace/workspace-url.ts",
+    "./issue-templates": "./issue-templates/index.ts",
+    "./issue-templates/queries": "./issue-templates/queries.ts",
+    "./issue-templates/mutations": "./issue-templates/mutations.ts",
+    "./workflows": "./workflows/index.ts",
+    "./workflows/queries": "./workflows/queries.ts",
+    "./artifacts": "./artifacts/index.ts",
+    "./artifacts/queries": "./artifacts/queries.ts"
   },
   "dependencies": {
     "@formatjs/intl-localematcher": "catalog:",

@@ -7,6 +7,9 @@ import { AutopilotDetailPage } from "./pages/autopilot-detail-page";
 import { SkillDetailPage } from "./pages/skill-detail-page";
 import { AgentDetailPage } from "./pages/agent-detail-page";
 import { MemberDetailPage } from "./pages/member-detail-page";
+import { DesktopWorkflowDetailPage } from "./pages/workflow-detail-page";
+import { DesktopArtifactDetailPage } from "./pages/artifact-detail-page";
+import { DesktopReviewDetailPage } from "./pages/review-detail-page";
 import {
   RuntimeDetailPage,
   RuntimeSettingsPage,
@@ -23,6 +26,9 @@ import { DesktopRuntimesPage } from "./components/desktop-runtimes-page";
 import { DesktopAgentsPage } from "./components/desktop-agents-page";
 import { AgentCreationStudio } from "@multica/views/agents";
 import { SquadsPage, SquadDetailPage as SquadDetailPageView } from "@multica/views/squads/components";
+import { WorkflowsPage } from "@multica/views/workflows/components";
+import { ArtifactsPage, ArtifactStatsPage } from "@multica/views/artifacts/components";
+import { ReviewsPage } from "@multica/views/reviews/components";
 import { InboxPage } from "@multica/views/inbox";
 import { ChatPage } from "@multica/views/chat";
 import { SettingsPage } from "@multica/views/settings";
@@ -213,6 +219,41 @@ export const appRoutes: RouteObject[] = [
             path: "dashboard",
             element: <MonitoringDashboardPage />,
             handle: { title: "Monitoring" },
+          },
+          {
+            path: "workflows",
+            element: <WorkflowsPage />,
+            handle: { title: "Workflows" },
+          },
+          {
+            path: "workflows/:id",
+            element: <DesktopWorkflowDetailPage />,
+            handle: { title: "Workflow" },
+          },
+          {
+            path: "artifacts",
+            element: <ArtifactsPage />,
+            handle: { title: "Artifacts" },
+          },
+          {
+            path: "artifacts/stats",
+            element: <ArtifactStatsPage />,
+            handle: { title: "Artifact Stats" },
+          },
+          {
+            path: "artifacts/:id",
+            element: <DesktopArtifactDetailPage />,
+            handle: { title: "Artifact" },
+          },
+          {
+            path: "reviews",
+            element: <ReviewsPage />,
+            handle: { title: "Reviews" },
+          },
+          {
+            path: "reviews/:artifactId",
+            element: <DesktopReviewDetailPage />,
+            handle: { title: "Review" },
           },
           {
             path: "settings",

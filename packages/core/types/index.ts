@@ -1,5 +1,40 @@
 export type { Issue, IssueStatus, IssuePriority, IssueAssigneeType, IssueMetadata, IssueMetadataValue, IssueReaction } from "./issue";
 export type {
+  Workflow,
+  WorkflowStatus,
+  WorkflowStage,
+  WorkflowNode,
+  WorkflowNodeStatus,
+  WorkflowNodeType,
+  WorkflowProgress,
+  WorkflowListResponse,
+  WorkflowTransition,
+  WorkflowTransitionsResponse,
+  CreateWorkflowRequest,
+  AdvanceWorkflowResponse,
+  ArtifactReviewStatus,
+} from "./workflow";
+export type {
+  Artifact,
+  ArtifactStatus,
+  ArtifactType,
+  ArtifactContentType,
+  ArtifactListResponse,
+  ArtifactVersion,
+  ArtifactVersionsResponse,
+  ArtifactDiffResponse,
+  DiffLine,
+  ArtifactReview,
+  ArtifactReviewsResponse,
+  ArtifactStats,
+  ReviewAction,
+  ReviewArtifactRequest,
+  ReviewArtifactResponse,
+  ReviewQueueItem,
+  ReviewQueueResponse,
+  CreateArtifactRequest,
+} from "./artifact";
+export type {
   Agent,
   AgentStatus,
   AgentRuntimeMode,
@@ -131,6 +166,7 @@ export type { InboxItem, InboxSeverity, InboxItemType, InboxWorkspaceUnread } fr
 export type { NotificationGroupKey, NotificationGroupValue, NotificationPreferences, NotificationPreferenceResponse } from "./notification-preference";
 export type { Comment, CommentType, CommentAuthorType, CommentTriggerPreview, CommentTriggerPreviewAgent, CommentTriggerSource, CommentTriggerOutcome, CommentTriggerStatus, Reaction } from "./comment";
 export type { Label, LabelResourceType, CreateLabelRequest, UpdateLabelRequest, ListLabelsResponse, IssueLabelsResponse, ResourceLabelsResponse } from "./label";
+export type { IssueTemplate, CreateIssueTemplateRequest, UpdateIssueTemplateRequest, ListIssueTemplatesResponse } from "./issue-template";
 export type { IssueProperty, IssuePropertyType, IssuePropertyOption, IssuePropertyConfig, IssuePropertyValue, IssuePropertyValues, CreatePropertyRequest, UpdatePropertyRequest, ListPropertiesResponse, IssuePropertiesResponse } from "./property";
 export { ISSUE_PROPERTY_TYPES, isKnownPropertyType } from "./property";
 export type {
@@ -243,6 +279,7 @@ export type {
 } from "./autopilot";
 export type {
   Squad,
+  SquadChild,
   SquadMember,
   SquadMemberType,
   SquadMemberPreview,

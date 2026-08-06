@@ -93,16 +93,38 @@ import (
 // (see TestRequireHumanActor_IgnoresUnknownActorSource), but the
 // addition of a new value is the moment to decide whether it's
 // human-equivalent or machine-equivalent.
+// isMachineActorSource reports whether the request authenticated via a
+// machine credential (mat_ task token / mcn_ cloud-node PAT). X-Actor-Source
+// is server-set only (the Auth middleware strips any client-supplied value
+// before stamping its own), so a match here is authoritative.
+func isMachineActorSource(r *http.Request) bool {
+	switch r.Header.Get("X-Actor-Source") {
+	case "task_token", "cloud_pat":
+		return true
+	}
+	return false
+}
+
 func RequireHumanActor(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// X-Actor-Source is server-set only. The auth middleware
-		// strips any client-supplied value before stamping its own,
-		// so a non-empty value here is authoritative.
-		switch r.Header.Get("X-Actor-Source") {
-		case "task_token", "cloud_pat":
+		if isMachineActorSource(r) {
 			writeError(w, http.StatusForbidden, "this endpoint is only available to human actors")
 			return
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// requireHumanActor is the handler-level twin of RequireHumanActor: it
+// reports whether the request came from a machine credential (mat_ task
+// token / mcn_ cloud-node PAT) and, if so, writes a 403 and returns false.
+// It exists as defense-in-depth for handlers whose routes are also guarded by
+// the RequireHumanActor middleware — so the guard holds even if a handler is
+// ever wired without the middleware (e.g. in tests or a future route rework).
+func requireHumanActor(w http.ResponseWriter, r *http.Request) bool {
+	if isMachineActorSource(r) {
+		writeError(w, http.StatusForbidden, "this endpoint is only available to human actors")
+		return false
+	}
+	return true
 }

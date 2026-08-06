@@ -187,4 +187,25 @@ describe("CommentTriggerChips", () => {
     expect(screen.getByText("Ops")).toBeInTheDocument();
     expect(screen.getByText("Runtime offline")).toBeInTheDocument();
   });
+
+  it("renders a delegation chip per /delegate squad with an invalid-command block", () => {
+    renderWithI18n(
+      <CommentTriggerChips
+        agents={[]}
+        blocked={[
+          { target_type: "squad", target_id: "", status: "blocked", reason_code: "invalid_command" },
+        ]}
+        delegations={[
+          { target_type: "squad", target_id: "cafef00d-0002", status: "queued", reason_code: "queued" },
+        ]}
+        draftContent="[@Ops](mention://squad/cafef00d-0002)"
+        suppressedAgentIds={new Set()}
+        onToggle={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("Ops")).toBeInTheDocument();
+    expect(screen.getByText("will create child issue")).toBeInTheDocument();
+    expect(screen.getByText("Invalid command")).toBeInTheDocument();
+  });
 });

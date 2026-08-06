@@ -53,12 +53,14 @@ const (
 	ReasonQueued                = dispatch.ReasonQueued
 	ReasonCoalesced             = dispatch.ReasonCoalesced
 	ReasonDeferred              = dispatch.ReasonDeferred
+	ReasonDeferredMember        = dispatch.ReasonDeferredMember
 	ReasonInvocationNotAllowed  = dispatch.ReasonInvocationNotAllowed
 	ReasonTargetUnavailable     = dispatch.ReasonTargetUnavailable
 	ReasonRuntimeOffline        = dispatch.ReasonRuntimeOffline
 	ReasonAttributionBlocked    = dispatch.ReasonAttributionBlocked
 	ReasonAlreadyActive         = dispatch.ReasonAlreadyActive
 	ReasonSelfTriggerSuppressed = dispatch.ReasonSelfTriggerSuppressed
+	ReasonInvalidCommand        = dispatch.ReasonInvalidCommand
 	ReasonInternalError         = dispatch.ReasonInternalError
 )
 

@@ -21,6 +21,7 @@ const OTHER = "user-other";
 const mocks = vi.hoisted(() => ({
   agents: [] as Agent[],
   members: [] as MemberWithUser[],
+  squads: [] as Squad[],
   createSquad: vi.fn(),
   addSquadMember: vi.fn(),
   navigationPush: vi.fn(),
@@ -39,6 +40,9 @@ vi.mock("@tanstack/react-query", () => ({
     if (Array.isArray(key) && key.includes("members")) {
       return { data: mocks.members };
     }
+    if (Array.isArray(key) && key.includes("squads")) {
+      return { data: mocks.squads };
+    }
     return { data: [] };
   },
   useQueryClient: () => ({ invalidateQueries: mocks.invalidate }),
@@ -47,15 +51,31 @@ vi.mock("@tanstack/react-query", () => ({
 vi.mock("@multica/core/workspace/queries", () => ({
   agentListOptions: () => ({ queryKey: ["agents"] }),
   memberListOptions: () => ({ queryKey: ["members"] }),
+  squadListOptions: () => ({ queryKey: ["squads"] }),
   workspaceKeys: { squads: (id: string) => ["squads", id] },
 }));
 
-vi.mock("@multica/core/api", () => ({
-  api: {
-    createSquad: (...args: unknown[]) => mocks.createSquad(...args),
-    addSquadMember: (...args: unknown[]) => mocks.addSquadMember(...args),
-  },
-}));
+vi.mock("@multica/core/api", () => {
+  class ApiError extends Error {
+    status: number;
+    statusText: string;
+    body?: unknown;
+    constructor(message: string, status: number, statusText: string, body?: unknown) {
+      super(message);
+      this.name = "ApiError";
+      this.status = status;
+      this.statusText = statusText;
+      this.body = body;
+    }
+  }
+  return {
+    api: {
+      createSquad: (...args: unknown[]) => mocks.createSquad(...args),
+      addSquadMember: (...args: unknown[]) => mocks.addSquadMember(...args),
+    },
+    ApiError,
+  };
+});
 
 vi.mock("@multica/core/auth", () => ({
   useAuthStore: (selector: (s: { user: { id: string } | null }) => unknown) =>
@@ -245,6 +265,8 @@ function makeSquad(overrides: Partial<Squad> = {}): Squad {
     updated_at: "2026-01-01T00:00:00Z",
     archived_at: null,
     archived_by: null,
+    parent_squad_id: null,
+    upgrade_on_member_mention: true,
     ...overrides,
   };
 }
@@ -346,7 +368,7 @@ describe("CreateSquadModal", () => {
     fireEvent.click(firstMatch("MineAgentTwo"));
 
     // Wire up the rest of the submit path so we can verify the sanitized
-    // payload sent to addSquadMember (none — leader was the only pick).
+    // payload sent to createSquad (no members — leader was the only pick).
     mocks.createSquad.mockResolvedValue(makeSquad({ leader_id: "agent-mine-2" }));
     fireEvent.change(screen.getByPlaceholderText(/e\.g\. Frontend Team/i), {
       target: { value: "Platform" },
@@ -356,7 +378,12 @@ describe("CreateSquadModal", () => {
     await waitFor(() => {
       expect(mocks.createSquad).toHaveBeenCalledTimes(1);
     });
-    // addSquadMember must NOT be called for the agent we promoted to leader.
+    // The promoted agent must not ride along in the members payload, and the
+    // old per-member addSquadMember step is gone entirely (F1 one-shot).
+    const payload = mocks.createSquad.mock.calls[0]![0] as {
+      members?: { member_type: string; member_id: string }[];
+    };
+    expect(payload.members ?? []).toEqual([]);
     expect(mocks.addSquadMember).not.toHaveBeenCalled();
   });
 
@@ -393,6 +420,10 @@ describe("CreateSquadModal", () => {
         avatar_url: undefined,
       });
     });
+    const payload = mocks.createSquad.mock.calls[0]![0] as {
+      members?: { member_type: string; member_id: string }[];
+    };
+    expect(payload.members ?? []).toEqual([]);
     expect(mocks.addSquadMember).not.toHaveBeenCalled();
   });
 
@@ -424,36 +455,72 @@ describe("CreateSquadModal", () => {
     expect(mocks.navigationPush).toHaveBeenCalledWith("/test-ws/squads/sq-1");
   });
 
-  it("on success with partial member failure shows success + warning toasts and still navigates", async () => {
+  it("submits all selected members in one atomic create call with their roles (F1/F2)", async () => {
     renderModal();
     fireEvent.change(screen.getByPlaceholderText(/e\.g\. Frontend Team/i), {
-      target: { value: "Mixed Squad" },
+      target: { value: "Atomic Squad" },
     });
     fireEvent.click(firstMatch("MineAgentOne"));
 
-    // Add two additional members: the workspace pal (member) + OtherAgentOne (agent).
-    // Locate them in the additional-members picker (last occurrence of each).
+    // Pick an agent + a human member from the additional-members picker.
     fireEvent.click(lastMatch("OtherAgentOne"));
     fireEvent.click(lastMatch("Workspace Pal"));
 
-    mocks.createSquad.mockResolvedValue(makeSquad({ id: "sq-2", leader_id: "agent-mine-1" }));
-    mocks.addSquadMember
-      .mockResolvedValueOnce({}) // first call succeeds
-      .mockRejectedValueOnce(new Error("boom")); // second fails
+    // Fill the optional role for the agent member.
+    const roleInput = screen.getByLabelText("Role for OtherAgentOne") as HTMLInputElement;
+    fireEvent.change(roleInput, { target: { value: "Reviewer" } });
+
+    mocks.createSquad.mockResolvedValue(makeSquad({ id: "sq-atomic", leader_id: "agent-mine-1" }));
 
     fireEvent.click(getSubmitButton());
 
     await waitFor(() => {
       expect(mocks.createSquad).toHaveBeenCalledTimes(1);
     });
-    await waitFor(() => {
-      expect(mocks.addSquadMember).toHaveBeenCalledTimes(2);
-    });
+    // One-shot payload: every selected member rides in the same request, the
+    // human member has no role, and the old addSquadMember step never runs.
+    const payload = mocks.createSquad.mock.calls[0]![0] as {
+      members?: { member_type: string; member_id: string; role?: string }[];
+    };
+    expect(payload.members).toEqual([
+      { member_type: "agent", member_id: "agent-other-1", role: "Reviewer" },
+      { member_type: "member", member_id: "user-other", role: undefined },
+    ]);
+    expect(mocks.addSquadMember).not.toHaveBeenCalled();
     await waitFor(() => {
       expect(mocks.toastSuccess).toHaveBeenCalledTimes(1);
     });
-    expect(mocks.toastWarning).toHaveBeenCalledTimes(1);
-    expect(mocks.navigationPush).toHaveBeenCalledWith("/test-ws/squads/sq-2");
+    expect(mocks.navigationPush).toHaveBeenCalledWith("/test-ws/squads/sq-atomic");
+  });
+
+  it("names the rejected members on a failed_members error and does not navigate (B07)", async () => {
+    renderModal();
+    fireEvent.change(screen.getByPlaceholderText(/e\.g\. Frontend Team/i), {
+      target: { value: "Rejected Squad" },
+    });
+    fireEvent.click(firstMatch("MineAgentOne"));
+    fireEvent.click(lastMatch("OtherAgentOne"));
+
+    // The server rejects the whole create with failed_members (atomic, AC-1.3).
+    const { ApiError } = await import("@multica/core/api");
+    mocks.createSquad.mockRejectedValueOnce(
+      new ApiError("one or more members are invalid; no squad was created", 400, "Bad Request", {
+        failed_members: [
+          { member_type: "agent", member_id: "agent-other-1", reason: "you can only add an agent you have access to" },
+        ],
+      }),
+    );
+
+    fireEvent.click(getSubmitButton());
+
+    await waitFor(() => {
+      expect(mocks.toastError).toHaveBeenCalledTimes(1);
+    });
+    // The toast names the rejected member instead of a generic failure.
+    expect(String(mocks.toastError.mock.calls[0]![0])).toContain("OtherAgentOne");
+    expect(mocks.navigationPush).not.toHaveBeenCalled();
+    // Submit is re-enabled so the user can fix the selection.
+    expect(getSubmitButton().disabled).toBe(false);
   });
 
   it("on createSquad failure shows an error toast, does not navigate, and re-enables submit", async () => {
@@ -475,5 +542,40 @@ describe("CreateSquadModal", () => {
     // not "Creating...").
     const button = getSubmitButton();
     expect(button.disabled).toBe(false);
+  });
+
+  it("submits included_squad_ids for squads picked in the include-squads picker", async () => {
+    // Squad B is already nested (has a parent) → excluded from the picker.
+    mocks.squads = [
+      makeSquad({ id: "sq-a", name: "Alpha Squad", parent_squad_id: null }),
+      makeSquad({ id: "sq-b", name: "Beta Squad", parent_squad_id: "sq-a" }),
+    ];
+    renderModal();
+    fireEvent.change(screen.getByPlaceholderText(/e\.g\. Frontend Team/i), {
+      target: { value: "Umbrella Squad" },
+    });
+    fireEvent.click(firstMatch("MineAgentOne"));
+
+    // Open the include-squads picker and pick Alpha Squad. Beta Squad must
+    // not be offered (already nested).
+    fireEvent.click(screen.getByText("Select squads to merge into this squad"));
+    fireEvent.click(screen.getByText("Alpha Squad"));
+    expect(screen.queryByText("Beta Squad")).not.toBeInTheDocument();
+
+    mocks.createSquad.mockResolvedValue(
+      makeSquad({ id: "sq-umbrella", leader_id: "agent-mine-1" }),
+    );
+    fireEvent.click(getSubmitButton());
+
+    await waitFor(() => {
+      expect(mocks.createSquad).toHaveBeenCalledWith({
+        name: "Umbrella Squad",
+        description: undefined,
+        leader_id: "agent-mine-1",
+        avatar_url: undefined,
+        included_squad_ids: ["sq-a"],
+      });
+    });
+    expect(mocks.navigationPush).toHaveBeenCalledWith("/test-ws/squads/sq-umbrella");
   });
 });

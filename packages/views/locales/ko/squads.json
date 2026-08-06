@@ -13,7 +13,8 @@
     },
     "no_matches": "일치하는 스쿼드가 없습니다",
     "row_menu": "스쿼드 작업",
-    "archive_action": "보관"
+    "archive_action": "보관",
+    "nested_in": "소속: {{name}}"
   },
   "inspector": {
     "details_section": "세부 정보",
@@ -95,5 +96,9 @@
     "filter_label": "필터",
     "filter_active_count_other": "필터 {{count}}개",
     "clear_filters": "필터 지우기"
+  },
+  "child_squads": {
+    "section_title": "하위 스쿼드",
+    "section_count_other": "이 스쿼드에 {{count}}개 통합됨"
   }
 }

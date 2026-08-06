@@ -1,6 +1,6 @@
 ---
 name: multica-mentioning
-description: "Use when an issue comment needs to @mention someone — link to a person, trigger another agent, hand work to a squad, or broadcast with @all. Documents the verified mention contract: how a mention link is built from a real UUID, the four mention types and exactly what each one enqueues (agent → a run for that agent, squad → a run for the squad leader, member and issue → a rendered link with NO run), comment create/edit preview and suppression, the @all broadcast and how it suppresses the assignee's auto-trigger, and the silent no-op cases (a name where a UUID belongs, a bad/unknown UUID, an already-pending task, an archived agent, a private agent you cannot access). WHETHER to mention — loop avoidance, staying silent on acknowledgements — lives in the runtime brief's Mentions section, not here. This skill is the backend contract only, traced to server/internal/util/mention.go and server/internal/handler/comment.go."
+description: "Use when an issue comment needs to @mention someone — link to a person, trigger another agent, hand work to a squad, or broadcast with @all. Documents the verified mention contract: how a mention link is built from a real UUID, the four mention types and exactly what each one enqueues (agent → a run for that agent — upgraded to a squad-leader run when the agent is the unique leader of one squad, squad → a run for the squad leader, member and issue → a rendered link with NO run), the unique-leader upgrade (SR3) and its personal-task escape hatch, comment create/edit preview and suppression, the @all broadcast and how it suppresses the assignee's auto-trigger, and the silent no-op cases (a name where a UUID belongs, a bad/unknown UUID, an already-pending task, an archived agent, a private agent you cannot access). WHETHER to mention — loop avoidance, staying silent on acknowledgements — lives in the runtime brief's Mentions section, not here. This skill is the backend contract only, traced to server/internal/util/mention.go and server/internal/handler/comment.go."
 user-invocable: false
 allowed-tools: Bash(multica *)
 ---
@@ -52,10 +52,32 @@ match, or the link resolves to the wrong entity (or to nothing).
 
 | To…                  | type     | uuid from       | What the backend does                                    |
 | -------------------- | -------- | --------------- | -------------------------------------------------------- |
-| trigger an agent     | `agent`  | agent.id        | enqueues a run for that agent (`EnqueueTaskForMention`)  |
+| trigger an agent     | `agent`  | agent.id        | enqueues a run for that agent (`EnqueueTaskForMention`); with one exception — see the unique-leader upgrade below |
 | hand work to a squad | `squad`  | squad.id        | resolves the squad's `leader_id` and enqueues a run for the LEADER agent |
 | link a person        | `member` | member.user_id  | renders a link; enqueues NOTHING — no agent run          |
 | reference an issue   | `issue`  | issue.id        | renders a link; enqueues NOTHING — always safe           |
+
+## Unique-squad-leader upgrade (SR3)
+
+An `@agent` mention of an agent who is the **unique leader of exactly one
+non-archived squad** in the workspace is automatically upgraded to a
+**squad-level** run (same as `@squad`): the task is enqueued for the leader
+with `is_leader_task` + `squad_id`, so the leader gets the Squad Operating
+Protocol + roster and coordinates the squad instead of doing the work alone.
+This is how "委派子小队请 @唯一 leader" works — delegating to a sub-squad by
+mentioning its leader behaves like mentioning the squad.
+
+Rules:
+
+- **Multi-squad leaders never upgrade.** An agent leading more than one squad
+  keeps `@agent` as a personal task — no guessing when the squad is ambiguous.
+- **Explicit `@squad` wins.** A `mention://squad/<id>` mention of the same
+  squad merges to the same squad-level result (leader-role-wins); there is no
+  conflict for the unique-leader case.
+- **Personal-task escape hatch.** To give a unique squad leader a PERSONAL task
+  (not squad-level), also `@` another agent member of that squad in the same
+  comment — the leader mention then stays personal. Mentioning an agent who is
+  not a member of the squad does not suppress the upgrade.
 
 The mention trigger set is computed by `computeMentionedAgentCommentTriggers`
 (`server/internal/handler/comment.go`); the comment path folds that result into

@@ -13,7 +13,8 @@
     },
     "no_matches": "No squads match",
     "row_menu": "Squad actions",
-    "archive_action": "Archive"
+    "archive_action": "Archive",
+    "nested_in": "In: {{name}}"
   },
   "inspector": {
     "details_section": "Details",
@@ -99,5 +100,10 @@
     "filter_active_count_one": "{{count}} filter",
     "filter_active_count_other": "{{count}} filters",
     "clear_filters": "Clear filters"
+  },
+  "child_squads": {
+    "section_title": "Child squads",
+    "section_count_one": "{{count}} squad merged under this one",
+    "section_count_other": "{{count}} squads merged under this one"
   }
 }
