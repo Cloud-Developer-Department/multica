@@ -39,8 +39,9 @@
 
 - `packages/views/issues/components/board-tree-model.test.ts`（新增）：buildChildrenMap / flattenBoardTree / collectSubtreeIds 纯函数覆盖。
 - `packages/views/issues/utils/drag-utils.test.ts`（扩展）：buildBoardTreeColumns 树形场景、getSubtreeBlock / moveBlock* / getSubtreeMoveAnchors / computeBlockPosition / getSubtreeSyncUpdates。
-- 验证：`pnpm typecheck`（6/6 包通过）、`pnpm --filter @multica/views test`（3074 通过，仅 4 个既有 locale parity 用例失败——基线同样失败，与本改动无关）。
-- 建议 Validation 补充：组件级展开/折叠交互、整组/单卡拖拽、拖子跨列脱离（参考 `swimlane-view.test.tsx` / `table-view-editing.test.tsx`）。
+- `packages/views/issues/components/board-column-tree.test.tsx`（**本轮补回**，CLO-264）：BoardColumn 树形组件级测试，覆盖折叠/展开（depth 缩进 / 折叠隐藏子树 / onToggleCollapsed 仅父卡接线）、follow-parent（子卡跨 status 跟随父列渲染）、DragOverlay「+N 子」徽章与 detach（转顶层）提示渲染。参考原 `2f2ac77f` 删除用例意图 + 现有 model/drag-utils 风格。
+- 验证：`pnpm typecheck`（6/6 包通过）、`pnpm --filter @multica/views test`（3082 通过，仅 4 个既有 locale parity 用例失败——基线同样失败，与本改动无关）、board-tree 相关单测 40/40、Board/Table/Swimlane 回归 112/112。
+- 建议 Validation 补充：整组/单卡真实指针拖拽、拖子跨列脱离的端到端交互（组件测试覆盖渲染与徽章，真实拖拽事件交由 Validation 人工回归）。
 
 ## 影响范围与风险
 

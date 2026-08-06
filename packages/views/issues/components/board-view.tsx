@@ -903,7 +903,7 @@ function BoardViewImpl({
  * card is itself a sub-issue (cross-column drops turn it into a top-level
  * task, D4).
  */
-function ActiveSubtreeBadge({ count, isDetaching }: { count: number; isDetaching: boolean }) {
+export function ActiveSubtreeBadge({ count, isDetaching }: { count: number; isDetaching: boolean }) {
   const { t } = useT("issues");
   if (count === 0) return null;
   return (
