@@ -14,6 +14,7 @@
 | `04-tests/` | Validation | 测试报告（基于 `f9b602d6`，注：分支后续重写为 `23c6ed5c`，需重跑） |
 | `05-review/` | Review | 代码审查报告（基于最终 tip `23c6ed5c`，含独立复验） |
 | `06-docs/` | Documentation | 用户交互指南 / API 契约 / Release Notes / Changelog（CLO-225） |
+| `07-deployment/` | DevOps | 部署报告 / 健康检查 / 冒烟验证 / 回滚方案（CLO-226） |
 
 ## 关键结论
 
