@@ -226,7 +226,12 @@
     "empty_column": "无 issue",
     "empty_grouping": "没有匹配的 issue",
     "no_value": "未设置",
-    "ordered_by": "按{{field}}排序"
+    "ordered_by": "按{{field}}排序",
+    "expand_subtree": "展开子任务",
+    "collapse_subtree": "折叠子任务",
+    "subtree_count": "子任务 +{{count}}",
+    "detach_hint": "将转为顶层任务",
+    "subtree_sync_failed": "部分子任务状态未同步"
   },
   "detail": {
     "not_found": "这个 issue 不存在或已在该工作区被删除。",

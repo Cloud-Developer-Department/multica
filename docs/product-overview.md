@@ -171,14 +171,14 @@ Issue 对应的概念在 Linear 叫 Issue、在 Jira 叫 Ticket、在 GitHub 叫
 #### 视图
 
 - **List 列表视图**：表格形式，可按 status/priority/assignee/creator/project 过滤、按名称/优先级/截止日/手动位置排序；支持开放和已完成分页。
-- **Board 看板视图**：Kanban，按状态分列；支持拖拽（拖动会自动切到"手动排序"模式）。
+- **Board 看板视图**：Kanban，按状态分列；父子 issue 以树形展示（父卡可展开/折叠、子卡缩进、跟随父列显示）；支持拖拽——拖父卡整棵子树一起移动、拖子卡跨列脱离父任务转顶层（拖拽会自动切到"手动排序"模式）。
 - **My Issues 我的议题**：专属视图，三个 scope：分配给我 / 我创建的 / 我的 agent 负责的。
 
 #### 交互
 
 - **快速创建**：侧边栏单行快速创建、或弹窗富文本创建（支持草稿本地持久化）
 - **批量操作**：多选后批量改 status/priority/assignee/删除
-- **子 issue**：父 issue 显示子任务完成比例圆环
+- **子 issue**：父 issue 显示子任务完成比例圆环；看板内可展开/折叠子树，子项跟随父列显示（详见 [看板交互说明](../deliverables/board-tree-2026-08-05/06-docs/board-tree-interaction.md)）
 - **订阅（subscribe）**：默认 creator、assignee、被 @ 的人会自动订阅
 - **Reaction**：issue 和评论都能加 emoji 反应
 - **Pin 固定**：把 issue 置顶到侧边栏快捷栏

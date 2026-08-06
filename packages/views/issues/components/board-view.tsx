@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useMemo, useEffect, useRef, memo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   DndContext,
   DragOverlay,
@@ -13,7 +13,6 @@ import {
   type DragOverEvent,
 } from "@dnd-kit/core";
 import type { QueryKey } from "@tanstack/react-query";
-import { arrayMove } from "@dnd-kit/sortable";
 import { toast } from "sonner";
 import type {
   Issue,
@@ -25,6 +24,7 @@ import type {
 } from "@multica/core/types";
 import { useLoadMoreByAssigneeGroup, useLoadMoreByStatus } from "@multica/core/issues/mutations";
 import type { AssigneeGroupedIssuesFilter, IssueSortParam, MyIssuesFilter } from "@multica/core/issues/queries";
+import { childrenByParentsOptions } from "@multica/core/issues/queries";
 import { useViewStore } from "@multica/core/issues/stores/view-store-context";
 import { propertyIdFromViewKey } from "@multica/core/issues/stores/view-store";
 import { propertyListOptions, useSetIssueProperty, useUnsetIssueProperty } from "@multica/core/properties";
@@ -37,6 +37,7 @@ import { HiddenColumnsPanel, HiddenColumnRow } from "./hidden-columns-panel";
 import { InfiniteScrollSentinel } from "./infinite-scroll-sentinel";
 import { ListLoadMoreFooter } from "./list-load-more-footer";
 import type { ChildProgress } from "./list-row";
+import { collectSubtreeIds, buildChildrenMap, type BoardNodeInfo } from "./board-tree-model";
 import type { IssueCreateDefaults } from "../surface/types";
 import type {
   IssueStatusPageState,
@@ -47,19 +48,22 @@ import type {
   IssueGroupPageState,
 } from "../surface/use-issue-group-branches";
 import { useDragSettle } from "./use-drag-settle";
+import { useIssueSurfaceActionsOptional } from "../surface/actions-context";
 import { useT } from "../../i18n";
 import {
   type DragMoveUpdates,
   makeKanbanCollision,
   statusGroupId,
   assigneeGroupId,
-  buildColumns,
-  computePosition,
+  buildBoardTreeColumns,
+  computeBlockPosition,
   findColumn,
-  getMoveAnchors,
-  insertIdByPosition,
-  issueMatchesGroup,
+  getSubtreeBlock,
+  getSubtreeMoveAnchors,
+  getSubtreeSyncUpdates,
   getMoveUpdates,
+  moveBlockInto,
+  moveBlockWithin,
   propertyGroupId,
 } from "../utils/drag-utils";
 
@@ -199,6 +203,8 @@ function BoardViewImpl({
   const { t } = useT("issues");
   const storeGrouping = useViewStore((s) => s.grouping);
   const sortBy = useViewStore((s) => s.sortBy);
+  const boardCollapsedParents = useViewStore((s) => s.boardCollapsedParents);
+  const toggleBoardParentCollapsed = useViewStore((s) => s.toggleBoardParentCollapsed);
   const boardWsId = useWorkspaceId();
   const { data: workspaceProperties = [] } = useQuery(propertyListOptions(boardWsId));
   const groupingPropertyId = propertyIdFromViewKey(storeGrouping);
@@ -402,6 +408,82 @@ function BoardViewImpl({
     [groupIds],
   );
 
+  // --- Tree state ---
+  // Collapse state is board-scoped (independent of the table's) so switching
+  // views never shares expansion state. `showSubIssues` controls whether the
+  // tree renders at all: when off the query returns roots only, and we feed
+  // the tree build an empty progress map so no chevrons appear either.
+  const showSubIssues = useViewStore((s) => s.showSubIssues);
+  const collapsedSet = useMemo(
+    () => new Set(boardCollapsedParents),
+    [boardCollapsedParents],
+  );
+  const treeProgressMap = showSubIssues ? childProgressMap : EMPTY_PROGRESS_MAP;
+  // Loaded direct children (from the flat page), used to detect pagination
+  // boundary parents for the lazy children fetch.
+  const loadedChildrenMap = useMemo(
+    () => buildChildrenMap(groupedIssues),
+    [groupedIssues],
+  );
+  // Expanded parents that still have unloaded children (R2): the parent is on
+  // the current page but some of its children landed on a later one, so the
+  // tree would otherwise render with missing branches. Lazily pull the full
+  // child subset when the parent is expanded.
+  const queryClient = useQueryClient();
+  const expandedParentsNeedingChildren = useMemo(() => {
+    if (!showSubIssues) return [];
+    const ids = new Set<string>();
+    for (const issue of groupedIssues) {
+      if (collapsedSet.has(issue.id)) continue;
+      const progress = childProgressMap.get(issue.id);
+      if (!progress || progress.total === 0) continue;
+      const loaded = loadedChildrenMap.get(issue.id)?.length ?? 0;
+      if (loaded < progress.total) ids.add(issue.id);
+    }
+    return Array.from(ids).sort();
+  }, [
+    showSubIssues,
+    groupedIssues,
+    collapsedSet,
+    childProgressMap,
+    loadedChildrenMap,
+  ]);
+  const { data: fetchedChildrenMap } = useQuery(
+    childrenByParentsOptions(boardWsId, expandedParentsNeedingChildren, queryClient),
+  );
+  // Merge lazily-fetched children into the flat issue list used for tree
+  // building so expanded branches render completely.
+  const treeIssues = useMemo(() => {
+    if (!fetchedChildrenMap || fetchedChildrenMap.size === 0) return groupedIssues;
+    const byId = new Map(groupedIssues.map((i) => [i.id, i]));
+    const extra: Issue[] = [];
+    for (const children of fetchedChildrenMap.values()) {
+      for (const child of children) {
+        if (!byId.has(child.id)) {
+          byId.set(child.id, child);
+          extra.push(child);
+        }
+      }
+    }
+    return extra.length === 0 ? groupedIssues : [...groupedIssues, ...extra];
+  }, [groupedIssues, fetchedChildrenMap]);
+  // childrenMap for subtree collection (drag payloads + DragOverlay badge).
+  const childrenMap = useMemo(() => buildChildrenMap(treeIssues), [treeIssues]);
+  const treeBuild = useMemo(
+    () =>
+      buildBoardTreeColumns(
+        treeIssues,
+        groups,
+        grouping,
+        collapsedSet,
+        treeProgressMap,
+        groupingOptionIds,
+      ),
+    [treeIssues, groups, grouping, collapsedSet, treeProgressMap, groupingOptionIds],
+  );
+  const nodeInfo = treeBuild.nodeInfo;
+  const surfaceActions = useIssueSurfaceActionsOptional();
+
   // --- Drag state ---
   const [activeIssue, setActiveIssue] = useState<Issue | null>(null);
   // Shared drag/settle primitive: owns the local column mirror, the
@@ -418,27 +500,43 @@ function BoardViewImpl({
     recentlyMovedRef,
     settleVersion,
     beginSettle,
-  } = useDragSettle(() => buildColumns(groupedIssues, groups, grouping, groupingOptionIds));
+  } = useDragSettle(() => treeBuild.columns);
 
   useEffect(() => {
     if (!isDraggingRef.current && !isSettlingRef.current) {
-      setColumns(buildColumns(groupedIssues, groups, grouping, groupingOptionIds));
+      setColumns(treeBuild.columns);
     }
-  }, [groupedIssues, groups, grouping, groupingOptionIds, settleVersion, setColumns, isDraggingRef, isSettlingRef]);
+  }, [treeBuild, settleVersion, setColumns, isDraggingRef, isSettlingRef]);
 
   // --- Issue map ---
   // Frozen during drag so BoardColumn/DraggableBoardCard props stay
   // referentially stable even if a TQ refetch lands mid-drag.
   const issueMap = useMemo(() => {
     const map = new Map<string, Issue>();
-    for (const issue of groupedIssues) map.set(issue.id, issue);
+    for (const issue of treeIssues) map.set(issue.id, issue);
     return map;
-  }, [groupedIssues]);
+  }, [treeIssues]);
 
   const issueMapRef = useRef(issueMap);
   if (!isDraggingRef.current && !isSettlingRef.current) {
     issueMapRef.current = issueMap;
   }
+  // nodeInfo / childrenMap frozen alongside the issue map so the drag payload
+  // and block math read the same tree the frozen columns were built from.
+  const nodeInfoRef = useRef(nodeInfo);
+  if (!isDraggingRef.current && !isSettlingRef.current) {
+    nodeInfoRef.current = nodeInfo;
+  }
+  const childrenMapRef = useRef(childrenMap);
+  if (!isDraggingRef.current && !isSettlingRef.current) {
+    childrenMapRef.current = childrenMap;
+  }
+  // Descendants that would ride along a subtree move of the dragged card
+  // (drives the DragOverlay "+N 子" badge).
+  const activeSubtreeCount = useMemo(
+    () => (activeIssue ? collectSubtreeIds(childrenMapRef.current, activeIssue.id).length : 0),
+    [activeIssue],
+  );
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -471,11 +569,12 @@ function BoardViewImpl({
         if (sortBy !== "position") return prev;
 
         recentlyMovedRef.current = true;
-        const oldIds = prev[activeCol]!.filter((id) => id !== activeId);
-        const newIds = [...prev[overCol]!];
-        const overIndex = newIds.indexOf(overId);
-        const insertIndex = overIndex >= 0 ? overIndex : newIds.length;
-        newIds.splice(insertIndex, 0, activeId);
+        // Move the whole subtree block (not just the dragged card) so the
+        // preview matches the eventual two-phase write.
+        const block = getSubtreeBlock(prev[activeCol]!, activeId, nodeInfoRef.current);
+        const blockSet = new Set(block);
+        const oldIds = prev[activeCol]!.filter((id) => !blockSet.has(id));
+        const newIds = moveBlockInto(prev[overCol] ?? [], block, overId);
         return { ...prev, [activeCol]: oldIds, [overCol]: newIds };
       });
     },
@@ -488,8 +587,7 @@ function BoardViewImpl({
       isDraggingRef.current = false;
       setActiveIssue(null);
 
-      const resetColumns = () =>
-        setColumns(buildColumns(groupedIssues, groups, grouping, groupingOptionIds));
+      const resetColumns = () => setColumns(treeBuild.columns);
 
       if (!over) {
         resetColumns();
@@ -507,14 +605,21 @@ function BoardViewImpl({
         return;
       }
 
-      // Same-column reorder (manual sort only)
+      const map = issueMapRef.current;
+      const currentIssue = map.get(activeId);
+      // Subtree block = the dragged card plus every node currently rendering
+      // under it (its expanded descendants, contiguous in the flattened
+      // column). Collapsed children are absent from the sequence and cannot
+      // leak into the block.
+      const block = getSubtreeBlock(cols[activeCol]!, activeId, nodeInfoRef.current);
+      const blockSet = new Set(block);
+      const descendantIds = collectSubtreeIds(childrenMapRef.current, activeId);
+
+      // Same-column reorder (manual sort only): move the whole block as a unit.
       let finalColumns = cols;
       if (activeCol === overCol && sortBy === "position") {
-        const ids = cols[activeCol]!;
-        const oldIndex = ids.indexOf(activeId);
-        const newIndex = ids.indexOf(overId);
-        if (oldIndex !== -1 && newIndex !== -1 && oldIndex !== newIndex) {
-          const reordered = arrayMove(ids, oldIndex, newIndex);
+        const reordered = moveBlockWithin(cols[activeCol]!, block, overId);
+        if (reordered.join("\u0000") !== cols[activeCol]!.join("\u0000")) {
           finalColumns = { ...cols, [activeCol]: reordered };
           setColumns(finalColumns);
         }
@@ -533,72 +638,99 @@ function BoardViewImpl({
         return;
       }
 
-      const map = issueMapRef.current;
-
       if (sortBy !== "position") {
-        // Cross-column: only update group (status/assignee), keep original position.
-        const currentIssue = map.get(activeId);
-        if (!currentIssue || issueMatchesGroup(currentIssue, finalGroup)) {
+        // Cross-column: only update group (status/assignee), keep original
+        // position. Same-column drops are a no-op even for children, whose
+        // own group value may differ from the column they render in.
+        if (!currentIssue || activeCol === overCol) {
           resetColumns();
           return;
         }
-        // Optimistically move the card into the target column *now*. Without
-        // this, the sortBy != "position" path never touches local columns on
-        // drop, so onDragOver having been a no-op leaves the card in its origin
-        // column for the whole request — it only jumps across when the mutation
-        // settles. That is the "snaps back to origin, then moves" glitch.
-        // Placement mirrors the cache (insertByPosition) so the settle rebuild
-        // from TanStack Query is a visual no-op.
-        const targetIds = insertIdByPosition(
-          (cols[overCol] ?? []).filter((id) => id !== activeId),
-          activeId,
-          currentIssue.position,
-          map,
-        );
+        // Optimistically move the whole subtree block into the target column
+        // *now* (mirrors the old single-card optimistic move; the block form
+        // keeps expanded children together during the request).
+        const targetIds = moveBlockInto(cols[overCol] ?? [], block, overId);
         setColumns((prev) => {
-          const fromIds = (prev[activeCol] ?? []).filter((cid) => cid !== activeId);
+          const fromIds = (prev[activeCol] ?? []).filter((cid) => !blockSet.has(cid));
           return { ...prev, [activeCol]: fromIds, [overCol]: targetIds };
         });
-        onMoveIssue(
-          activeId,
-          {
-            ...getMoveUpdates(finalGroup, currentIssue.position),
-            ...getMoveAnchors(targetIds, activeId),
-          },
-          beginSettle(),
-        );
+        // D4: a child dragged out of its parent's column is detached — it
+        // becomes a top-level task in the target column. Detachment only fires
+        // when the parent is visible in the current view: a sub-issue whose
+        // parent is filtered/paged out renders as a root (D2), so dragging it
+        // is a plain root move that must not silently clear the parent link.
+        // The card's own subtree follows it (D3 recursive), so descendants
+        // still get synced below.
+        const isDetach =
+          !!currentIssue.parent_issue_id &&
+          map.has(currentIssue.parent_issue_id);
+        const updates: DragMoveUpdates = {
+          ...getMoveUpdates(finalGroup, currentIssue.position),
+          ...getSubtreeMoveAnchors(targetIds, block),
+          ...(isDetach ? { parent_issue_id: null as string | null } : {}),
+        };
+        onMoveIssue(activeId, updates, beginSettle());
         applyPropertyGroupValue(finalGroup, activeId);
+        // Two-phase: descendants batch-sync the group field (status/assignee;
+        // property columns skip — R5, the parent moves alone).
+        const sync = getSubtreeSyncUpdates(finalGroup);
+        if (sync && descendantIds.length > 0) {
+          void surfaceActions?.batchUpdate(descendantIds, sync).catch(() => {
+            toast.error(t(($) => $.board.subtree_sync_failed));
+          });
+        }
         return;
       }
 
       const finalIds = finalColumns[finalCol]!;
-      const newPosition = computePosition(finalIds, activeId, map);
-      const currentIssue = map.get(activeId);
+      const newPosition = computeBlockPosition(finalIds, block, map);
+      const currentIssuePos = map.get(activeId);
 
       if (
-        currentIssue &&
-        issueMatchesGroup(currentIssue, finalGroup) &&
-        currentIssue.position === newPosition
+        currentIssuePos &&
+        activeCol === finalCol &&
+        currentIssuePos.position === newPosition
       ) {
         return;
       }
 
+      const crossColumn = activeCol !== finalCol;
+      const isDetach =
+        crossColumn &&
+        !!currentIssuePos?.parent_issue_id &&
+        map.has(currentIssuePos.parent_issue_id);
+      // Same-column reorder writes position ONLY — never the group field, since
+      // a child rendered under its parent may carry a different status/assignee
+      // than the column it lives in (follow-the-parent column semantics).
+      const updates: DragMoveUpdates = crossColumn
+        ? {
+            ...getMoveUpdates(finalGroup, newPosition),
+            ...getSubtreeMoveAnchors(finalIds, block),
+            ...(isDetach ? { parent_issue_id: null as string | null } : {}),
+          }
+        : {
+            position: newPosition,
+            ...getSubtreeMoveAnchors(finalIds, block),
+          };
       // beginSettle() holds the lock and returns the onSettled callback that
       // releases it and resyncs local columns from the cache: a no-op on
       // success (onSuccess already patched the moved card in place), the revert
       // on error (onError restored the snapshot). Without it a failed move would
       // strand the card at the drop target, since onSettled no longer refetches.
-      onMoveIssue(
-        activeId,
-        {
-          ...getMoveUpdates(finalGroup, newPosition),
-          ...getMoveAnchors(finalIds, activeId),
-        },
-        beginSettle(),
-      );
-      applyPropertyGroupValue(finalGroup, activeId);
+      onMoveIssue(activeId, updates, beginSettle());
+      if (crossColumn) {
+        // Property value changes apply only when crossing columns — a child
+        // nested in a property column keeps its own value on a plain reorder.
+        applyPropertyGroupValue(finalGroup, activeId);
+        const sync = getSubtreeSyncUpdates(finalGroup);
+        if (sync && descendantIds.length > 0) {
+          void surfaceActions?.batchUpdate(descendantIds, sync).catch(() => {
+            toast.error(t(($) => $.board.subtree_sync_failed));
+          });
+        }
+      }
     },
-    [groupedIssues, groups, grouping, groupingOptionIds, onMoveIssue, groupIds, groupMap, sortBy, beginSettle, columnsRef, isDraggingRef, setColumns, applyPropertyGroupValue],
+    [treeBuild, onMoveIssue, groupIds, groupMap, sortBy, beginSettle, columnsRef, isDraggingRef, setColumns, applyPropertyGroupValue, surfaceActions, t],
   );
 
   return (
@@ -633,6 +765,8 @@ function BoardViewImpl({
                   group={group}
                   issueIds={columns[group.id] ?? EMPTY_IDS}
                   issueMap={issueMapRef.current}
+                  nodeInfo={nodeInfoRef.current}
+                  onToggleCollapsed={toggleBoardParentCollapsed}
                   childProgressMap={childProgressMap}
                   projectMap={projectMap}
                   page={statusPagination[group.status]}
@@ -646,6 +780,8 @@ function BoardViewImpl({
                   group={group}
                   issueIds={columns[group.id] ?? EMPTY_IDS}
                   issueMap={issueMapRef.current}
+                  nodeInfo={nodeInfoRef.current}
+                  onToggleCollapsed={toggleBoardParentCollapsed}
                   childProgressMap={childProgressMap}
                   projectMap={projectMap}
                   myIssuesOpts={myIssuesOpts}
@@ -662,6 +798,8 @@ function BoardViewImpl({
                   group={group}
                   issueIds={columns[group.id] ?? EMPTY_IDS}
                   issueMap={issueMapRef.current}
+                  nodeInfo={nodeInfoRef.current}
+                  onToggleCollapsed={toggleBoardParentCollapsed}
                   childProgressMap={childProgressMap}
                   projectMap={projectMap}
                   page={groupPagination[group.id]!}
@@ -675,6 +813,8 @@ function BoardViewImpl({
                   group={group}
                   issueIds={columns[group.id] ?? EMPTY_IDS}
                   issueMap={issueMapRef.current}
+                  nodeInfo={nodeInfoRef.current}
+                  onToggleCollapsed={toggleBoardParentCollapsed}
                   childProgressMap={childProgressMap}
                   projectMap={projectMap}
                   queryKey={assigneeGroupQueryKey}
@@ -690,6 +830,8 @@ function BoardViewImpl({
                   group={group}
                   issueIds={columns[group.id] ?? EMPTY_IDS}
                   issueMap={issueMapRef.current}
+                  nodeInfo={nodeInfoRef.current}
+                  onToggleCollapsed={toggleBoardParentCollapsed}
                   childProgressMap={childProgressMap}
                   projectMap={projectMap}
                   projectId={projectId}
@@ -739,11 +881,42 @@ function BoardViewImpl({
                   ? projectMap?.get(activeIssue.project_id)
                   : undefined
               }
+              hasChildren={(childProgressMap.get(activeIssue.id)?.total ?? 0) > 0}
+            />
+            <ActiveSubtreeBadge
+              count={activeSubtreeCount}
+              isDetaching={
+                !!activeIssue.parent_issue_id &&
+                issueMapRef.current.has(activeIssue.parent_issue_id)
+              }
             />
           </div>
         ) : null}
       </DragOverlay>
     </DndContext>
+  );
+}
+
+/**
+ * Drag-preview badge for subtree moves: shows how many descendants ride along
+ * when the dragged card has children, and the detach hint when the dragged
+ * card is itself a sub-issue (cross-column drops turn it into a top-level
+ * task, D4).
+ */
+export function ActiveSubtreeBadge({ count, isDetaching }: { count: number; isDetaching: boolean }) {
+  const { t } = useT("issues");
+  if (count === 0) return null;
+  return (
+    <div className="mt-1 flex flex-col gap-0.5">
+      <span className="inline-flex w-fit items-center gap-1 rounded-full bg-background px-2 py-0.5 text-[11px] font-medium tabular-nums text-foreground shadow-sm border border-border">
+        {t(($) => $.board.subtree_count, { count })}
+      </span>
+      {isDetaching && (
+        <span className="inline-flex w-fit items-center rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-medium text-amber-700 shadow-sm border border-amber-500/30">
+          {t(($) => $.board.detach_hint)}
+        </span>
+      )}
+    </div>
   );
 }
 
@@ -753,6 +926,8 @@ const PaginatedAssigneeBoardColumn = memo(function PaginatedAssigneeBoardColumn(
   issueMap,
   childProgressMap,
   projectMap,
+  nodeInfo,
+  onToggleCollapsed,
   queryKey,
   filter,
   sort,
@@ -763,6 +938,8 @@ const PaginatedAssigneeBoardColumn = memo(function PaginatedAssigneeBoardColumn(
   group: BoardColumnGroup;
   issueIds: string[];
   issueMap: Map<string, Issue>;
+  nodeInfo?: ReadonlyMap<string, BoardNodeInfo>;
+  onToggleCollapsed?: (issueId: string) => void;
   childProgressMap?: Map<string, ChildProgress>;
   projectMap?: Map<string, Project>;
   queryKey: QueryKey;
@@ -787,6 +964,8 @@ const PaginatedAssigneeBoardColumn = memo(function PaginatedAssigneeBoardColumn(
       group={group}
       issueIds={issueIds}
       issueMap={issueMap}
+      nodeInfo={nodeInfo}
+      onToggleCollapsed={onToggleCollapsed}
       childProgressMap={childProgressMap}
       projectMap={projectMap}
       totalCount={total}
@@ -809,6 +988,8 @@ const ServerPaginatedBoardColumn = memo(function ServerPaginatedBoardColumn({
   group,
   issueIds,
   issueMap,
+  nodeInfo,
+  onToggleCollapsed,
   childProgressMap,
   projectMap,
   page,
@@ -819,6 +1000,8 @@ const ServerPaginatedBoardColumn = memo(function ServerPaginatedBoardColumn({
   group: BoardColumnGroup;
   issueIds: string[];
   issueMap: Map<string, Issue>;
+  nodeInfo?: ReadonlyMap<string, BoardNodeInfo>;
+  onToggleCollapsed?: (issueId: string) => void;
   childProgressMap?: Map<string, ChildProgress>;
   projectMap?: Map<string, Project>;
   page: IssueStatusPageState | IssueGroupPageState;
@@ -841,6 +1024,8 @@ const ServerPaginatedBoardColumn = memo(function ServerPaginatedBoardColumn({
       group={group}
       issueIds={issueIds}
       issueMap={issueMap}
+      nodeInfo={nodeInfo}
+      onToggleCollapsed={onToggleCollapsed}
       childProgressMap={childProgressMap}
       projectMap={projectMap}
       totalCount={page.total}
@@ -856,6 +1041,8 @@ const PaginatedBoardColumn = memo(function PaginatedBoardColumn({
   group,
   issueIds,
   issueMap,
+  nodeInfo,
+  onToggleCollapsed,
   childProgressMap,
   projectMap,
   myIssuesOpts,
@@ -867,6 +1054,8 @@ const PaginatedBoardColumn = memo(function PaginatedBoardColumn({
   group: BoardColumnGroup & { status: IssueStatus };
   issueIds: string[];
   issueMap: Map<string, Issue>;
+  nodeInfo?: ReadonlyMap<string, BoardNodeInfo>;
+  onToggleCollapsed?: (issueId: string) => void;
   childProgressMap?: Map<string, ChildProgress>;
   projectMap?: Map<string, Project>;
   myIssuesOpts?: { scope: string; filter: MyIssuesFilter };
@@ -885,6 +1074,8 @@ const PaginatedBoardColumn = memo(function PaginatedBoardColumn({
       group={group}
       issueIds={issueIds}
       issueMap={issueMap}
+      nodeInfo={nodeInfo}
+      onToggleCollapsed={onToggleCollapsed}
       childProgressMap={childProgressMap}
       projectMap={projectMap}
       totalCount={total}

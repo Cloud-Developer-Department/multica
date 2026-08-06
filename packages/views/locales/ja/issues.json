@@ -226,7 +226,12 @@
     "empty_column": "イシューなし",
     "empty_grouping": "一致するイシューがありません",
     "no_value": "値なし",
-    "ordered_by": "{{field}} 順に並べたボード"
+    "ordered_by": "{{field}} 順に並べたボード",
+    "expand_subtree": "サブイシューを展開",
+    "collapse_subtree": "サブイシューを折りたたむ",
+    "subtree_count": "サブイシュー +{{count}}",
+    "detach_hint": "トップレベルのイシューになります",
+    "subtree_sync_failed": "一部のサブイシューを移動できませんでした"
   },
   "detail": {
     "not_found": "このイシューはこのワークスペースに存在しないか、削除されています。",

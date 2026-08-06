@@ -23,6 +23,7 @@ import { useViewStoreApi } from "@multica/core/issues/stores/view-store-context"
 import { StatusHeading } from "./status-heading";
 import { DraggableBoardCard } from "./board-card";
 import type { ChildProgress } from "./list-row";
+import type { BoardNodeInfo } from "./board-tree-model";
 import { useT } from "../../i18n";
 import { ActorAvatar } from "../../common/actor-avatar";
 import { useRestoredScrollOffset, useRestoredScrollRef } from "../../platform";
@@ -89,6 +90,7 @@ export const BoardColumn = memo(function BoardColumn({
   group,
   issueIds,
   issueMap,
+  nodeInfo,
   childProgressMap,
   projectMap,
   totalCount,
@@ -96,10 +98,12 @@ export const BoardColumn = memo(function BoardColumn({
   projectId,
   onCreateIssue,
   sortLabel,
+  onToggleCollapsed,
 }: {
   group: BoardColumnGroup;
   issueIds: string[];
   issueMap: Map<string, Issue>;
+  nodeInfo?: ReadonlyMap<string, BoardNodeInfo>;
   childProgressMap?: Map<string, ChildProgress>;
   projectMap?: Map<string, Project>;
   totalCount?: number;
@@ -108,6 +112,7 @@ export const BoardColumn = memo(function BoardColumn({
   projectId?: string;
   onCreateIssue?: (defaults: IssueCreateDefaults) => void;
   sortLabel?: string | null;
+  onToggleCollapsed?: (issueId: string) => void;
 }) {
   const status = group.status;
   const cfg = status ? STATUS_CONFIG[status] : null;
@@ -156,21 +161,32 @@ export const BoardColumn = memo(function BoardColumn({
   );
 
   const computeItemKey = (_index: number, issue: Issue) => issue.id;
-  const itemContent = (index: number, issue: Issue) => (
-    // pt-2 on every card but the first reproduces the previous `space-y-2`
-    // gap; padding (not margin) is inside Virtuoso's measured item box so its
-    // height math stays correct.
-    <div className={index === 0 ? undefined : "pt-2"}>
-      <DraggableBoardCard
-        issue={issue}
-        childProgress={childProgressMap?.get(issue.id)}
-        project={
-          issue.project_id ? projectMap?.get(issue.project_id) : undefined
-        }
-        disableSorting={!!sortLabel}
-      />
-    </div>
-  );
+  const itemContent = (index: number, issue: Issue) => {
+    const node = nodeInfo?.get(issue.id);
+    return (
+      // pt-2 on every card but the first reproduces the previous `space-y-2`
+      // gap; padding (not margin) is inside Virtuoso's measured item box so its
+      // height math stays correct.
+      <div className={index === 0 ? undefined : "pt-2"}>
+        <DraggableBoardCard
+          issue={issue}
+          childProgress={childProgressMap?.get(issue.id)}
+          project={
+            issue.project_id ? projectMap?.get(issue.project_id) : undefined
+          }
+          disableSorting={!!sortLabel}
+          depth={node?.depth ?? 0}
+          hasChildren={node?.hasChildren ?? false}
+          collapsed={node?.collapsed ?? false}
+          onToggleCollapsed={
+            node?.hasChildren && onToggleCollapsed
+              ? () => onToggleCollapsed(issue.id)
+              : undefined
+          }
+        />
+      </div>
+    );
+  };
 
   return (
     <div style={{ width: BOARD_COL_WIDTH }} className={`flex shrink-0 flex-col rounded-xl ${cfg?.columnBg ?? "bg-muted/40"} p-2`}>

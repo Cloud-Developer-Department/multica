@@ -59,9 +59,16 @@ type IssueResponse struct {
 	Metadata map[string]any `json:"metadata"`
 	// Properties is the custom-property value bag keyed by property definition
 	// UUID (see property.go). Always emitted, mirroring Metadata.
-	Properties  map[string]any          `json:"properties"`
-	Reactions   []IssueReactionResponse `json:"reactions,omitempty"`
-	Attachments []AttachmentResponse    `json:"attachments,omitempty"`
+	Properties map[string]any `json:"properties"`
+	// DirectChildCount is the number of direct sub-issues for this issue
+	// (one level, workspace-wide — not constrained by the list's own filters,
+	// so a Board parent card always shows its full sub-task tree). Only set
+	// when the list is queried with ?hierarchy=true; the nil pointer keeps the
+	// field absent for existing consumers (0 = no children, undefined = not
+	// requested).
+	DirectChildCount *int64                  `json:"direct_child_count,omitempty"`
+	Reactions        []IssueReactionResponse `json:"reactions,omitempty"`
+	Attachments      []AttachmentResponse    `json:"attachments,omitempty"`
 	// Labels are bulk-attached by list/detail endpoints so the client can render
 	// chips without an N+1 round-trip per row. Pointer + omitempty so paths that
 	// don't load labels (e.g. UpdateIssue, batch UpdateIssues, the issue:updated
@@ -174,6 +181,45 @@ func (h *Handler) labelsByIssue(ctx context.Context, wsUUID pgtype.UUID, issueID
 			CreatedAt:    timestampToString(r.CreatedAt),
 			UpdatedAt:    timestampToString(r.UpdatedAt),
 		})
+	}
+	return out
+}
+
+// directChildCountsByIssue bulk-counts direct sub-issues for the given parent
+// issue IDs. Counts are workspace-wide by design: the Board hierarchy flag
+// needs the full sub-task tree of a listed parent even when the list itself is
+// filtered to one status column. Returns a map keyed by parent issue UUID
+// string; on error or empty input returns an empty map — hierarchy counts are
+// an enhancement, and a failure should degrade to a flat list rather than fail
+// the whole call (mirrors labelsByIssue).
+func (h *Handler) directChildCountsByIssue(ctx context.Context, parentIDs []pgtype.UUID) map[string]int64 {
+	out := map[string]int64{}
+	if len(parentIDs) == 0 {
+		return out
+	}
+	rows, err := h.DB.Query(ctx, `
+		SELECT parent_issue_id, COUNT(*)::bigint
+		FROM issue
+		WHERE parent_issue_id = ANY($1::uuid[])
+		GROUP BY parent_issue_id
+	`, parentIDs)
+	if err != nil {
+		slog.Warn("count direct child issues failed", "error", err)
+		return out
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var parentID pgtype.UUID
+		var count int64
+		if err := rows.Scan(&parentID, &count); err != nil {
+			slog.Warn("count direct child issues scan failed", "error", err)
+			return out
+		}
+		out[uuidToString(parentID)] = count
+	}
+	if err := rows.Err(); err != nil {
+		slog.Warn("count direct child issues rows failed", "error", err)
+		return out
 	}
 	return out
 }
@@ -784,6 +830,13 @@ func (h *Handler) ListIssues(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// hierarchy=true augments each row with a workspace-wide
+	// direct_child_count so the Board view can render collapse toggles and
+	// child-count badges without a per-card N+1 (see
+	// directChildCountsByIssue). Off by default; existing list consumers keep
+	// their current shape.
+	hierarchy := r.URL.Query().Get("hierarchy") == "true"
+
 	// Parse optional filter params. Malformed UUIDs in filters return 400 —
 	// silently coercing them to a zero UUID would mask a client bug and let
 	// the query return an empty result set (or worse, match a NULL row).
@@ -1256,9 +1309,21 @@ LIMIT %s OFFSET %s`, whereSql, orderBy, limitRef, offsetRef)
 		ids[i] = issue.ID
 	}
 	labelsMap := h.labelsByIssue(ctx, wsUUID, ids)
+	var childCounts map[string]int64
+	if hierarchy {
+		childCounts = h.directChildCountsByIssue(ctx, ids)
+	}
 	resp := make([]IssueResponse, len(issues))
 	for i, issue := range issues {
 		resp[i] = issueListRowToResponse(issue, prefix)
+		if hierarchy {
+			if count, ok := childCounts[resp[i].ID]; ok {
+				resp[i].DirectChildCount = &count
+			} else {
+				zero := int64(0)
+				resp[i].DirectChildCount = &zero
+			}
+		}
 		labels := labelsMap[resp[i].ID]
 		if labels == nil {
 			labels = []LabelResponse{}
