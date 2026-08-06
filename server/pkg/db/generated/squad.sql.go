@@ -86,18 +86,19 @@ func (q *Queries) CountSquadMembers(ctx context.Context, squadID pgtype.UUID) (i
 }
 
 const createSquad = `-- name: CreateSquad :one
-INSERT INTO squad (workspace_id, name, description, leader_id, creator_id, avatar_url)
-VALUES ($1, $2, $3, $4, $5, $6)
+INSERT INTO squad (workspace_id, name, description, leader_id, creator_id, avatar_url, instructions)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
 RETURNING id, workspace_id, name, description, leader_id, creator_id, created_at, updated_at, archived_at, archived_by, avatar_url, instructions
 `
 
 type CreateSquadParams struct {
-	WorkspaceID pgtype.UUID `json:"workspace_id"`
-	Name        string      `json:"name"`
-	Description string      `json:"description"`
-	LeaderID    pgtype.UUID `json:"leader_id"`
-	CreatorID   pgtype.UUID `json:"creator_id"`
-	AvatarUrl   pgtype.Text `json:"avatar_url"`
+	WorkspaceID  pgtype.UUID `json:"workspace_id"`
+	Name         string      `json:"name"`
+	Description  string      `json:"description"`
+	LeaderID     pgtype.UUID `json:"leader_id"`
+	CreatorID    pgtype.UUID `json:"creator_id"`
+	AvatarUrl    pgtype.Text `json:"avatar_url"`
+	Instructions string      `json:"instructions"`
 }
 
 func (q *Queries) CreateSquad(ctx context.Context, arg CreateSquadParams) (Squad, error) {
@@ -108,6 +109,7 @@ func (q *Queries) CreateSquad(ctx context.Context, arg CreateSquadParams) (Squad
 		arg.LeaderID,
 		arg.CreatorID,
 		arg.AvatarUrl,
+		arg.Instructions,
 	)
 	var i Squad
 	err := row.Scan(

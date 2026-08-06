@@ -1117,3 +1117,234 @@ func TestApplyResourceTemplate_IdempotentReplay(t *testing.T) {
 		t.Fatal("replayed apply must not create a second agent")
 	}
 }
+
+// ---------------------------------------------------------------------------
+// CLO-250 DEF-4 / DEF-5: top-level overrides consumption
+// (architect ruling 2026-08-06: zero migration; squad model/permission_mode
+// must be rejected with CONFIG_NOT_ALLOWED, not silently ignored)
+// ---------------------------------------------------------------------------
+
+// TestApplyResourceTemplate_SquadOverrides verifies the squad row consumes
+// top-level overrides.{Description, Instructions} (CLO-250 DEF-4 regression).
+func TestApplyResourceTemplate_SquadOverrides(t *testing.T) {
+	if testHandler == nil || testPool == nil {
+		t.Skip("database not available")
+	}
+	squadName := uniqueName("apply-squad-ov")
+	leaderName := uniqueName("apply-ov-lead")
+	members := []map[string]any{
+		memberRef("lead", "leader", map[string]any{
+			"name": leaderName, "description": "l", "instructions": "",
+			"thinking_level": "", "service_tier": "", "permission_mode": "private",
+			"custom_args": []string{}, "skills": []any{}, "custom_env_keys": []any{}, "mcp_servers": []any{},
+		}),
+	}
+	code, resp, body := doApply(t, map[string]any{
+		"template":          squadTemplate(squadName, "embedded", "lead", members),
+		"target_runtime_id": handlerTestRuntimeID(t),
+		"overrides": map[string]any{
+			"description":  "override-description",
+			"instructions": "override-instructions",
+		},
+	})
+	if code != http.StatusOK || !resp.Applied {
+		t.Fatalf("squad apply with overrides failed: code=%d resp=%+v body=%s", code, resp, body)
+	}
+	if len(resp.Created.Squads) != 1 {
+		t.Fatalf("created squads = %+v", resp.Created.Squads)
+	}
+	squadID := resp.Created.Squads[0].ID
+	for _, a := range resp.Created.Agents {
+		cleanupAgentByID(t, a.ID)
+	}
+	t.Cleanup(func() {
+		testPool.Exec(context.Background(), `DELETE FROM squad WHERE id = $1`, squadID)
+	})
+
+	var description, instructions string
+	if err := testPool.QueryRow(context.Background(),
+		`SELECT description, instructions FROM squad WHERE id = $1`, squadID).
+		Scan(&description, &instructions); err != nil {
+		t.Fatalf("load squad: %v", err)
+	}
+	if description != "override-description" {
+		t.Errorf("squad description = %q, want override-description", description)
+	}
+	if instructions != "override-instructions" {
+		t.Errorf("squad instructions = %q, want override-instructions", instructions)
+	}
+}
+
+// TestApplyResourceTemplate_SquadModelPermissionConfigNotAllowed verifies
+// that model / permission_mode overrides on a squad template fail with
+// CONFIG_NOT_ALLOWED instead of being silently ignored or written to dead
+// columns (architect ruling).
+func TestApplyResourceTemplate_SquadModelPermissionConfigNotAllowed(t *testing.T) {
+	if testHandler == nil || testPool == nil {
+		t.Skip("database not available")
+	}
+	squadName := uniqueName("apply-squad-na")
+	leaderName := uniqueName("apply-na-lead")
+	members := []map[string]any{
+		memberRef("lead", "leader", map[string]any{
+			"name": leaderName, "description": "l", "instructions": "",
+			"thinking_level": "", "service_tier": "", "permission_mode": "private",
+			"custom_args": []string{}, "skills": []any{}, "custom_env_keys": []any{}, "mcp_servers": []any{},
+		}),
+	}
+	code, resp, body := doApply(t, map[string]any{
+		"template":          squadTemplate(squadName, "embedded", "lead", members),
+		"target_runtime_id": handlerTestRuntimeID(t),
+		"overrides": map[string]any{
+			"model":           "gpt-4o",
+			"permission_mode": "public_to",
+		},
+	})
+	if code != http.StatusOK {
+		t.Fatalf("apply code = %d, want 200 (validation result in body): %s", code, body)
+	}
+	if resp.Applied {
+		t.Fatal("apply must not succeed when squad overrides carry model/permission_mode")
+	}
+	if len(resp.Created.Agents) != 0 || len(resp.Created.Squads) != 0 {
+		t.Fatalf("nothing must be created: %+v", resp.Created)
+	}
+	paths := map[string]bool{}
+	for _, e := range resp.Errors {
+		if e.Code == resourcetmpl.ErrorCode(CodeConfigNotAllowed) {
+			paths[e.Path] = true
+		}
+	}
+	if !paths["overrides.model"] {
+		t.Errorf("missing CONFIG_NOT_ALLOWED for overrides.model; errors = %+v", resp.Errors)
+	}
+	if !paths["overrides.permission_mode"] {
+		t.Errorf("missing CONFIG_NOT_ALLOWED for overrides.permission_mode; errors = %+v", resp.Errors)
+	}
+}
+
+// TestApplyResourceTemplate_AgentTopLevelOverrides verifies top-level
+// overrides.{Description, Instructions, Model, PermissionMode} are consumed
+// for agent templates (the top-level resource of the apply).
+func TestApplyResourceTemplate_AgentTopLevelOverrides(t *testing.T) {
+	if testHandler == nil || testPool == nil {
+		t.Skip("database not available")
+	}
+	name := uniqueName("apply-top-ov")
+	code, resp, body := doApply(t, map[string]any{
+		"template":          agentTemplate(name, nil),
+		"target_runtime_id": handlerTestRuntimeID(t),
+		"overrides": map[string]any{
+			"description":     "top-desc",
+			"instructions":    "top-inst",
+			"model":           "top-model",
+			"permission_mode": "public_to",
+		},
+	})
+	if code != http.StatusOK || !resp.Applied {
+		t.Fatalf("apply failed: code=%d resp=%+v body=%s", code, resp, body)
+	}
+	cleanupAgentByID(t, resp.Created.Agents[0].ID)
+	var description, instructions, model, permissionMode string
+	if err := testPool.QueryRow(context.Background(),
+		`SELECT description, instructions, COALESCE(model, ''), permission_mode FROM agent WHERE id = $1`, resp.Created.Agents[0].ID).
+		Scan(&description, &instructions, &model, &permissionMode); err != nil {
+		t.Fatalf("load agent: %v", err)
+	}
+	if description != "top-desc" {
+		t.Errorf("agent description = %q, want top-desc", description)
+	}
+	if instructions != "top-inst" {
+		t.Errorf("agent instructions = %q, want top-inst", instructions)
+	}
+	if model != "top-model" {
+		t.Errorf("agent model = %q, want top-model", model)
+	}
+	if permissionMode != "public_to" {
+		t.Errorf("agent permission_mode = %q, want public_to", permissionMode)
+	}
+}
+
+// TestApplyResourceTemplate_AgentTopLevelPermissionOverride verifies the
+// top-level overrides.permission_mode is consumed for agent templates when
+// the spec does not set one (CLO-250 DEF-5 regression).
+func TestApplyResourceTemplate_AgentTopLevelPermissionOverride(t *testing.T) {
+	if testHandler == nil || testPool == nil {
+		t.Skip("database not available")
+	}
+	name := uniqueName("apply-top-pm")
+	// Build a template whose spec omits permission_mode entirely so the
+	// top-level override is the only source (the helper defaults to private).
+	tmpl := agentTemplate(name, nil)
+	delete(tmpl["spec"].(map[string]any)["agent"].(map[string]any), "permission_mode")
+	code, resp, body := doApply(t, map[string]any{
+		"template":          tmpl,
+		"target_runtime_id": handlerTestRuntimeID(t),
+		"overrides":         map[string]any{"permission_mode": "public_to"},
+	})
+	if code != http.StatusOK || !resp.Applied {
+		t.Fatalf("apply failed: code=%d resp=%+v body=%s", code, resp, body)
+	}
+	cleanupAgentByID(t, resp.Created.Agents[0].ID)
+	var permissionMode string
+	if err := testPool.QueryRow(context.Background(),
+		`SELECT permission_mode FROM agent WHERE id = $1`, resp.Created.Agents[0].ID).Scan(&permissionMode); err != nil {
+		t.Fatalf("load agent: %v", err)
+	}
+	if permissionMode != "public_to" {
+		t.Errorf("agent permission_mode = %q, want public_to (top-level override consumed)", permissionMode)
+	}
+}
+
+// TestApplyResourceTemplate_PermissionOverridePrecedence pins the fallback
+// order per the architect ruling: per-ref override > top-level override >
+// spec value > private default.
+func TestApplyResourceTemplate_PermissionOverridePrecedence(t *testing.T) {
+	if testHandler == nil || testPool == nil {
+		t.Skip("database not available")
+	}
+	// 1) Top-level override beats the spec value.
+	name := uniqueName("apply-pm-top")
+	code, resp, _ := doApply(t, map[string]any{
+		"template":          agentTemplate(name, map[string]any{"permission_mode": "public_to"}),
+		"target_runtime_id": handlerTestRuntimeID(t),
+		"overrides":         map[string]any{"permission_mode": "private"},
+	})
+	if code != http.StatusOK || !resp.Applied {
+		t.Fatalf("top-level-wins apply failed: code=%d resp=%+v", code, resp)
+	}
+	cleanupAgentByID(t, resp.Created.Agents[0].ID)
+	var pm string
+	if err := testPool.QueryRow(context.Background(),
+		`SELECT permission_mode FROM agent WHERE id = $1`, resp.Created.Agents[0].ID).Scan(&pm); err != nil {
+		t.Fatal(err)
+	}
+	if pm != "private" {
+		t.Errorf("top-level override should beat spec: permission_mode = %q, want private", pm)
+	}
+
+	// 2) Per-ref override beats the top-level override (kind=agent template;
+	// per-ref is keyed by the agent name per the Q10 ruling).
+	perRefName := uniqueName("apply-pm-perref")
+	code, resp, _ = doApply(t, map[string]any{
+		"template":          agentTemplate(perRefName, nil),
+		"target_runtime_id": handlerTestRuntimeID(t),
+		"overrides": map[string]any{
+			"permission_mode": "private",
+			"agents": map[string]any{
+				perRefName: map[string]any{"permission_mode": "public_to"},
+			},
+		},
+	})
+	if code != http.StatusOK || !resp.Applied {
+		t.Fatalf("per-ref-wins apply failed: code=%d resp=%+v", code, resp)
+	}
+	cleanupAgentByID(t, resp.Created.Agents[0].ID)
+	if err := testPool.QueryRow(context.Background(),
+		`SELECT permission_mode FROM agent WHERE id = $1`, resp.Created.Agents[0].ID).Scan(&pm); err != nil {
+		t.Fatal(err)
+	}
+	if pm != "public_to" {
+		t.Errorf("per-ref override should beat top-level: permission_mode = %q, want public_to", pm)
+	}
+}
