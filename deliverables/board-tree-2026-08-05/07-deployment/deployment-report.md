@@ -154,3 +154,12 @@ cd apps/web && nohup pnpm exec next start -p 3000 &
 |----|------|
 | 风险 | 🟢 部署环境共享目录曾出现 node_modules 被清理（外部环境行为），已重建并恢复；观察期继续监控 |
 | 回滚 | 前端可 `git checkout 0cd16cde^`（或旧分支）重建；后端已有 `server.bin.bak-20260806` 备份，见第八节 |
+
+## 十四、最终交付状态
+
+- ✅ PR #12 已合入主干（`0cd16cde`）
+- ✅ 远端冗余分支 `feature/board-tree` 已清理
+- ✅ 部署报告更新经 PR #13 合入（`2f116d19`）
+- ✅ 合入后冒烟全通过：`/health`、`/login`、`/api/config`、`/issues/board`（含 `/{slug}/issues/board` 200）
+- ✅ hierarchy 数据层功能复验通过（BSM-1/BSM-2 父子链路）
+- ⏳ 观察期：继续监控 Error Rate / CPU / Memory / 告警
