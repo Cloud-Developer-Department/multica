@@ -2510,6 +2510,52 @@ func (q *Queries) GetAgent(ctx context.Context, id pgtype.UUID) (Agent, error) {
 	return i, err
 }
 
+const getAgentByWorkspaceAndName = `-- name: GetAgentByWorkspaceAndName :one
+SELECT id, workspace_id, name, avatar_url, runtime_mode, runtime_config, visibility, status, max_concurrent_tasks, owner_id, created_at, updated_at, description, runtime_id, instructions, archived_at, archived_by, custom_env, custom_args, mcp_config, model, thinking_level, composio_toolkit_allowlist, permission_mode, kind, system_key, disabled_runtime_skills, service_tier FROM agent
+WHERE workspace_id = $1 AND name = $2 AND archived_at IS NULL AND kind = 'user'
+`
+
+type GetAgentByWorkspaceAndNameParams struct {
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	Name        string      `json:"name"`
+}
+
+func (q *Queries) GetAgentByWorkspaceAndName(ctx context.Context, arg GetAgentByWorkspaceAndNameParams) (Agent, error) {
+	row := q.db.QueryRow(ctx, getAgentByWorkspaceAndName, arg.WorkspaceID, arg.Name)
+	var i Agent
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.Name,
+		&i.AvatarUrl,
+		&i.RuntimeMode,
+		&i.RuntimeConfig,
+		&i.Visibility,
+		&i.Status,
+		&i.MaxConcurrentTasks,
+		&i.OwnerID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Description,
+		&i.RuntimeID,
+		&i.Instructions,
+		&i.ArchivedAt,
+		&i.ArchivedBy,
+		&i.CustomEnv,
+		&i.CustomArgs,
+		&i.McpConfig,
+		&i.Model,
+		&i.ThinkingLevel,
+		&i.ComposioToolkitAllowlist,
+		&i.PermissionMode,
+		&i.Kind,
+		&i.SystemKey,
+		&i.DisabledRuntimeSkills,
+		&i.ServiceTier,
+	)
+	return i, err
+}
+
 const getAgentForClaimUpdate = `-- name: GetAgentForClaimUpdate :one
 SELECT id, workspace_id, name, avatar_url, runtime_mode, runtime_config, visibility, status, max_concurrent_tasks, owner_id, created_at, updated_at, description, runtime_id, instructions, archived_at, archived_by, custom_env, custom_args, mcp_config, model, thinking_level, composio_toolkit_allowlist, permission_mode, kind, system_key, disabled_runtime_skills, service_tier FROM agent
 WHERE id = $1

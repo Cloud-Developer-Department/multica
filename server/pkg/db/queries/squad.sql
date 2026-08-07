@@ -229,3 +229,7 @@ LEFT JOIN issue i
        ON i.id = atq.issue_id
 WHERE sm.squad_id = $1
 ORDER BY sm.created_at ASC, atq.dispatched_at DESC NULLS LAST;
+
+-- name: GetSquadByWorkspaceAndName :one
+SELECT * FROM squad
+WHERE workspace_id = $1 AND name = $2 AND archived_at IS NULL;
