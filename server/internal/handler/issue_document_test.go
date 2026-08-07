@@ -460,3 +460,310 @@ func TestIssueDocumentVersionConflictNotGeneric500(t *testing.T) {
 	}
 	t.Logf("version race: %d created, %d conflict(409)", created, conflicts)
 }
+
+// newIssueDocumentAgentRequest builds a POST /api/issue-documents request that
+// authenticates as an agent actor (server-stamped X-Actor-Source=task_token +
+// X-Agent-ID, the shape resolveActor trusts as the first-class agent signal).
+func newIssueDocumentAgentRequest(agentID string, body map[string]any) *http.Request {
+	req := newRequest("POST", "/api/issue-documents", body)
+	req.Header.Set("X-Actor-Source", "task_token")
+	req.Header.Set("X-Agent-ID", agentID)
+	return req
+}
+
+// seedTestAttachment inserts a bare attachment row in the given workspace and
+// returns its id. No storage URL is written (the row only feeds the
+// GetAttachmentByIDOnly ownership check).
+func seedTestAttachment(t *testing.T, workspaceID string) string {
+	t.Helper()
+	var id string
+	if err := testPool.QueryRow(context.Background(), `
+		INSERT INTO attachment (workspace_id, uploader_type, uploader_id, filename, url, content_type, size_bytes)
+		VALUES ($1, 'member', $2, 'seed.txt', 'seed://attachment', 'text/plain', 0)
+		RETURNING id::text
+	`, workspaceID, testUserID).Scan(&id); err != nil {
+		t.Fatalf("seed attachment: %v", err)
+	}
+	t.Cleanup(func() {
+		testPool.Exec(context.Background(), `DELETE FROM attachment WHERE id = $1`, id)
+	})
+	return id
+}
+
+// seedForeignWorkspace creates a throwaway workspace (for cross-workspace
+// attachment ownership tests) and returns its id.
+func seedForeignWorkspace(t *testing.T) string {
+	t.Helper()
+	var id string
+	if err := testPool.QueryRow(context.Background(), `
+		INSERT INTO workspace (name, slug, description, issue_prefix)
+		VALUES ('Issue Doc Foreign', 'issue-doc-foreign-' || gen_random_uuid()::text, 'temporary', 'FOR')
+		RETURNING id::text
+	`).Scan(&id); err != nil {
+		t.Fatalf("seed foreign workspace: %v", err)
+	}
+	t.Cleanup(func() {
+		testPool.Exec(context.Background(), `DELETE FROM workspace WHERE id = $1`, id)
+	})
+	return id
+}
+
+// TestCreateIssueDocument_PlainMemberForbidden locks the CLO-284 S1 write gate:
+// the POST /api/issue-documents channel must be reserved for agent identities
+// and workspace owner/admin members. A plain member gets 403 even though the
+// route sits in the RequireWorkspaceMember group — the page is read-only for
+// them and accepting their writes would let any member forge review status or
+// overwrite real stage artifacts.
+func TestCreateIssueDocument_PlainMemberForbidden(t *testing.T) {
+	issueID := newIssueDocumentFixture(t)
+	plainMemberID := createPlainMember(t, "issue-doc-plain@multica.test")
+
+	w := httptest.NewRecorder()
+	req := newRequestAs(plainMemberID, "POST", "/api/issue-documents", map[string]any{
+		"issue_id": issueID,
+		"type":     "requirements",
+		"title":    "requirement.md",
+		"content":  "# Requirements",
+	})
+	testHandler.CreateIssueDocument(w, req)
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("plain member create: expected 403, got %d: %s", w.Code, w.Body.String())
+	}
+
+	// Same gate for a forged `approved` status: a plain member must not be able
+	// to fake a review outcome even if the identity gate were bypassed.
+	w = httptest.NewRecorder()
+	req = newRequestAs(plainMemberID, "POST", "/api/issue-documents", map[string]any{
+		"issue_id": issueID,
+		"type":     "requirements",
+		"title":    "requirement.md",
+		"content":  "# Requirements",
+		"status":   "approved",
+	})
+	testHandler.CreateIssueDocument(w, req)
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("plain member forged approved: expected 403, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+// TestCreateIssueDocument_AgentIdentityAllowed verifies the primary legitimate
+// write path: an agent actor (task-token) may register a document. The
+// author_type recorded must be "agent".
+func TestCreateIssueDocument_AgentIdentityAllowed(t *testing.T) {
+	issueID := newIssueDocumentFixture(t)
+	agentID := createHandlerTestAgent(t, "issue-doc-writer-agent", nil)
+
+	w := httptest.NewRecorder()
+	req := newIssueDocumentAgentRequest(agentID, map[string]any{
+		"issue_id": issueID,
+		"type":     "architecture",
+		"title":    "architecture.md",
+		"content":  "# Architecture",
+	})
+	testHandler.CreateIssueDocument(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("agent create: expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+	var created IssueDocumentDetailResponse
+	if err := json.NewDecoder(w.Body).Decode(&created); err != nil {
+		t.Fatalf("decode created document: %v", err)
+	}
+	if created.AuthorType != "agent" || created.AuthorID != agentID {
+		t.Fatalf("expected agent author %s, got type=%s id=%s", agentID, created.AuthorType, created.AuthorID)
+	}
+}
+
+// TestCreateIssueDocument_AgentCannotSetReviewStatus verifies a flow agent may
+// register a document in draft/submitted state but must NOT be able to set a
+// review status (approved/rejected) — that decision belongs to an owner/admin
+// review path (CLO-284 S1).
+func TestCreateIssueDocument_AgentCannotSetReviewStatus(t *testing.T) {
+	issueID := newIssueDocumentFixture(t)
+	agentID := createHandlerTestAgent(t, "issue-doc-review-agent", nil)
+
+	for _, status := range []string{"approved", "rejected"} {
+		w := httptest.NewRecorder()
+		req := newIssueDocumentAgentRequest(agentID, map[string]any{
+			"issue_id": issueID,
+			"type":     "security",
+			"title":    "security.md",
+			"content":  "# Security",
+			"status":   status,
+		})
+		testHandler.CreateIssueDocument(w, req)
+		if w.Code != http.StatusForbidden {
+			t.Fatalf("agent set %s: expected 403, got %d: %s", status, w.Code, w.Body.String())
+		}
+	}
+
+	// `superseded` is server-managed and never accepted from a client.
+	w := httptest.NewRecorder()
+	req := newIssueDocumentAgentRequest(agentID, map[string]any{
+		"issue_id": issueID,
+		"type":     "security",
+		"title":    "security.md",
+		"content":  "# Security",
+		"status":   "superseded",
+	})
+	testHandler.CreateIssueDocument(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("agent set superseded: expected 400, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+// TestCreateIssueDocument_OwnerCanSetReviewStatus verifies the owner/admin path
+// may still register a document with an explicit review status (the escaping
+// hatch for owners who review directly).
+func TestCreateIssueDocument_OwnerCanSetReviewStatus(t *testing.T) {
+	issueID := newIssueDocumentFixture(t)
+
+	w := httptest.NewRecorder()
+	req := newRequest("POST", "/api/issue-documents", map[string]any{
+		"issue_id": issueID,
+		"type":     "security",
+		"title":    "security.md",
+		"content":  "# Security",
+		"status":   "approved",
+	})
+	testHandler.CreateIssueDocument(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("owner create approved: expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+	var created IssueDocumentDetailResponse
+	if err := json.NewDecoder(w.Body).Decode(&created); err != nil {
+		t.Fatalf("decode created document: %v", err)
+	}
+	if created.Status != "approved" {
+		t.Fatalf("expected status approved, got %s", created.Status)
+	}
+}
+
+// TestCreateIssueDocument_FileAttachmentOwnership locks the CLO-284 S2 gate: a
+// file_attachment_id must exist and belong to the current workspace.
+func TestCreateIssueDocument_FileAttachmentOwnership(t *testing.T) {
+	issueID := newIssueDocumentFixture(t)
+	agentID := createHandlerTestAgent(t, "issue-doc-file-agent", nil)
+
+	// Non-existent attachment id → 400.
+	w := httptest.NewRecorder()
+	req := newIssueDocumentAgentRequest(agentID, map[string]any{
+		"issue_id":          issueID,
+		"type":              "deployment",
+		"title":             "deploy.txt",
+		"content_type":      "file",
+		"file_attachment_id": "00000000-0000-0000-0000-000000000000",
+	})
+	testHandler.CreateIssueDocument(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("missing attachment: expected 400, got %d: %s", w.Code, w.Body.String())
+	}
+
+	// Attachment from another workspace → 400.
+	foreignWorkspaceID := seedForeignWorkspace(t)
+	otherAttachmentID := seedTestAttachment(t, foreignWorkspaceID)
+	w = httptest.NewRecorder()
+	req = newIssueDocumentAgentRequest(agentID, map[string]any{
+		"issue_id":          issueID,
+		"type":              "deployment",
+		"title":             "deploy.txt",
+		"content_type":      "file",
+		"file_attachment_id": otherAttachmentID,
+	})
+	testHandler.CreateIssueDocument(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("cross-workspace attachment: expected 400, got %d: %s", w.Code, w.Body.String())
+	}
+
+	// Same-workspace attachment → 201.
+	ownAttachmentID := seedTestAttachment(t, testWorkspaceID)
+	w = httptest.NewRecorder()
+	req = newIssueDocumentAgentRequest(agentID, map[string]any{
+		"issue_id":          issueID,
+		"type":              "deployment",
+		"title":             "deploy.txt",
+		"content_type":      "file",
+		"file_attachment_id": ownAttachmentID,
+	})
+	testHandler.CreateIssueDocument(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("same-workspace attachment: expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+// TestCreateIssueDocument_TitleLengthCaps verifies the title length limit
+// (CLO-284 S3) rejects oversized titles.
+func TestCreateIssueDocument_TitleLengthCaps(t *testing.T) {
+	issueID := newIssueDocumentFixture(t)
+
+	longTitle := strings.Repeat("t", maxIssueDocumentTitleRunes+1)
+	w := httptest.NewRecorder()
+	req := newRequest("POST", "/api/issue-documents", map[string]any{
+		"issue_id": issueID,
+		"type":     "requirements",
+		"title":    longTitle,
+		"content":  "# Requirements",
+	})
+	testHandler.CreateIssueDocument(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("oversized title: expected 400, got %d: %s", w.Code, w.Body.String())
+	}
+
+	// A title exactly at the cap still succeeds.
+	okTitle := strings.Repeat("t", maxIssueDocumentTitleRunes)
+	w = httptest.NewRecorder()
+	req = newRequest("POST", "/api/issue-documents", map[string]any{
+		"issue_id": issueID,
+		"type":     "requirements",
+		"title":    okTitle,
+		"content":  "# Requirements",
+	})
+	testHandler.CreateIssueDocument(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("title at cap: expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+// TestIssueDocumentSearchEscapesWildcards verifies the q filter treats LIKE
+// wildcards literally instead of matching everything (CLO-284 S4, mirrors
+// ListIssues).
+func TestIssueDocumentSearchEscapesWildcards(t *testing.T) {
+	issueID := newIssueDocumentFixture(t)
+
+	w := httptest.NewRecorder()
+	req := newRequest("POST", "/api/issue-documents", map[string]any{
+		"issue_id": issueID,
+		"type":     "testing",
+		"title":    "report.md",
+		"content":  "# Report",
+	})
+	testHandler.CreateIssueDocument(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("create: expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+
+	// `%` alone must not act as a match-everything wildcard.
+	w = httptest.NewRecorder()
+	req = newRequest("GET", "/api/issue-documents?q=%25", nil)
+	testHandler.ListIssueDocuments(w, req)
+	var list struct {
+		Items []IssueDocumentResponse `json:"items"`
+		Total int64                   `json:"total"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&list); err != nil {
+		t.Fatalf("decode list: %v", err)
+	}
+	if list.Total != 0 {
+		t.Fatalf("q='%%': expected 0 hits (wildcard escaped), got %d", list.Total)
+	}
+
+	// `_` alone must not match any single-character title.
+	w = httptest.NewRecorder()
+	req = newRequest("GET", "/api/issue-documents?q=_", nil)
+	testHandler.ListIssueDocuments(w, req)
+	if err := json.NewDecoder(w.Body).Decode(&list); err != nil {
+		t.Fatalf("decode list: %v", err)
+	}
+	if list.Total != 0 {
+		t.Fatalf("q='_': expected 0 hits (wildcard escaped), got %d", list.Total)
+	}
+}

@@ -756,6 +756,11 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 	authRL := middleware.RateLimit(rdb, envPositiveInt("RATE_LIMIT_AUTH", 5), time.Minute, trustedProxies)
 	authVerifyRL := middleware.RateLimit(rdb, envPositiveInt("RATE_LIMIT_AUTH_VERIFY", 20), time.Minute, trustedProxies)
 	contactSalesRL := middleware.RateLimit(rdb, envPositiveInt("RATE_LIMIT_CONTACT_SALES", 5), time.Hour, trustedProxies)
+	// Write channel for issue-flow documents (POST /api/issue-documents). Each
+	// submission bumps the (issue, type) version and supersedes the previous
+	// one, so an unthrottled client could churn versions and drown the history
+	// (CLO-284 S5). Per-IP fixed-window, same shape as the auth limiters.
+	issueDocsWriteRL := middleware.RateLimit(rdb, envPositiveInt("RATE_LIMIT_ISSUE_DOCUMENTS_WRITE", 30), time.Minute, trustedProxies)
 	r.With(authRL).Post("/auth/send-code", h.SendCode)
 	r.With(authVerifyRL).Post("/auth/verify-code", h.VerifyCode)
 	r.With(authRL).Post("/auth/google", h.GoogleLogin)
@@ -1136,9 +1141,12 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 			// Issue-flow intermediate documents (Issue Documents tab, CLO-278).
 			// Read-only for workspace members; the POST registration is the write
 			// channel used by the CLI / flow agents to submit stage documents.
+			// The handler itself gates the write channel to agent identities or
+			// workspace owner/admin (CLO-284 S1); the per-IP rate limit caps
+			// version churn from a single caller (CLO-284 S5).
 			r.Route("/api/issue-documents", func(r chi.Router) {
 				r.Get("/", h.ListIssueDocuments)
-				r.Post("/", h.CreateIssueDocument)
+				r.With(issueDocsWriteRL).Post("/", h.CreateIssueDocument)
 				r.Route("/{documentId}", func(r chi.Router) {
 					r.Get("/", h.GetIssueDocument)
 					r.Get("/versions", h.ListIssueDocumentVersions)

@@ -265,7 +265,10 @@ func (h *Handler) ListIssueDocuments(w http.ResponseWriter, r *http.Request) {
 	}
 	var qFilter pgtype.Text
 	if raw := strings.TrimSpace(r.URL.Query().Get("q")); raw != "" {
-		qFilter = strToText(raw)
+		// Escape LIKE wildcards so `%`/`_` in the query match literally instead
+		// of acting as wildcards (CLO-284 S4, mirrors ListIssues). The value is
+		// parameterized so this is about match precision, not injection.
+		qFilter = strToText(escapeLike(raw))
 	}
 
 	// Build WHERE + ORDER BY dynamically. `w.issue_prefix` powers the
@@ -462,20 +465,66 @@ type CreateIssueDocumentRequest struct {
 const (
 	maxIssueDocumentInlineContentBytes = 5 * 1024 * 1024
 	maxIssueDocumentRequestBytes       = 6 * 1024 * 1024
+	// maxIssueDocumentTitleRunes caps the title so a single row cannot carry an
+	// unbounded title (CLO-284 S3). The column is TEXT, so without this the
+	// title is limited only by the 6MB request body cap.
+	maxIssueDocumentTitleRunes = 500
 )
+
+// requireIssueDocumentWriteAccess enforces the POST /api/issue-documents gate
+// (CLO-284 S1): only agent identities (task-token auth or a validated
+// X-Agent-ID + X-Task-ID pair, per resolveActor) or workspace owner/admin
+// members may register documents. A plain workspace member gets 403 — the
+// Issue Documents page is read-only for them, and accepting their writes would
+// let any member forge review status or overwrite real stage artifacts.
+//
+// It returns the actor identity to record as the document author, and whether
+// the caller may set a review status (approved/rejected) at creation time:
+// owner/admin members may, flow agents may not (they propose; the review gate
+// is a human/owner decision).
+func (h *Handler) requireIssueDocumentWriteAccess(w http.ResponseWriter, r *http.Request, workspaceID string) (authorType string, authorID pgtype.UUID, canSetReviewStatus bool, ok bool) {
+	userID, ok := requireUserID(w, r)
+	if !ok {
+		return "", pgtype.UUID{}, false, false
+	}
+	actorType, actorID := h.resolveActor(r, userID, workspaceID)
+	if actorType == "agent" {
+		agentUUID, err := util.ParseUUID(actorID)
+		if err != nil {
+			writeError(w, http.StatusForbidden, "invalid agent identity")
+			return "", pgtype.UUID{}, false, false
+		}
+		return "agent", agentUUID, false, true
+	}
+	// Human member: must be owner/admin (same shape as requirePropertyAdmin).
+	member, roleOK := h.requireWorkspaceRole(w, r, workspaceID, "workspace not found", "owner", "admin")
+	if !roleOK {
+		return "", pgtype.UUID{}, false, false
+	}
+	return "member", member.ID, true, true
+}
 
 // CreateIssueDocument registers a new version of an issue-flow document. The
 // previous versions of the same (issue_id, type) are marked `superseded`
 // atomically (see IssueDocumentService.Submit). This endpoint is the write
 // channel used by the CLI / future flow agents; the Issue Documents page itself
 // is read-only.
+//
+// Access control (CLO-284 S1): only agent identities (task-token auth or a
+// validated X-Agent-ID + X-Task-ID pair) or workspace owner/admin members may
+// POST. A plain member gets 403. Creation never trusts a client-submitted
+// review status: `approved`/`rejected` require an owner/admin caller, and
+// `superseded` is a server-managed state that clients cannot set at all.
 func (h *Handler) CreateIssueDocument(w http.ResponseWriter, r *http.Request) {
-	userID, ok := requireUserID(w, r)
+	workspaceID := h.resolveWorkspaceID(r)
+	wsUUID, ok := parseUUIDOrBadRequest(w, workspaceID, "workspace id")
 	if !ok {
 		return
 	}
-	workspaceID := h.resolveWorkspaceID(r)
-	wsUUID, ok := parseUUIDOrBadRequest(w, workspaceID, "workspace id")
+
+	// Identity gate BEFORE decoding the body: reject unauthorized callers as
+	// early as possible (CLO-284 S1).
+	authorType, authorID, canSetReviewStatus, ok := h.requireIssueDocumentWriteAccess(w, r, workspaceID)
 	if !ok {
 		return
 	}
@@ -503,8 +552,13 @@ func (h *Handler) CreateIssueDocument(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "issue_id is required")
 		return
 	}
-	if strings.TrimSpace(req.Title) == "" {
+	title := strings.TrimSpace(req.Title)
+	if title == "" {
 		writeError(w, http.StatusBadRequest, "title is required")
+		return
+	}
+	if len([]rune(title)) > maxIssueDocumentTitleRunes {
+		writeError(w, http.StatusBadRequest, "title is too long")
 		return
 	}
 	docType := strings.TrimSpace(req.Type)
@@ -520,12 +574,26 @@ func (h *Handler) CreateIssueDocument(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid content_type")
 		return
 	}
+	// Status is not trusted from clients (CLO-284 S1): creation allows only
+	// `draft`/`submitted` by default; a review status (`approved`/`rejected`)
+	// requires an owner/admin caller and should instead come from a future
+	// review endpoint; `superseded` is server-managed and never accepted.
 	status := "submitted"
 	if req.Status != nil {
 		status = strings.TrimSpace(*req.Status)
 		if !validIssueDocumentStatuses[status] {
 			writeError(w, http.StatusBadRequest, "invalid status")
 			return
+		}
+		switch status {
+		case "superseded":
+			writeError(w, http.StatusBadRequest, "superseded is a server-managed status")
+			return
+		case "approved", "rejected":
+			if !canSetReviewStatus {
+				writeError(w, http.StatusForbidden, "only workspace owner/admin can set a review status")
+				return
+			}
 		}
 	}
 	if contentType == "file" {
@@ -554,28 +622,16 @@ func (h *Handler) CreateIssueDocument(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "invalid file_attachment_id")
 			return
 		}
+		// The attachment must exist and belong to the current workspace (CLO-284
+		// S2) — otherwise the document row can reference a dangling id or a
+		// cross-workspace attachment, producing dirty data. Mirrors
+		// loadAttachmentForDownload's workspace-ownership check.
+		att, err := h.Queries.GetAttachmentByIDOnly(r.Context(), u)
+		if err != nil || uuidToString(att.WorkspaceID) != workspaceID {
+			writeError(w, http.StatusBadRequest, "file_attachment_id must reference an attachment in the current workspace")
+			return
+		}
 		fileAttachmentID = u
-	}
-
-	actorType, actorID := h.resolveActor(r, userID, uuidToString(issue.WorkspaceID))
-	authorType := "member"
-	var authorID pgtype.UUID
-	switch actorType {
-	case "agent":
-		authorType = "agent"
-		agentUUID, err := util.ParseUUID(actorID)
-		if err != nil {
-			writeError(w, http.StatusForbidden, "invalid agent identity")
-			return
-		}
-		authorID = agentUUID
-	case "member":
-		member, err := h.getWorkspaceMember(r.Context(), userID, uuidToString(issue.WorkspaceID))
-		if err != nil {
-			writeError(w, http.StatusForbidden, "workspace member not found")
-			return
-		}
-		authorID = member.ID
 	}
 
 	doc, err := h.IssueDocumentService.Submit(r.Context(), service.SubmitIssueDocumentParams{
