@@ -10,7 +10,9 @@
 | `01-research/` | Research | ba-agent《业务需求分析报告》+《需求风险清单》（requirement_analysis.md / requirement_risk.md） |
 | `02-design/` | PM-Design | **PRD.md**（功能清单 / User Story / Mermaid 逻辑流程 / 异常状态处理规则 / 验收标准） |
 | `03-code/` | Dev-Task A | **teamtmpl 包**（types + loader + 10 条校验 + smoke 模板），见 `teamtmpl-package.md` |
+| `03-code/` | Dev-Task C | **team-template handler**（List/Get/Apply + 单事务三阶段 + 预 fetch），见 `team-template-handler.md` |
 | `04-tests/` | Dev-Task A | **teamtmpl 单测报告**（17 用例全绿），见 `teamtmpl-tests.md` |
+| `04-tests/` | Dev-Task C | **team-template handler 单测报告**（12 用例全绿），见 `team-template-handler-tests.md` |
 
 ## 关键结论
 

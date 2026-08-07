@@ -180,6 +180,24 @@ func checkUniqueNames[T any](kind string, items []T, getName func(int) string) e
 	return nil
 }
 
+// NewRegistry builds a Registry from an in-memory slice of templates, running
+// the same validation as Load. Useful for tests that need a deterministic
+// catalog without writing JSON files to the embedded templates dir.
+func NewRegistry(templates ...TeamTemplate) (*Registry, error) {
+	reg := &Registry{bySlug: make(map[string]TeamTemplate, len(templates))}
+	for _, t := range templates {
+		if err := validate(t, t.Slug+".json"); err != nil {
+			return nil, err
+		}
+		if _, dup := reg.bySlug[t.Slug]; dup {
+			return nil, fmt.Errorf("duplicate slug %q", t.Slug)
+		}
+		reg.bySlug[t.Slug] = t
+		reg.order = append(reg.order, t.Slug)
+	}
+	return reg, nil
+}
+
 // List returns all templates in deterministic load order.
 func (r *Registry) List() []TeamTemplate {
 	out := make([]TeamTemplate, 0, len(r.order))
