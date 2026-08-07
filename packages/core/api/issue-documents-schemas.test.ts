@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   EMPTY_ISSUE_DOCUMENT_DETAIL,
   EMPTY_ISSUE_DOCUMENT_LIST_RESPONSE,
+  EMPTY_ISSUE_DOCUMENT_VERSIONS_RESPONSE,
   IssueDocumentListResponseSchema,
   IssueDocumentDetailResponseSchema,
   IssueDocumentVersionsResponseSchema,
@@ -82,7 +83,7 @@ describe("issue document schemas", () => {
         ],
       },
       IssueDocumentVersionsResponseSchema,
-      { issue_id: "", type: "other", items: [] },
+      EMPTY_ISSUE_DOCUMENT_VERSIONS_RESPONSE,
       { endpoint: "test" },
     );
     expect(result.items).toHaveLength(2);

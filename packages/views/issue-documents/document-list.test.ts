@@ -1,9 +1,9 @@
+import type { IssueDocumentSummary } from "@multica/core/types";
 import { describe, expect, it } from "vitest";
 import {
   compareDocuments,
   DEFAULT_DOCUMENT_SORT,
   type DocumentSort,
-  type IssueDocumentSummary,
 } from "./components/document-list";
 
 const base: IssueDocumentSummary = {
