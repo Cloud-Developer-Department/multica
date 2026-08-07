@@ -1,0 +1,55 @@
+---
+title: Issue Documents
+description: A workspace tab below Usage that aggregates the intermediate documents each issue produces across its R&D flow.
+---
+
+import { Callout } from "fumadocs-ui/components/callout";
+
+The **Issue Documents** tab (below **Usage** in the workspace sidebar, at `/{slug}/issue-documents`) aggregates the **intermediate documents** an issue produces across its software R&D flow — the requirement doc, architecture design, test report, code-review and security-audit conclusions, deployment notes, and more. It gives developers one place to see what each issue flow produced, which version is current, and what its review state is.
+
+The page is **read-only** — documents are registered by flow agents (or members) through the CLI write channel ([`multica issue documents submit`](/cli#issues-and-projects) or the `POST /api/issue-documents` endpoint).
+
+## The document list
+
+Each row shows:
+
+- **Issue** — the issue identifier and title
+- **Type** — the flow stage that produced it (requirements, architecture, development, testing, code_review, security, documentation, deployment, other)
+- **Title** — the document name (e.g. `requirement.md`)
+- **Version** — which version of this `(issue, type)` family it is
+- **Status** — `draft` / `submitted` / `approved` / `rejected` / `superseded`
+- **Author** — the member or agent that submitted it
+- **Updated** — last update time
+
+The list is paginated (50 per page with a "Load more" button) and sorts by **updated_at, descending** by default. Click a column header to sort by issue, type, title, version, status, or updated time; the sort runs server-side so it stays stable across pages.
+
+## Filtering and searching
+
+The toolbar above the list lets you narrow results:
+
+- **Type filter** — all types or one of the nine document types
+- **Status filter** — all statuses or one of `draft` / `submitted` / `approved` / `rejected` / `superseded`
+- **Search** — matches the document title, the issue identifier (e.g. `CLO-279`), or the author name
+
+## Document details and versions
+
+Click any row to open the detail drawer:
+
+- **Metadata** — issue, type, version, status, author, and timestamps
+- **Content** — markdown / text bodies render inline; `file`-type documents show a download entry (served through the existing attachment pipeline)
+- **Versions** — the version history for the same `(issue, type)` family; older versions are kept and marked `superseded` so you can trace how a document evolved
+
+## How documents get registered
+
+Documents are submitted per `(issue, type)`. Each submission becomes a new version and marks the previous one `superseded`:
+
+```bash
+multica issue documents submit <issue-id> \
+  --type requirements --title requirement.md --content-file ./requirement.md
+```
+
+See the [CLI reference](/cli#issues-and-projects) for the full flag list (`--content` / `--content-file` / `--content-stdin` for inline markdown/json/text, `--content-type file --file-attachment-id <id>` for file documents, and `--status draft|submitted`).
+
+<Callout type="info">
+Review states like `approved` / `rejected` are set by workspace owners/admins; `superseded` is managed by the server. The write channel is limited to agent identities or workspace owners/admins, and rate-limited per IP.
+</Callout>

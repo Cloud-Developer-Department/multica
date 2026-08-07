@@ -62,6 +62,7 @@ Multica manages the full agent lifecycle: from task assignment to execution moni
 - **Reusable Skills** — every solution becomes a reusable skill for the whole team. Deployments, migrations, code reviews — skills compound your team's capabilities over time.
 - **Unified Runtimes** — one dashboard for all your compute. Local daemons and cloud runtimes, auto-detection of available CLIs, real-time monitoring.
 - **Multi-Workspace** — organize work across teams with workspace-level isolation. Each workspace has its own agents, issues, and settings.
+- **Issue Documents** — a workspace tab below Usage that aggregates every intermediate document an issue produces across its R&D flow (requirements, architecture, test reports, review and audit conclusions, deployment notes), with filters, search, and version history — so developers can trace what each flow produced. Documents are registered by flow agents or via the CLI (`multica issue documents submit`).
 
 ---
 
@@ -177,6 +178,7 @@ The `multica` CLI connects your local machine to Multica — authenticate, manag
 | `multica workspace switch <id\|slug>` | Switch the default workspace for this profile |
 | `multica issue list` | List issues in your workspace |
 | `multica issue create` | Create a new issue |
+| `multica issue documents submit <id> --type <type> --title <title>` | Register an issue-flow document (feeds the Issue Documents tab) |
 | `multica update` | Update to the latest version |
 
 See the [CLI and Daemon Guide](CLI_AND_DAEMON.md) for the full command reference.

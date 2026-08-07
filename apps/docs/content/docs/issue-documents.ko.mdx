@@ -1,0 +1,55 @@
+---
+title: Issue Documents
+description: Usage 아래에 있는 워크스페이스 탭. 이슈가 R&D 흐름에서 만든 중간 문서를 집계합니다.
+---
+
+import { Callout } from "fumadocs-ui/components/callout";
+
+**Issue Documents** 탭(사이드바의 **Usage** 바로 아래, `/{slug}/issue-documents`)은 이슈가 소프트웨어 R&D 흐름 전반에 걸쳐 생산한 **중간 문서**(요구사항 문서, 아키텍처 설계, 테스트 보고서, 코드 리뷰·보안 감사 결론, 배포 메모 등)를 집계합니다. 각 이슈 흐름에서 어떤 문서가 생산됐는지, 현재 버전이 무엇인지, 검토 상태가 어떤지를 한눈에 볼 수 있습니다.
+
+이 페이지는 **읽기 전용**입니다. 문서는 흐름 에이전트(또는 멤버)가 CLI 쓰기 채널([`multica issue documents submit`](/cli#issues-and-projects) 또는 `POST /api/issue-documents`)을 통해 등록합니다.
+
+## 문서 목록
+
+각 행은 다음을 표시합니다:
+
+- **Issue** — 이슈 식별자와 제목
+- **유형** — 문서를 생산한 흐름 단계(requirements, architecture, development, testing, code_review, security, documentation, deployment, other)
+- **제목** — 문서 이름(예: `requirement.md`)
+- **버전** — 이 `(issue, type)` 패밀리의 몇 번째 버전인지
+- **상태** — `draft` / `submitted` / `approved` / `rejected` / `superseded`
+- **작성자** — 문서를 등록한 멤버 또는 에이전트
+- **업데이트** — 마지막 업데이트 시각
+
+목록은 **업데이트 시각 내림차순**으로 페이지당 50개씩 표시됩니다("Load more" 버튼으로 추가 로드). 열 헤더를 클릭하면 issue·유형·제목·버전·상태·업데이트 시각으로 정렬할 수 있습니다. 정렬은 서버 측에서 수행되므로 페이지를 넘어도 안정적입니다.
+
+## 필터와 검색
+
+목록 위의 도구 모음에서 좁힐 수 있습니다:
+
+- **유형 필터** — 전체 또는 9가지 문서 유형
+- **상태 필터** — 전체 또는 `draft` / `submitted` / `approved` / `rejected` / `superseded`
+- **검색** — 문서 제목, 이슈 식별자(예: `CLO-279`), 작성자 이름과 매칭
+
+## 문서 상세와 버전 이력
+
+행을 클릭하면 상세 서랍이 열립니다:
+
+- **메타데이터** — issue, 유형, 버전, 상태, 작성자, 일시
+- **본문** — markdown / 텍스트 본문은 인라인으로 렌더링. `file` 유형은 다운로드 항목 표시(기존 첨부 파이프라인 경유)
+- **버전 이력** — 동일 `(issue, type)` 패밀리의 이력. 이전 버전은 보존되고 `superseded`로 표시됩니다
+
+## 문서 등록 방법
+
+문서는 `(issue, type)` 단위로 등록됩니다. 등록할 때마다 새 버전이 만들어지고 이전 버전은 `superseded`가 됩니다:
+
+```bash
+multica issue documents submit <issue-id> \
+  --type requirements --title requirement.md --content-file ./requirement.md
+```
+
+전체 플래그는 [CLI 참조](/cli#issues-and-projects)를 확인하세요(markdown/json/text는 `--content` / `--content-file` / `--content-stdin`, 파일 유형은 `--content-type file --file-attachment-id <id>`, 상태는 `--status draft|submitted`).
+
+<Callout type="info">
+`approved` / `rejected` 같은 검토 상태는 워크스페이스 owner/admin이 설정합니다. `superseded`는 서버가 관리합니다. 쓰기 채널은 에이전트 신원 또는 owner/admin으로 제한되며 IP당 요청 수가 제한됩니다.
+</Callout>

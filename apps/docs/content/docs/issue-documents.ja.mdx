@@ -1,0 +1,55 @@
+---
+title: Issue ドキュメント
+description: Usage の下にあるワークスペースタブ。イシューの R&D フローで生み出される中間ドキュメントを集約します。
+---
+
+import { Callout } from "fumadocs-ui/components/callout";
+
+**Issue Documents** タブ（サイドバーの **Usage** の直下、`/{slug}/issue-documents`）は、イシューがソフトウェア R&D フローで生み出した**中間ドキュメント**（要件定義、アーキテクチャ設計、テストレポート、コードレビュー・セキュリティ監査の結論、デプロイメモなど）を集約します。各イシューフローでどのドキュメントが作られ、現行バージョンが何か、レビュー状態がどうかを一覧できます。
+
+このページは**読み取り専用**です。ドキュメントはフローエージェント（またはメンバー）が CLI の書き込みチャネル（[`multica issue documents submit`](/cli#issues-and-projects) または `POST /api/issue-documents`）で登録します。
+
+## ドキュメント一覧
+
+各行は以下を表示します:
+
+- **Issue** — イシュー識別子とタイトル
+- **種別** — 生成したフロー段階（requirements、architecture、development、testing、code_review、security、documentation、deployment、other）
+- **タイトル** — ドキュメント名（例: `requirement.md`）
+- **バージョン** — この `(issue, type)` ファミリーの何版目か
+- **ステータス** — `draft` / `submitted` / `approved` / `rejected` / `superseded`
+- **作成者** — 登録したメンバーまたはエージェント
+- **更新日時** — 最終更新日時
+
+一覧は**更新日時の降順**でページングされます（1 ページ 50 件、「Load more」で追加読み込み）。列ヘッダーをクリックすると issue・種別・タイトル・バージョン・ステータス・更新日時で並べ替えできます。並べ替えはサーバー側で実行されるため、ページをまたいでも安定します。
+
+## フィルターと検索
+
+一覧上部のツールバーで絞り込みできます:
+
+- **種別フィルター** — すべて、または 9 種のドキュメント種別
+- **ステータスフィルター** — すべて、または `draft` / `submitted` / `approved` / `rejected` / `superseded`
+- **検索** — ドキュメントタイトル、イシュー識別子（例: `CLO-279`）、作成者名にマッチ
+
+## ドキュメント詳細とバージョン履歴
+
+行をクリックすると詳細ドロワーが開きます:
+
+- **メタデータ** — issue、種別、バージョン、ステータス、作成者、日時
+- **本文** — markdown / テキスト本文はインラインで描画。`file` 型はダウンロードエントリを表示（既存の添付パイプライン経由）
+- **バージョン履歴** — 同じ `(issue, type)` ファミリーの履歴。旧バージョンは保持され `superseded` とマークされます
+
+## ドキュメントの登録方法
+
+ドキュメントは `(issue, type)` ごとに登録されます。登録ごとに新しいバージョンが作られ、直前のバージョンは `superseded` になります:
+
+```bash
+multica issue documents submit <issue-id> \
+  --type requirements --title requirement.md --content-file ./requirement.md
+```
+
+完全なフラグ一覧は [CLI リファレンス](/cli#issues-and-projects) を参照してください（markdown/json/text は `--content` / `--content-file` / `--content-stdin`、ファイル型は `--content-type file --file-attachment-id <id>`、ステータスは `--status draft|submitted`）。
+
+<Callout type="info">
+`approved` / `rejected` などのレビュー状態はワークスペースの owner/admin が設定します。`superseded` はサーバーが管理します。書き込みチャネルはエージェント身分または owner/admin に限定され、IP 単位でレート制限されます。
+</Callout>

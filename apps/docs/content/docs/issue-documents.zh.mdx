@@ -1,0 +1,55 @@
+---
+title: Issue 流程文档
+description: 位于「用量」下方的顶层标签页，按 issue 整合其研发流程各阶段产出的中间文档。
+---
+
+import { Callout } from "fumadocs-ui/components/callout";
+
+**Issue 流程文档**（侧边栏「用量」正下方，路由 `/{slug}/issue-documents`）按 issue 整合其软件研发流程各阶段产出的**中间文档**——需求文档、架构设计、测试报告、代码审查与安全审计结论、部署说明等。开发者可以集中查看每条 issue 流程产出了哪些文档、当前是哪个版本、审核状态如何。
+
+本页面为**只读**。文档由流程智能体（或成员）通过 CLI 写入通道（[`multica issue documents submit`](/cli#issues-and-projects) 或 `POST /api/issue-documents` 接口）登记。
+
+## 文档清单
+
+每条记录包含：
+
+- **Issue** — 所属 issue 的标识符与标题
+- **类型** — 产出该文档的流程阶段（需求文档、架构文档、开发产物、测试报告、代码审查、安全审计、文档、部署、其他）
+- **标题** — 文档名称（如 `requirement.md`）
+- **版本** — 该 `(issue, type)` 文档家族的第几个版本
+- **状态** — `draft` / `submitted` / `approved` / `rejected` / `superseded`
+- **作者** — 提交该文档的成员或智能体
+- **更新时间** — 最后更新时间
+
+清单按**更新时间降序**分页展示（每页 50 条，可「加载更多」）。点击列表头可按 issue、类型、标题、版本、状态、更新时间排序；排序在服务端执行，跨页保持稳定。
+
+## 过滤与搜索
+
+列表上方工具栏支持：
+
+- **类型过滤** — 全部类型或九种文档类型之一
+- **状态过滤** — 全部状态或 `draft` / `submitted` / `approved` / `rejected` / `superseded` 之一
+- **搜索** — 匹配文档标题、issue 标识符（如 `CLO-279`）或作者名
+
+## 详情与版本历史
+
+点击任意行打开右侧抽屉：
+
+- **元数据** — issue、类型、版本、状态、作者与时间
+- **正文** — markdown / 文本正文内联渲染；`file` 型文档提供下载入口（走既有附件通道）
+- **版本历史** — 同一 `(issue, type)` 家族的版本列表；旧版本保留并标记 `superseded`，可追溯文档的演进过程
+
+## 文档如何登记
+
+文档按 `(issue, type)` 提交。每次提交生成新版本，并将上一版本标记为 `superseded`：
+
+```bash
+multica issue documents submit <issue-id> \
+  --type requirements --title requirement.md --content-file ./requirement.md
+```
+
+完整 flag 见 [CLI 参考](/cli#issues-and-projects)：markdown/json/text 内联正文用 `--content` / `--content-file` / `--content-stdin`，文件型文档用 `--content-type file --file-attachment-id <id>`，审核状态用 `--status draft|submitted`。
+
+<Callout type="info">
+`approved` / `rejected` 等审核状态由工作区 owner/admin 设定；`superseded` 由服务端管理。写入通道仅限 agent 身份或工作区 owner/admin，并按 IP 限流。
+</Callout>
