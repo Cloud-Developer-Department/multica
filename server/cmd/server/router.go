@@ -1157,6 +1157,17 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 				})
 			})
 
+			// Issue templates (CLO-159): workspace-level presets for issue creation.
+			r.Route("/api/issue-templates", func(r chi.Router) {
+				r.Get("/", h.ListIssueTemplates)
+				r.Post("/", h.CreateIssueTemplate)
+				r.Route("/{id}", func(r chi.Router) {
+					r.Get("/", h.GetIssueTemplate)
+					r.Put("/", h.UpdateIssueTemplate)
+					r.Delete("/", h.DeleteIssueTemplate)
+				})
+			})
+
 			// Projects
 			r.Route("/api/projects", func(r chi.Router) {
 				r.Get("/search", h.SearchProjects)
@@ -1329,6 +1340,60 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 				r.Get("/runtime/daily", h.GetDashboardRunTimeDaily)
 				r.Get("/failures/daily", h.GetDashboardFailuresDaily)
 				r.Get("/failures/by-agent", h.GetDashboardFailuresByAgent)
+
+				// Data-monitoring dashboard aggregation endpoints (CLO-170).
+				// ?days= (1/7/30, default 7) + ?tz= drive the count/trend
+				// modules; issue-distribution is a workspace snapshot.
+				r.Get("/issue-distribution", h.GetMonitoringIssueDistribution)
+				r.Get("/activity", h.GetMonitoringActivity)
+				r.Get("/comments", h.GetMonitoringComments)
+				r.Get("/completion", h.GetMonitoringCompletion)
+
+				// Personal-dimension usage dashboard (CLO-206 / CLO-212).
+				// ?range=today|week|month + ?tz=; personal endpoints read the
+				// session user (X-User-ID) and never accept a client-supplied
+				// user_id. /rates is the realtime USD→CNY rate (live fetch +
+				// default fallback).
+				r.Get("/personal/summary", h.GetPersonalUsageSummary)
+				r.Get("/personal/trend", h.GetPersonalUsageTrend)
+				r.Get("/personal/models", h.GetPersonalUsageModels)
+				r.Get("/personal/duration", h.GetPersonalUsageDuration)
+				r.Get("/personal/runtime-trend", h.GetPersonalRuntimeTrend)
+				r.Get("/personal/errors", h.GetPersonalUsageErrors)
+				r.Get("/personal/rank", h.GetPersonalUsageRank)
+				r.Get("/rates", h.GetDashboardRates)
+			})
+
+			// Engineering-analytics platform (CLO-239) — the "/{slug}/analytics"
+			// four-dashboard page (Adoption & Activity / Agent Performance /
+			// Git Contributions / DORA / Identity). Contract: API-CLO-228 v2.0.
+			// G/D/L endpoints self-report external-source readiness via a
+			// top-level `source_status`; never 4xx/5xx for an unconnected source.
+			r.Route("/api/analytics", func(r chi.Router) {
+				// Tab1 Adoption & Activity (A1–A5)
+				r.Get("/activity/summary", h.GetAnalyticsActivitySummary)
+				r.Get("/activity/heatmap", h.GetAnalyticsActivityHeatmap)
+				r.Get("/activity/top-members", h.GetAnalyticsActivityTopMembers)
+				r.Get("/adoption/summary", h.GetAnalyticsAdoptionSummary)
+				r.Get("/adoption/trend", h.GetAnalyticsAdoptionTrend)
+				// Tab2 Agent Performance (B1–B6)
+				r.Get("/agents/funnel", h.GetAnalyticsAgentsFunnel)
+				r.Get("/agents/performance", h.GetAnalyticsAgentsPerformance)
+				r.Get("/agents/top", h.GetAnalyticsAgentsTop)
+				r.Get("/skills/overview", h.GetAnalyticsSkillsOverview)
+				r.Get("/collaboration/summary", h.GetAnalyticsCollaborationSummary)
+				r.Get("/collaboration/blockers", h.GetAnalyticsCollaborationBlockers)
+				// Tab3 Git Contributions (G1–G4)
+				r.Get("/git/eloc", h.GetAnalyticsGitEloc)
+				r.Get("/git/quality", h.GetAnalyticsGitQuality)
+				r.Get("/git/repos", h.GetAnalyticsGitRepos)
+				r.Get("/git/prs", h.GetAnalyticsGitPRs)
+				// Tab4 DORA (D1–D2)
+				r.Get("/dora/lead-time", h.GetAnalyticsDoraLeadTime)
+				r.Get("/dora/deployments", h.GetAnalyticsDoraDeployments)
+				// Identity & departments (L1–L2)
+				r.Get("/identity/lifecycle", h.GetAnalyticsIdentityLifecycle)
+				r.Get("/identity/departments", h.GetAnalyticsIdentityDepartments)
 			})
 
 			// Runtimes
@@ -1455,6 +1520,51 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 				r.Get("/", h.GetNotificationPreferences)
 				r.Patch("/", h.PatchNotificationPreferences)
 				r.Put("/", h.UpdateNotificationPreferences)
+			})
+
+			// Workflow state machine (CLO-146)
+			r.Route("/api/workflows", func(r chi.Router) {
+				r.Get("/", h.ListWorkflows)
+				r.Post("/", h.CreateWorkflow)
+				r.Route("/{id}", func(r chi.Router) {
+					r.Get("/", h.GetWorkflow)
+					r.Put("/", h.UpdateWorkflow)
+					// M-1 (security audit): stage advancement is a Leader/admin
+					// control (FR5.5) — restrict to human actors + role check in
+					// the handler, so arbitrary members cannot force advancement.
+					r.With(handler.RequireHumanActor).Post("/advance", h.AdvanceWorkflow)
+					r.Get("/nodes", h.ListWorkflowNodes)
+					r.Get("/transitions", h.ListWorkflowTransitions)
+					// H-2 (security audit): node status override can bypass the
+					// human review loop — human-only + role check + review guard
+					// in the handler/service.
+					r.With(handler.RequireHumanActor).Post("/nodes/{nodeId}/status", h.OverrideNodeStatus)
+				})
+			})
+
+			// Artifacts + review loop (CLO-146)
+			r.Route("/api/artifacts", func(r chi.Router) {
+				r.Get("/", h.ListArtifacts)
+				r.Post("/", h.CreateArtifact)
+				r.Get("/stats", h.GetArtifactStats)
+				r.Route("/{id}", func(r chi.Router) {
+					r.Get("/", h.GetArtifact)
+					r.Get("/versions", h.ListArtifactVersions)
+					r.Get("/diff", h.DiffArtifactVersions)
+					r.Get("/reviews", h.ListArtifactReviews)
+					// H-1 (security audit): the human review gate must not be
+					// reachable with a machine credential (mat_ task token /
+					// mcn_ cloud PAT), otherwise an agent could self-review and
+					// self-approve its own artifact. Reviews are human-only.
+					r.With(handler.RequireHumanActor).Post("/review", h.ReviewArtifact)
+				})
+			})
+
+			// Human review queue (FR4.1). V-04 (security audit): the queue
+			// exposes workflow/node/author metadata that machine credentials
+			// must not read — human-only.
+			r.Route("/api/reviews", func(r chi.Router) {
+				r.With(handler.RequireHumanActor).Get("/queue", h.ListReviewQueue)
 			})
 		})
 	})

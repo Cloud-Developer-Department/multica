@@ -1,0 +1,57 @@
+diff --git a/server/cmd/server/router.go b/server/cmd/server/router.go
+index bd09d670..2f36845e 100644
+--- a/server/cmd/server/router.go
++++ b/server/cmd/server/router.go
+@@ -1157,6 +1157,17 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
+ 				})
+ 			})
+ 
++			// Issue templates (CLO-159): workspace-level presets for issue creation.
++			r.Route("/api/issue-templates", func(r chi.Router) {
++				r.Get("/", h.ListIssueTemplates)
++				r.Post("/", h.CreateIssueTemplate)
++				r.Route("/{id}", func(r chi.Router) {
++					r.Get("/", h.GetIssueTemplate)
++					r.Put("/", h.UpdateIssueTemplate)
++					r.Delete("/", h.DeleteIssueTemplate)
++				})
++			})
++
+ 			// Projects
+ 			r.Route("/api/projects", func(r chi.Router) {
+ 				r.Get("/search", h.SearchProjects)
+diff --git a/server/internal/handler/workspace.go b/server/internal/handler/workspace.go
+index 08480bf3..164cd3e2 100644
+--- a/server/internal/handler/workspace.go
++++ b/server/internal/handler/workspace.go
+@@ -215,6 +215,13 @@ func (h *Handler) CreateWorkspace(w http.ResponseWriter, r *http.Request) {
+ 		return
+ 	}
+ 
++	// Seed the 4 built-in issue templates (CLO-159) inside the same
++	// transaction so a workspace never exists without its preset catalog.
++	if err := SeedPresetIssueTemplates(r.Context(), qtx, ws.ID, parseUUID(userID)); err != nil {
++		writeError(w, http.StatusInternalServerError, "failed to seed issue templates: "+err.Error())
++		return
++	}
++
+ 	// NOTE: CreateWorkspace deliberately does NOT mark the user as
+ 	// onboarded. The `onboarded_at` flag is owned by CompleteOnboarding
+ 	// (Step 3 of the flow) and by AcceptInvitation (invitee joining an
+diff --git a/server/pkg/protocol/events.go b/server/pkg/protocol/events.go
+index e6f063f6..5db151e8 100644
+--- a/server/pkg/protocol/events.go
++++ b/server/pkg/protocol/events.go
+@@ -102,6 +102,12 @@ const (
+ 	EventPropertyUpdated        = "property:updated"
+ 	EventIssuePropertiesChanged = "issue_properties:changed"
+ 
++	// Issue template events (CLO-159). Templates are hard-deleted, so there
++	// is a template:deleted event (unlike properties which archive).
++	EventIssueTemplateCreated = "issue_template:created"
++	EventIssueTemplateUpdated = "issue_template:updated"
++	EventIssueTemplateDeleted = "issue_template:deleted"
++
+ 	// Pin events
+ 	EventPinCreated   = "pin:created"
+ 	EventPinDeleted   = "pin:deleted"

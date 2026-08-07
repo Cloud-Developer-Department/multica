@@ -1,0 +1,1 @@
+DROP INDEX CONCURRENTLY IF EXISTS idx_artifact_workspace_status_created;

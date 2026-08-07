@@ -34,6 +34,7 @@ const mockToastCustom = vi.hoisted(() => vi.fn());
 const mockToastDismiss = vi.hoisted(() => vi.fn());
 const mockToastError = vi.hoisted(() => vi.fn());
 const mockUploadWithToast = vi.hoisted(() => vi.fn());
+const mockListIssueTemplates = vi.hoisted(() => vi.fn());
 
 const mockDraftStore = {
   draft: {
@@ -193,6 +194,14 @@ vi.mock("@multica/core/properties", async (importOriginal) => {
 
 vi.mock("@multica/core/hooks/use-file-upload", () => ({
   useFileUpload: () => ({ uploadWithToast: mockUploadWithToast }),
+}));
+
+vi.mock("@multica/core/issue-templates", () => ({
+  issueTemplateListOptions: () => ({
+    queryKey: ["issue-templates", "ws-test", "list"],
+    queryFn: async () => ({ issue_templates: await mockListIssueTemplates() }),
+    select: (data: { issue_templates: unknown[] }) => data.issue_templates,
+  }),
 }));
 
 // Hoisted ApiError class so both the vi.mock factory and the tests below
@@ -598,6 +607,7 @@ describe("CreateIssueModal", () => {
     mockSetIssueProperty.mockResolvedValue({
       properties: { "property-tier": "option-enterprise" },
     });
+    mockListIssueTemplates.mockResolvedValue([]);
   });
 
   it("shows success feedback with a direct path to the new issue", async () => {
@@ -1296,6 +1306,68 @@ describe("CreateIssueModal", () => {
       await waitFor(() => expect(switchButton).toBeDisabled());
       fireEvent.click(switchButton);
       expect(onSwitchMode).not.toHaveBeenCalled();
+    });
+  });
+
+  it("pre-fills the title and body when a template is applied", async () => {
+    const user = userEvent.setup();
+    mockListIssueTemplates.mockResolvedValue([
+      {
+        id: "tpl-bug",
+        workspace_id: "ws-test",
+        name: "Bug 修复",
+        description: "",
+        title_template: "[Bug] ",
+        body_template: "## 问题现象\n\n复现步骤……",
+        status: "todo",
+        priority: "high",
+        assignee_type: null,
+        assignee_id: null,
+        project_id: null,
+        stage: null,
+        label_ids: [],
+        icon: "bug",
+        category: "",
+        is_preset: true,
+        created_by: "user-1",
+        created_at: "2026-08-04T00:00:00Z",
+        updated_at: "2026-08-04T00:00:00Z",
+      },
+    ]);
+
+    renderModal(
+      <ManualCreatePanel
+        onClose={vi.fn()}
+        onSwitchMode={vi.fn()}
+        isExpanded={false}
+        setIsExpanded={vi.fn()}
+      />,
+    );
+
+    await new Promise((r) => setTimeout(r, 50));
+    fireEvent.click(await screen.findByRole("button", { name: "Template" }));
+    await user.click(await screen.findByRole("button", { name: /Bug 修复/ }));
+
+    // The template body must land in the description editor, not just the
+    // draft store — ContentEditor treats defaultValue as mount-only, so this
+    // only passes if the editor is remounted via formResetKey.
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText("Add description...")).toHaveValue(
+        "## 问题现象\n\n复现步骤……",
+      );
+    });
+
+    await user.type(screen.getByPlaceholderText("Issue title"), "crash on login");
+    await user.click(screen.getByRole("button", { name: "Create Issue" }));
+
+    await waitFor(() => {
+      expect(mockCreateIssue).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: "[Bug] crash on login",
+          description: "## 问题现象\n\n复现步骤……",
+          priority: "high",
+        }),
+      );
     });
   });
 

@@ -1,7 +1,11 @@
 # --- Build stage ---
-FROM golang:1.26-alpine AS builder
+FROM golang:1.26.1-alpine AS builder
 
 RUN apk add --no-cache git
+
+# Use a China mirror for Go module downloads (proxy.golang.org is unreachable
+# from mainland networks; no direct fallback so builds fail fast instead of hanging)
+ENV GOPROXY=https://goproxy.cn
 
 WORKDIR /src
 

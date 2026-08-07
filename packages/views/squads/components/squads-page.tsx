@@ -168,18 +168,36 @@ function SquadAvatar({ squad }: { squad: Squad }) {
   );
 }
 
-// Two-line identity cell — same form as the agents list.
-function NameCell({ squad }: { squad: Squad }) {
+// Two-line identity cell — same form as the agents list. Parent squads get a
+// child-count badge next to the name; nested squads show their parent squad
+// name underneath (LIU-8 squad nesting).
+function NameCell({ squad, parentName }: { squad: Squad; parentName?: string }) {
+  const { t } = useT("squads");
+  const childCount = squad.child_squads?.length ?? 0;
   return (
     <ListGridCell className="gap-3">
       <SquadAvatar squad={squad} />
       <div className="min-w-0 flex-1">
-        <span className="block min-w-0 truncate text-sm font-medium">
-          {squad.name}
+        <span className="flex min-w-0 items-center gap-1.5 text-sm font-medium">
+          <span className="truncate">{squad.name}</span>
+          {childCount > 0 && (
+            <span
+              title={`${childCount} nested squad(s)`}
+              className="inline-flex shrink-0 items-center gap-1 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground tabular-nums"
+            >
+              <Users className="h-3 w-3" />
+              {childCount}
+            </span>
+          )}
         </span>
         {squad.description ? (
           <span className="block min-w-0 truncate text-xs text-muted-foreground">
             {squad.description}
+          </span>
+        ) : null}
+        {parentName ? (
+          <span className="block min-w-0 truncate text-xs text-muted-foreground/70">
+            {t(($) => $.page.nested_in, { name: parentName })}
           </span>
         ) : null}
       </div>
@@ -772,6 +790,13 @@ export function SquadsPage() {
     return m;
   }, [agents]);
 
+  // Squad id → squad, used to resolve a nested squad's parent name.
+  const squadById = useMemo(() => {
+    const m = new Map<string, Squad>();
+    for (const s of squads) m.set(s.id, s);
+    return m;
+  }, [squads]);
+
   const membersById = useMemo(() => {
     const m = new Map<string, MemberWithUser>();
     for (const mem of members) m.set(mem.user_id, mem);
@@ -965,7 +990,14 @@ export function SquadsPage() {
                     className="cursor-pointer"
                     {...rowLink(p.squadDetail(squad.id))}
                   >
-                    <NameCell squad={squad} />
+                    <NameCell
+                      squad={squad}
+                      parentName={
+                        squad.parent_squad_id
+                          ? squadById.get(squad.parent_squad_id)?.name
+                          : undefined
+                      }
+                    />
                     <LeaderCell
                       leaderId={squad.leader_id}
                       leader={agentsById.get(squad.leader_id)}

@@ -16,6 +16,10 @@ export function blockedReasonLabel(reasonCode: string, t: IssuesT): string {
       return t(($) => $.comment.trigger_blocked_target_unavailable);
     case "runtime_offline":
       return t(($) => $.comment.trigger_blocked_runtime_offline);
+    case "deferred_member":
+      return t(($) => $.comment.trigger_deferred_member);
+    case "invalid_command":
+      return t(($) => $.comment.trigger_blocked_invalid_command);
     default:
       return t(($) => $.comment.trigger_blocked_generic);
   }
@@ -31,6 +35,10 @@ export function blockedShortReasonLabel(reasonCode: string, t: IssuesT): string 
       return t(($) => $.comment.trigger_blocked_short_target_unavailable);
     case "runtime_offline":
       return t(($) => $.comment.trigger_blocked_short_runtime_offline);
+    case "deferred_member":
+      return t(($) => $.comment.trigger_deferred_member_short);
+    case "invalid_command":
+      return t(($) => $.comment.trigger_blocked_short_invalid_command);
     default:
       return t(($) => $.comment.trigger_blocked_short_generic);
   }

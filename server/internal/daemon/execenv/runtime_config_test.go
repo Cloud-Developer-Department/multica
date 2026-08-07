@@ -1585,3 +1585,64 @@ func TestCommentTriggeredBriefSingleThreadKeepsSingleReply(t *testing.T) {
 		t.Errorf("single/same-thread brief must keep the single --parent=trigger cookbook, got:\n%s", out)
 	}
 }
+
+// TestWorkflowExecutionRulesSectionPresent pins the CLO-175 Workflow Execution
+// Rules section into the runtime brief for every issue-bearing task kind. The
+// rules must reach both the Project Manager (who creates the workflow) and the
+// executing agents (who submit artifacts), so the section is unconditional for
+// assignment- and comment-triggered runs. It must also never advertise the
+// human-only actions (advance / override / approve / reject) as available.
+func TestWorkflowExecutionRulesSectionPresent(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		ctx  TaskContextForEnv
+	}{
+		{
+			name: "assignment-triggered",
+			ctx:  TaskContextForEnv{IssueID: "11111111-2222-3333-4444-555555555555"},
+		},
+		{
+			name: "comment-triggered",
+			ctx: TaskContextForEnv{
+				IssueID:          "22222222-3333-4444-5555-666666666666",
+				TriggerCommentID: "33333333-4444-5555-6666-777777777777",
+			},
+		},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			out := buildMetaSkillContent("claude", tc.ctx)
+
+			if !strings.Contains(out, "## Workflow Execution Rules") {
+				t.Fatalf("expected Workflow Execution Rules section in %s brief", tc.name)
+			}
+			for _, want := range []string{
+				"Project Manager Agent MUST create a Workflow first",
+				"multica workflow create --name",
+				"multica artifact submit --workflow-id",
+				"multica workflow get <id> --output json",
+				"Human approval is REQUIRED before continuing past critical phases",
+				"human-only actions and no CLI command exposes them",
+				"NEVER use curl / wget or any direct API call",
+			} {
+				if !strings.Contains(out, want) {
+					t.Errorf("[%s] section missing %q", tc.name, want)
+				}
+			}
+		})
+	}
+}
+
+// TestWorkflowExecutionRulesNotInQuickCreate: quick-create has a deliberately
+// minimal command surface and no issue/workflow context, so the workflow rules
+// must not be emitted there.
+func TestWorkflowExecutionRulesNotInQuickCreate(t *testing.T) {
+	t.Parallel()
+	out := buildMetaSkillContent("claude", TaskContextForEnv{QuickCreatePrompt: "create an issue"})
+	if strings.Contains(out, "## Workflow Execution Rules") {
+		t.Errorf("quick-create brief must not carry Workflow Execution Rules:\n%s", out)
+	}
+}

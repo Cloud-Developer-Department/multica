@@ -1,0 +1,14 @@
+-- Squad hierarchy (LIU-8): a squad may be nested under a parent squad so the
+-- parent's leader can coordinate the whole tree (v1: one level deep).
+--
+-- The parent link lives on the child row (parent_squad_id) rather than in a
+-- join table: a squad row can only hold one parent value, which enforces the
+-- v1 "one parent per squad" rule, and the shape stays tree-extensible (a
+-- squad can later gain a grandparent without a schema change).
+--
+-- Per repository rules no foreign key / cascade is declared here: existence,
+-- same-workspace, archive and one-level constraints are validated explicitly
+-- in the application layer (CreateSquad), and the archive lifecycle detaches
+-- children explicitly (DeleteSquad). The child lookup index lives in its own
+-- concurrent-index migration file (233_squad_parent_index.up.sql).
+ALTER TABLE squad ADD COLUMN parent_squad_id UUID;

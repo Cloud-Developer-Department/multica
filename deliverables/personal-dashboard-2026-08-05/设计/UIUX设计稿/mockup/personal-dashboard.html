@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>个人用量看板 · 设计稿（正常态 + 全状态预览）</title>
+<style>
+/* ============================================================
+   个人用量看板 · 设计稿 mockup
+   设计规范见 03-组件规范与标注.md（token 与 docs/design.md 一致）
+   仅用于设计预览，非生产代码
+   ============================================================ */
+:root {
+  color-scheme: light;
+  --app-shell: oklch(0.964435 0.001327 286.375);
+  --page-canvas: oklch(0.988087 0 0);
+  --surface: oklch(1 0 0);
+  --foreground: oklch(0.141 0.005 285.823);
+  --card: var(--surface);
+  --card-foreground: var(--foreground);
+  --muted: oklch(0.967 0.001 286.375);
+  --muted-foreground: oklch(0.552 0.016 285.938);
+  --accent: oklch(0.967 0.001 286.375);
+  --border: oklch(0.945 0.003 286.32);
+  --surface-border: oklch(0.92 0.004 286.32);
+  --brand: oklch(0.55 0.16 255);
+  --brand-foreground: oklch(0.985 0 0);
+  --success: oklch(0.55 0.16 145);
+  --destructive: oklch(0.577 0.245 27.325);
+  --warning: oklch(0.75 0.16 85);
+  --info: oklch(0.55 0.18 250);
+  --chart-1: oklch(0.55 0.16 255);
+  --chart-2: oklch(0.66 0.13 255);
+  --chart-3: oklch(0.76 0.10 255);
+  --chart-4: oklch(0.85 0.06 255);
+  --chart-5: oklch(0.92 0.03 255);
+  --radius: 0.625rem;
+  --surface-shadow: 0 1px 2px rgb(15 23 42 / 0.04), 0 1px 1px rgb(15 23 42 / 0.03);
+  --font-sans: Inter, "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", system-ui, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: var(--font-sans);
+  background: var(--page-canvas);
+  color: var(--foreground);
+  font-size: 14px;
+  line-height: 1.5;
+}
+.tabular { font-variant-numeric: tabular-nums; }
+
+/* ---------- 演示工具条（非产品元素） ---------- */
+.demo-bar {
+  position: sticky; top: 0; z-index: 100;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 12px;
+  padding: 10px 16px; background: oklch(0.21 0.006 285.885); color: #fff;
+  font-size: 12px;
+}
+.demo-bar label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+.demo-bar select, .demo-bar button {
+  background: oklch(0.35 0.006 285.885); color: #fff; border: 1px solid oklch(1 0 0 / 15%);
+  border-radius: 6px; padding: 4px 8px; font-size: 12px; cursor: pointer;
+}
+.demo-bar .hint { color: oklch(0.8 0 0); }
+.demo-bar .seg-preview { display: flex; gap: 4px; }
+.demo-bar .seg-preview button {
+  background: transparent; border: 1px solid oklch(1 0 0 / 25%);
+}
+.demo-bar .seg-preview button.active { background: var(--brand); border-color: var(--brand); }
+
+/* ---------- 页面骨架 ---------- */
+.page { display: flex; flex-direction: column; height: 100vh; }
+.page-header {
+  display: flex; align-items: center; gap: 8px;
+  min-height: 48px; padding: 6px 20px;
+}
+.page-header h1 { font-size: 14px; font-weight: 500; }
+.page-header .icon { color: var(--muted-foreground); }
+
+/* 工具栏 */
+.toolbar {
+  position: sticky; top: 46px; z-index: 20;
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+  gap: 8px 16px; border-bottom: 1px solid var(--border);
+  background: color-mix(in oklab, var(--page-canvas) 95%, transparent);
+  padding: 10px 20px; backdrop-filter: blur(4px);
+}
+.segmented { display: inline-flex; align-items: center; gap: 2px; border-radius: 8px; background: var(--muted); padding: 2px; }
+.segmented button {
+  border: none; background: transparent; border-radius: 6px;
+  padding: 4px 10px; font-size: 12px; font-weight: 500;
+  color: var(--muted-foreground); cursor: pointer; transition: color 150ms;
+}
+.segmented button:hover { color: var(--foreground); }
+.segmented button.active { background: var(--brand); color: var(--brand-foreground); box-shadow: 0 1px 2px rgb(15 23 42 / 0.1); }
+.toolbar-right { display: flex; align-items: center; gap: 12px; }
+.rate-note { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted-foreground); }
+.rate-note svg { width: 14px; height: 14px; }
+.btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  border: none; background: var(--foreground); color: var(--brand-foreground);
+  border-radius: 8px; padding: 4px 12px; font-size: 12px; font-weight: 500; cursor: pointer;
+}
+.btn svg { width: 14px; height: 14px; }
+.btn.spin svg { animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* 内容容器 */
+.content { flex: 1; overflow-y: auto; }
+.inner { max-width: 1440px; margin: 0 auto; padding: 16px; display: flex; flex-direction: column; gap: 16px; }
+
+/* KPI 区 */
+.kpi-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+@media (min-width: 768px) { .kpi-grid { grid-template-columns: repeat(3, 1fr); } }
+@media (min-width: 1280px) { .kpi-grid { grid-template-columns: repeat(5, 1fr); } }
+.kpi {
+  display: flex; flex-direction: column; justify-content: space-between; gap: 8px;
+  border: 1px solid var(--surface-border); border-radius: 10px; background: var(--card);
+  padding: 16px; box-shadow: var(--surface-shadow); transition: box-shadow 150ms;
+}
+.kpi:hover { box-shadow: 0 4px 12px rgb(15 23 42 / 0.1); }
+.kpi .label { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted-foreground); }
+.kpi .label .dot { width: 6px; height: 6px; border-radius: 999px; }
+.kpi .value { font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.kpi .value.dim { color: var(--muted-foreground); }
+.kpi .sub { font-size: 12px; color: var(--muted-foreground); }
+
+/* 模块卡 */
+.card { border: 1px solid var(--surface-border); border-radius: 10px; background: var(--card); padding: 20px; box-shadow: var(--surface-shadow); }
+.card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 16px; min-height: 24px; }
+.card-head h3 { font-size: 16px; font-weight: 600; }
+.card-head .subtitle { margin-top: 2px; font-size: 12px; color: var(--muted-foreground); }
+.card-switch { display: inline-flex; align-items: center; gap: 2px; border-radius: 8px; background: var(--muted); padding: 2px; }
+.card-switch button { border: none; background: transparent; border-radius: 6px; padding: 2px 8px; font-size: 12px; color: var(--muted-foreground); cursor: pointer; }
+.card-switch button.active { background: var(--brand); color: var(--brand-foreground); }
+
+.grid-2 { display: grid; grid-template-columns: 1fr; gap: 16px; }
+@media (min-width: 1280px) { .grid-2 { grid-template-columns: 1fr 1fr; } }
+
+/* 排名卡 */
+.rank-main { font-size: 16px; font-weight: 500; margin-bottom: 12px; }
+.rank-main .hl { color: var(--brand); font-weight: 500; }
+.rank-stats { display: grid; grid-template-columns: 1fr; gap: 12px; }
+@media (min-width: 1280px) { .rank-stats { grid-template-columns: repeat(3, 1fr); } }
+.rank-stat { display: flex; flex-direction: column; gap: 2px; padding: 12px; border-radius: 10px; background: var(--muted); }
+.rank-stat .stat-label { font-size: 12px; color: var(--muted-foreground); }
+.rank-stat .stat-value { font-size: 18px; font-weight: 500; font-variant-numeric: tabular-nums; }
+
+/* 图表区 */
+.chart-box { width: 100%; aspect-ratio: 3 / 1; }
+.chart-box svg { width: 100%; height: 100%; display: block; }
+.legend-dots { display: flex; justify-content: center; gap: 16px; margin-top: 8px; }
+.legend-dots span { display: flex; align-items: center; gap: 4px; font-size: 12px; color: var(--muted-foreground); }
+.legend-dots i { width: 8px; height: 8px; border-radius: 999px; display: inline-block; }
+
+/* 模型/错误 行 */
+.rows { display: flex; flex-direction: column; }
+.row { display: grid; grid-template-columns: minmax(0,1.4fr) minmax(0,1fr) auto; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.row:last-child { border-bottom: none; }
+.row .name { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 12px; }
+.row .name .dot { width: 8px; height: 8px; border-radius: 999px; flex-shrink: 0; }
+.row .name .txt { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.row .name .badge { margin-left: 6px; border-radius: 2px; background: var(--muted); padding: 1px 4px; font-size: 10px; color: var(--muted-foreground); }
+.row .bar { height: 8px; border-radius: 999px; background: var(--muted); overflow: hidden; }
+.row .bar i { display: block; height: 100%; border-radius: 999px; transition: width 300ms ease-out; }
+.row .val { font-size: 12px; font-variant-numeric: tabular-nums; color: var(--muted-foreground); text-align: right; }
+code.reason { font-family: var(--font-mono); font-size: 12px; color: var(--muted-foreground); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* 空态 */
+.empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 32px 24px; text-align: center; }
+.empty-icon { width: 32px; height: 32px; border-radius: 8px; background: var(--muted); display: flex; align-items: center; justify-content: center; color: var(--foreground); }
+.empty-icon svg { width: 16px; height: 16px; }
+.empty-title { font-size: 14px; font-weight: 500; }
+.empty-desc { font-size: 12px; color: var(--muted-foreground); }
+
+/* 错误态 */
+.module-error { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 32px; text-align: center; }
+.module-error .ico { color: var(--destructive); }
+.module-error .ico svg { width: 24px; height: 24px; }
+.module-error p { font-size: 14px; font-weight: 500; }
+.btn-outline {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: transparent; color: var(--foreground); border: 1px solid var(--border);
+  border-radius: 8px; padding: 4px 12px; font-size: 12px; cursor: pointer;
+}
+
+/* 骨架 */
+.skeleton { position: relative; overflow: hidden; background: var(--muted); border-radius: 8px; }
+.skeleton::after {
+  content: ""; position: absolute; inset: 0; transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, oklch(1 0 0 / 60%), transparent);
+  animation: shimmer 1.6s infinite;
+}
+@keyframes shimmer { 100% { transform: translateX(100%); } }
+.sk-chart { height: 220px; }
+.sk-dots { display: flex; justify-content: center; gap: 8px; margin-top: 8px; }
+.sk-dots i { width: 8px; height: 8px; border-radius: 999px; background: var(--muted); }
+
+/* 状态切换 —— 演示 */
+.state-loading .js-normal { display: none; }
+.state-empty .js-normal { display: none; }
+.state-error .js-normal { display: none; }
+.state-loading .js-empty { display: none; }
+.state-error .js-empty { display: none; }
+.state-loading .js-error { display: none; }
+.state-empty .js-error { display: none; }
+</style>
+</head>
+<body>
+
+<!-- ==================== 演示工具条 ==================== -->
+<div class="demo-bar">
+  <span>设计稿预览 · 个人用量看板（CLO-215）</span>
+  <label>状态：
+    <select id="stateSel">
+      <option value="normal">正常态</option>
+      <option value="loading">Loading（骨架屏）</option>
+      <option value="empty">空数据态</option>
+      <option value="error">Error 态</option>
+    </select>
+  </label>
+  <label>时间窗：
+    <span class="seg-preview">
+      <button id="rToday">今天</button>
+      <button id="rWeek" class="active">本周</button>
+      <button id="rMonth">本月</button>
+    </span>
+  </label>
+  <button id="refreshBtn" class="btn" style="background:transparent;border:1px solid oklch(1 0 0/25%);">⟳ 刷新（演示）</button>
+  <span class="hint">仅演示视觉，非真实数据；正常态为可交付视觉基准，其余状态见 02-全状态设计.md</span>
+</div>
+
+<!-- ==================== 页面 ==================== -->
+<div class="page" id="page">
+
+  <!-- PageHeader -->
+  <div class="page-header">
+    <svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg>
+    <h1>个人用量看板</h1>
+  </div>
+
+  <!-- 工具栏 -->
+  <div class="toolbar">
+    <div class="segmented" role="group" aria-label="时间范围">
+      <button data-r="today">今天</button>
+      <button data-r="week" class="active">本周</button>
+      <button data-r="month">本月</button>
+    </div>
+    <div class="toolbar-right">
+      <span class="rate-note">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        <span id="rateNote">汇率更新于 14:30</span>
+      </span>
+      <button class="btn" id="toolbarRefresh">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
+        刷新
+      </button>
+    </div>
+  </div>
+
+  <!-- 内容 -->
+  <div class="content">
+    <div class="inner">
+
+      <!-- ① KPI 卡 -->
+      <section class="kpi-grid" aria-label="我的数据">
+        <div class="kpi">
+          <div class="label">Token 消耗</div>
+          <div class="value">97.00 M</div>
+          <div class="sub">97,000,000</div>
+        </div>
+        <div class="kpi">
+          <div class="label">成本（¥）</div>
+          <div class="value">¥132.14</div>
+          <div class="sub">汇率更新于 14:30</div>
+        </div>
+        <div class="kpi">
+          <div class="label">任务数</div>
+          <div class="value">42</div>
+        </div>
+        <div class="kpi">
+          <div class="label">运行时长</div>
+          <div class="value">3h 40m</div>
+        </div>
+        <div class="kpi">
+          <div class="label"><span class="dot" style="background:var(--success)"></span>成功率</div>
+          <div class="value">88.1%</div>
+        </div>
+      </section>
+
+      <!-- ② 我的排名卡 -->
+      <section class="card">
+        <div class="card-head"><h3>我的排名</h3></div>
+        <div class="rank-main">本周你排 <span class="hl">第 3 名</span> / 共 12 人，超过 <span class="hl">81.8%</span> 成员</div>
+        <div class="rank-stats">
+          <div class="rank-stat"><span class="stat-label">团队人均 token</span><span class="stat-value">15.42 M</span></div>
+          <div class="rank-stat"><span class="stat-label">团队中位数 token</span><span class="stat-value">9.80 M</span></div>
+          <div class="rank-stat"><span class="stat-label">我的 token</span><span class="stat-value">48.00 M</span></div>
+        </div>
+      </section>
+
+      <!-- ③ Token/成本趋势图 -->
+      <section class="card">
+        <div class="card-head">
+          <div><h3>Token / 成本趋势</h3></div>
+          <div class="card-switch" role="group" aria-label="趋势指标">
+            <button class="active" data-metric="tokens">Token</button>
+            <button data-metric="cost">成本</button>
+          </div>
+        </div>
+        <div class="js-normal">
+          <div class="chart-box" id="trendChart"></div>
+          <div class="legend-dots"><span><i style="background:var(--brand)"></i><b id="trendLegend">Token</b></span></div>
+        </div>
+        <!-- 空态 -->
+        <div class="js-empty empty">
+          <div class="empty-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div>
+          <div class="empty-title">暂无趋势数据</div>
+        </div>
+        <!-- 错误态 -->
+        <div class="js-error module-error">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div>
+          <p>数据加载失败</p>
+          <button class="btn-outline">重试</button>
+        </div>
+        <!-- Loading -->
+        <div class="js-loading">
+          <div class="skeleton sk-chart"></div>
+          <div class="sk-dots"><i></i><i></i><i></i></div>
+        </div>
+      </section>
+
+      <!-- ④ 模型分布 | ⑤ 耗时分布 -->
+      <div class="grid-2">
+        <!-- ④ -->
+        <section class="card">
+          <div class="card-head">
+            <div><h3>模型分布</h3></div>
+            <div class="card-switch" role="group" aria-label="模型指标">
+              <button class="active" data-metric="tokens">Token</button>
+              <button data-metric="cost">成本</button>
+            </div>
+          </div>
+          <div class="js-normal rows" id="modelRows"></div>
+          <div class="js-empty empty">
+            <div class="empty-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 2 7l10 5 10-5-10-5Z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/></svg></div>
+            <div class="empty-title">暂无模型数据</div>
+          </div>
+          <div class="js-error module-error">
+            <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div>
+            <p>数据加载失败</p>
+            <button class="btn-outline">重试</button>
+          </div>
+          <div class="js-loading"><div class="skeleton sk-chart"></div></div>
+        </section>
+
+        <!-- ⑤ -->
+        <section class="card">
+          <div class="card-head"><div><h3>耗时分布</h3></div></div>
+          <div class="js-normal chart-box" id="durationChart"></div>
+          <div class="js-empty empty">
+            <div class="empty-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2"/><path d="M5 3 2 6"/><path d="m22 6-3-3"/></svg></div>
+            <div class="empty-title">暂无耗时数据</div>
+          </div>
+          <div class="js-error module-error">
+            <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div>
+            <p>数据加载失败</p>
+            <button class="btn-outline">重试</button>
+          </div>
+          <div class="js-loading"><div class="skeleton sk-chart"></div></div>
+        </section>
+      </div>
+
+      <!-- ⑥ 总运行时长趋势 | ⑦ 失败率趋势 -->
+      <div class="grid-2">
+        <section class="card">
+          <div class="card-head"><div><h3>总运行时长趋势</h3></div></div>
+          <div class="js-normal chart-box" id="runtimeChart"></div>
+          <div class="js-empty empty">
+            <div class="empty-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></div>
+            <div class="empty-title">暂无运行时长数据</div>
+          </div>
+          <div class="js-error module-error">
+            <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div>
+            <p>数据加载失败</p>
+            <button class="btn-outline">重试</button>
+          </div>
+          <div class="js-loading"><div class="skeleton sk-chart"></div></div>
+        </section>
+
+        <section class="card">
+          <div class="card-head"><div><h3>失败率趋势</h3></div></div>
+          <div class="js-normal chart-box" id="failureChart"></div>
+          <div class="js-empty empty">
+            <div class="empty-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div>
+            <div class="empty-title">暂无失败数据</div>
+          </div>
+          <div class="js-error module-error">
+            <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div>
+            <p>数据加载失败</p>
+            <button class="btn-outline">重试</button>
+          </div>
+          <div class="js-loading"><div class="skeleton sk-chart"></div></div>
+        </section>
+      </div>
+
+      <!-- ⑧ 错误类型分布 -->
+      <section class="card">
+        <div class="card-head"><div><h3>错误类型分布</h3></div></div>
+        <div class="js-normal rows" id="errorRows"></div>
+        <div class="js-empty empty">
+          <div class="empty-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 5 5 19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg></div>
+          <div class="empty-title">暂无错误类型数据</div>
+        </div>
+        <div class="js-error module-error">
+          <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div>
+          <p>数据加载失败</p>
+          <button class="btn-outline">重试</button>
+        </div>
+        <div class="js-loading"><div class="skeleton sk-chart"></div></div>
+      </section>
+
+    </div>
+  </div>
+</div>
+
+<script>
+/* ---------------- 演示数据与图表绘制（非生产） ---------------- */
+
+// 折线图：极简 SVG polyline
+function lineSvg(container, values, color, opts = {}) {
+  const w = container.clientWidth || 600, h = container.clientHeight || 200;
+  const pad = 8;
+  const max = Math.max(...values, 1);
+  const step = (w - pad * 2) / (values.length - 1);
+  const pts = values.map((v, i) => `${pad + i * step},${h - pad - (v / max) * (h - pad * 2)}`);
+  const grid = [];
+  for (let g = 0; g < 3; g++) {
+    const gy = pad + (h - pad * 2) * (g / 3);
+    grid.push(`<line x1="${pad}" y1="${gy}" x2="${w - pad}" y2="${gy}" stroke="var(--border)" stroke-width="1"/>`);
+  }
+  container.innerHTML = `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">${grid.join("")}<polyline points="${pts.join(" ")}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+}
+
+// 柱状图
+function barSvg(container, labels, counts, color) {
+  const w = container.clientWidth || 600, h = container.clientHeight || 200;
+  const max = Math.max(...counts, 1);
+  const n = labels.length, gap = 20;
+  const bw = (w - gap * 2 - (n - 1) * 12) / n;
+  let bars = "";
+  counts.forEach((c, i) => {
+    const bh = (c / max) * (h - 48);
+    const x = gap + i * (bw + 12);
+    const y = h - 24 - bh;
+    bars += `<rect x="${x}" y="${y}" width="${bw}" height="${bh}" rx="3" fill="${color}"/>`;
+    bars += `<text x="${x + bw / 2}" y="${h - 8}" font-size="11" fill="var(--muted-foreground)" text-anchor="middle">${labels[i]}</text>`;
+  });
+  container.innerHTML = `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">${bars}</svg>`;
+}
+
+function render() {
+  // ① KPI
+  // ③ 趋势
+  lineSvg(document.getElementById("trendChart"), [4, 8, 5, 12, 18, 14, 22, 26, 20, 30, 34, 38], "var(--brand)");
+  // ⑤ 耗时直方图
+  barSvg(document.getElementById("durationChart"), ["<1m", "1-5m", "5-15m", "15-30m", ">30m"], [18, 14, 6, 3, 1], "var(--brand)");
+  // ⑥ 总时长趋势
+  lineSvg(document.getElementById("runtimeChart"), [2400, 5100, 5400, 4200, 6800, 7300, 9200], "var(--chart-2)");
+  // ⑦ 失败率趋势
+  lineSvg(document.getElementById("failureChart"), [11.1, 16.7, 9.5, 12.3, 8.2, 10.0, 6.4], "var(--destructive)");
+  // ④ 模型分布
+  const models = [
+    { name: "deepseek-v4-flash", pct: 62, val: "60.00M", c: "var(--chart-1)" },
+    { name: "gpt-5.6-luna", pct: 26, val: "25.00M", c: "var(--chart-2)" },
+    { name: "grok-4.3", pct: 12, val: "12.00M", c: "var(--chart-3)" },
+  ];
+  document.getElementById("modelRows").innerHTML = models.map((m) => `
+    <div class="row">
+      <span class="name"><span class="dot" style="background:${m.c}"></span><span class="txt">${m.name}</span></span>
+      <span class="bar"><i style="width:${m.pct}%;background:${m.c}"></i></span>
+      <span class="val">${m.val} · ${m.pct}%</span>
+    </div>`).join("");
+  // ⑧ 错误类型
+  const errors = [
+    { r: "agent_error.provider_quota_limit", cnt: 3, pct: 60.0 },
+    { r: "timeout", cnt: 2, pct: 40.0 },
+  ];
+  document.getElementById("errorRows").innerHTML = errors.map((e) => `
+    <div class="row">
+      <code class="reason">${e.r}</code>
+      <span class="bar"><i style="width:${e.pct}%;background:var(--destructive)"></i></span>
+      <span class="val">${e.cnt} · ${e.pct.toFixed(1)}%</span>
+    </div>`).join("");
+}
+window.addEventListener("resize", render);
+
+/* ---------------- 状态切换演示 ---------------- */
+const page = document.getElementById("page");
+document.getElementById("stateSel").addEventListener("change", (e) => {
+  page.className = "page state-" + e.target.value;
+});
+
+/* 时间窗切换演示：仅切换高亮 + 汇率文案 */
+const segButtons = document.querySelectorAll(".segmented button");
+segButtons.forEach((b) => {
+  b.addEventListener("click", () => {
+    segButtons.forEach((x) => x.classList.remove("active"));
+    b.classList.add("active");
+    const r = b.dataset.r;
+    const map = { today: "今天", week: "本周", month: "本月" };
+    document.getElementById("rateNote").textContent = "汇率更新于 14:30";
+    // 仅演示排名/空态主文案变化
+    const rankMain = document.querySelector(".rank-main");
+    rankMain.innerHTML = `${map[r]}你排 <span class="hl">第 3 名</span> / 共 12 人，超过 <span class="hl">81.8%</span> 成员`;
+    // KPI 空态文案随范围
+    document.querySelectorAll(".js-empty .empty-title")[0].textContent = `${map[r]}暂无消耗`;
+  });
+});
+document.getElementById("rToday").addEventListener("click", () => document.querySelector('.segmented button[data-r="today"]').click());
+document.getElementById("rWeek").addEventListener("click", () => document.querySelector('.segmented button[data-r="week"]').click());
+document.getElementById("rMonth").addEventListener("click", () => document.querySelector('.segmented button[data-r="month"]').click());
+
+/* 图表切换演示 */
+document.querySelectorAll(".card-switch").forEach((group) => {
+  group.querySelectorAll("button").forEach((b) => {
+    b.addEventListener("click", () => {
+      group.querySelectorAll("button").forEach((x) => x.classList.remove("active"));
+      b.classList.add("active");
+      const m = b.dataset.metric;
+      const legend = document.getElementById("trendLegend");
+      if (legend) legend.textContent = m === "tokens" ? "Token" : "成本(¥)";
+      if (m === "cost") {
+        lineSvg(document.getElementById("trendChart"), [12, 18, 15, 22, 30, 26, 36, 42, 38, 50, 55, 62], "var(--success)");
+      } else {
+        lineSvg(document.getElementById("trendChart"), [4, 8, 5, 12, 18, 14, 22, 26, 20, 30, 34, 38], "var(--brand)");
+      }
+    });
+  });
+});
+
+/* 刷新按钮演示 */
+const tb = document.getElementById("toolbarRefresh");
+tb.addEventListener("click", () => {
+  tb.classList.add("spin");
+  setTimeout(() => tb.classList.remove("spin"), 1200);
+});
+
+render();
+</script>
+</body>
+</html>

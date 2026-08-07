@@ -252,7 +252,11 @@ func writeAvailableCommands(b *strings.Builder) {
 	b.WriteString("- `multica issue metadata list <issue-id> [--output json]` — list KV metadata.\n")
 	b.WriteString("- `multica issue metadata set <issue-id> --key <k> --value <v> [--type string|number|bool]` — pin or overwrite a key.\n")
 	b.WriteString("- `multica issue metadata delete <issue-id> --key <k>` — remove a key.\n")
-	b.WriteString("- `multica repo checkout <url> [--ref <branch-or-sha>]` — repository checkout on a dedicated branch.\n\n")
+	b.WriteString("- `multica repo checkout <url> [--ref <branch-or-sha>]` — repository checkout on a dedicated branch.\n")
+	b.WriteString("- `multica workflow create --name \"...\" --issue-id <issue-id> [--description \"...\"] [--template <key>] [--output json]` — create a Workflow for a software R&D issue; nodes become sub-issues that dispatch to their assigned agents.\n")
+	b.WriteString("- `multica workflow get <workflow-id> [--output json]` — workflow status, current stage/node/agent/task, and submitted artifacts.\n")
+	b.WriteString("- `multica artifact submit --workflow-id <id> --node-id <node-id> --type <type> --name <name> --file <path> [--output json]` — submit a phase artifact; the node moves to in_review awaiting human approval.\n")
+	b.WriteString("- `multica artifact list --workflow-id <id> [--type <type>] [--status <status>] [--output json]` — list artifacts for a workflow.\n\n")
 	b.WriteString("### Squad maintenance\n")
 	b.WriteString("- `multica squad member set-role <squad-id> --member-id <id> --member-type <agent|member> --role <role> [--output json]` — change role in place (use this instead of remove+add).\n\n")
 }
@@ -507,6 +511,24 @@ func writeSubIssueCreation(b *strings.Builder) {
 	b.WriteString("**Ordering with stages.** For phased plans, group children with `--stage <N>` (N ≥ 1) instead of hand-promoting the backlog chain — stage members run together, and the parent wakes once per stage. Use `--stage k --status backlog` for later stages, then `multica issue children <id>` to inspect groupings before promoting. Reach for stages whenever a plan has more than one step or a step must wait for a group.\n\n")
 }
 
+// writeWorkflowExecutionRules emits the Workflow Execution Rules section
+// (CLO-175): the agent-side contract for participating in the software R&D
+// workflow loop. The section has three parts — the Project Manager MUST
+// create a Workflow first, every phase MUST produce a submitted Artifact,
+// and human review is the only path past critical gates. It is emitted for
+// every issue-bearing task kind (assignment / comment) so both the project
+// manager and the executing agents get the same rules.
+func writeWorkflowExecutionRules(b *strings.Builder) {
+	b.WriteString("## Workflow Execution Rules\n\n")
+	b.WriteString("Applies to project manager / software R&D tasks:\n\n")
+	b.WriteString("1. Project Manager Agent MUST create a Workflow first when the request is a software R&D task: `multica workflow create --name \"<name>\" --issue-id <issue-id> --output json`.\n")
+	b.WriteString("2. Every major development phase MUST generate an Artifact.\n")
+	b.WriteString("3. Artifact MUST be submitted through the CLI: `multica artifact submit --workflow-id <id> --node-id <node-id> --type <type> --name <file> --file <path> --output json`.\n")
+	b.WriteString("4. Track workflow status with `multica workflow get <id> --output json`.\n")
+	b.WriteString("5. Human approval is REQUIRED before continuing past critical phases. Do not advance, override status, approve, or reject anything — those are human-only actions and no CLI command exposes them.\n")
+	b.WriteString("6. NEVER use curl / wget or any direct API call to access Multica resources; NEVER bypass the human review loop.\n\n")
+}
+
 // writeSkills emits the Skills section listing skill names + descriptions.
 func writeSkills(b *strings.Builder, provider string, ctx TaskContextForEnv) {
 	skills := modelVisibleSkills(ctx.AgentSkills)
@@ -714,6 +736,10 @@ func buildMetaSkillContentSlim(provider string, ctx TaskContextForEnv) string {
 	if kind == kindCommentTriggered || kind == kindAssignmentTriggered {
 		writeMentions(&b)
 		writeAttachments(&b)
+	}
+
+	if kind == kindCommentTriggered || kind == kindAssignmentTriggered {
+		writeWorkflowExecutionRules(&b)
 	}
 
 	writeAlwaysUseCLI(&b)

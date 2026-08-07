@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>研发效能分析 · Tab4 DORA · 高保真设计稿</title>
+<style>
+  :root{
+    color-scheme: light;
+    --app-shell: oklch(0.964435 0.001327 286.375);
+    --page-canvas: oklch(0.988087 0 0);
+    --surface: oklch(1 0 0);
+    --surface-raised: oklch(1 0 0);
+    --surface-hover: oklch(0.967 0.001 286.375);
+    --surface-border: oklch(0.92 0.004 286.32);
+    --foreground: oklch(0.141 0.005 285.823);
+    --muted: oklch(0.967 0.001 286.375);
+    --muted-foreground: oklch(0.552 0.016 285.938);
+    --border: oklch(0.945 0.003 286.32);
+    --input: oklch(0.92 0.004 286.32);
+    --brand: oklch(0.55 0.16 255);
+    --success: oklch(0.55 0.16 145);
+    --warning: oklch(0.75 0.16 85);
+    --destructive: oklch(0.577 0.245 27.325);
+    --info: oklch(0.55 0.18 250);
+    --chart-1: oklch(0.55 0.16 255);
+    --chart-2: oklch(0.66 0.13 255);
+    --chart-3: oklch(0.76 0.10 255);
+    --chart-4: oklch(0.85 0.06 255);
+    --chart-5: oklch(0.92 0.03 255);
+    --radius: 0.625rem;
+    --surface-shadow: 0 1px 2px rgb(15 23 42 / 0.04), 0 1px 1px rgb(15 23 42 / 0.03);
+    --font-sans: "Inter", "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+    --font-mono: "Geist Mono", ui-monospace, SFMono-Regular, monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:var(--font-sans);background:var(--page-canvas);color:var(--foreground);font-size:14px}
+  .app{display:flex;height:100vh;background:var(--app-shell)}
+  .sidebar{width:232px;flex-shrink:0;background:var(--app-shell);border-right:1px solid var(--border);padding:16px 8px;font-size:14px}
+  .side-logo{display:flex;align-items:center;gap:8px;padding:4px 8px 16px;font-weight:500}
+  .side-logo .dot{width:20px;height:20px;border-radius:6px;background:var(--brand);display:inline-block}
+  .side-item{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;color:var(--muted-foreground);margin-bottom:2px}
+  .side-item.active{background:var(--surface-hover);color:var(--foreground);font-weight:500}
+  .side-item .ic{width:16px;height:16px;opacity:.75}
+  .side-group{font-size:11px;color:var(--muted-foreground);text-transform:uppercase;letter-spacing:.04em;padding:12px 8px 4px}
+  .main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+  .phead{height:48px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);padding:0 16px;background:var(--page-canvas)}
+  .phead-title{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:500}
+  .phead-title svg{width:16px;height:16px;color:var(--muted-foreground)}
+  .phead-right{display:flex;align-items:center;gap:12px}
+  .seg{display:inline-flex;align-items:center;gap:2px;background:var(--muted);border-radius:8px;padding:2px}
+  .seg button{border:none;background:transparent;font-size:12px;font-weight:500;padding:4px 10px;border-radius:6px;color:var(--muted-foreground);cursor:pointer;font-family:inherit}
+  .seg button.on{background:var(--surface);color:var(--foreground);box-shadow:0 1px 2px rgb(15 23 42/.08)}
+  .sel{display:flex;align-items:center;gap:6px;border:1px solid var(--input);border-radius:8px;padding:5px 10px;font-size:13px;color:var(--foreground);background:var(--surface)}
+  .sel svg{width:14px;height:14px;color:var(--muted-foreground)}
+  .tabs{display:flex;gap:20px;border-bottom:1px solid var(--border);padding:0 16px;background:var(--page-canvas)}
+  .tab{border:none;background:none;font-family:inherit;font-size:14px;color:var(--muted-foreground);padding:10px 2px;cursor:pointer;border-bottom:2px solid transparent;display:flex;align-items:center;gap:6px}
+  .tab.on{color:var(--foreground);font-weight:500;border-bottom-color:var(--foreground)}
+  .badge{font-size:11px;font-weight:500;border-radius:999px;padding:1px 7px;background:var(--muted);color:var(--muted-foreground);border:1px solid var(--border)}
+  .badge.warn{background:color-mix(in oklch, var(--warning) 12%, transparent);color:var(--warning);border-color:color-mix(in oklch, var(--warning) 30%, transparent)}
+  .badge.ok{background:color-mix(in oklch, var(--success) 12%, transparent);color:var(--success);border-color:color-mix(in oklch, var(--success) 30%, transparent)}
+  .badge.err{background:color-mix(in oklch, var(--destructive) 12%, transparent);color:var(--destructive);border-color:color-mix(in oklch, var(--destructive) 30%, transparent)}
+  .content{flex:1;overflow:auto;padding:24px}
+  .inner{max-width:1152px;margin:0 auto;display:flex;flex-direction:column;gap:20px}
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);border:1px solid var(--surface-border);border-radius:10px;background:var(--surface);box-shadow:var(--surface-shadow);overflow:hidden}
+  .kpi{display:flex;flex-direction:column;gap:8px;padding:20px}
+  .kpi+.kpi{border-left:1px solid var(--border)}
+  .kpi .lbl{font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:.05em;color:var(--muted-foreground)}
+  .kpi .val{font-size:30px;font-weight:600;line-height:1;font-variant-numeric:tabular-nums}
+  .kpi .val.brand{color:var(--brand)}
+  .kpi .val.err{color:var(--destructive)}
+  .kpi .hint{font-size:12px;color:var(--muted-foreground)}
+  .card{border:1px solid var(--surface-border);border-radius:10px;background:var(--surface);box-shadow:var(--surface-shadow);overflow:hidden}
+  .card-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px 8px}
+  .card-title{font-size:14px;font-weight:500}
+  .card-desc{font-size:12px;color:var(--muted-foreground);margin-top:2px}
+  .card-body{padding:4px 16px 16px}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+  .muted{color:var(--muted-foreground)}
+  .num{font-variant-numeric:tabular-nums;text-align:right}
+  .mono{font-family:var(--font-mono)}
+  .trend-legend{display:flex;gap:16px;font-size:12px;color:var(--muted-foreground);margin-bottom:6px;justify-content:flex-end}
+  .trend-legend .k{display:flex;align-items:center;gap:6px}
+  .trend-legend .sw{width:10px;height:3px;border-radius:2px}
+  .sw.c1{background:var(--chart-1)}.sw.c2{background:var(--chart-2)}.sw.c4{background:var(--chart-4)}
+  .chart-box{border:1px solid var(--border);border-radius:8px;background:var(--surface);padding:12px 16px}
+  .chart-svg{width:100%;height:140px;display:block}
+  table{width:100%;border-collapse:collapse}
+  th{font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:.04em;color:var(--muted-foreground);text-align:left;padding:8px 16px;border-bottom:1px solid var(--border)}
+  th.num{text-align:right}
+  td{font-size:13px;padding:9px 16px;border-bottom:1px solid var(--border);vertical-align:middle}
+  tr:last-child td{border-bottom:none}
+  tbody tr:hover{background:var(--surface-hover)}
+  .empty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:40px 16px;text-align:center;color:var(--muted-foreground)}
+  .empty .big{width:32px;height:32px;color:var(--muted-foreground);opacity:.6;margin-bottom:4px}
+  .empty .t{font-size:14px;font-weight:500;color:var(--foreground)}
+  .empty .d{font-size:12px;max-width:420px}
+  .footnote{font-size:12px;color:var(--muted-foreground);text-align:center;padding:8px;border-top:1px solid var(--border)}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="side-logo"><span class="dot"></span>云开发者俱乐部</div>
+    <div class="side-group">个人</div>
+    <div class="side-item"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/></svg>收件箱</div>
+    <div class="side-item"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>对话</div>
+    <div class="side-group">工作区</div>
+    <div class="side-item"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>Issue</div>
+    <div class="side-item"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>项目</div>
+    <div class="side-item"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>智能体</div>
+    <div class="side-item"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>小队</div>
+    <div class="side-item"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 14l4-4 4 3 5-6"/></svg>用量</div>
+    <div class="side-item active"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 15l-2-3m2 3 2-3m-2 3v3"/><path d="M4 19a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2z"/></svg>效能分析</div>
+    <div class="side-group">配置</div>
+    <div class="side-item"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v4m0 14v4M4.2 4.2l2.8 2.8m10 10 2.8 2.8M1 12h4m14 0h4M4.2 19.8l2.8-2.8M17 7l2.8-2.8"/></svg>设置</div>
+  </aside>
+  <div class="main">
+    <header class="phead">
+      <div class="phead-title">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 15l-2-3m2 3 2-3m-2 3v3"/><path d="M4 19a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2z"/></svg>
+        研发效能分析
+      </div>
+      <div class="phead-right">
+        <div class="seg">
+          <button>7d</button><button class="on">30d</button><button>90d</button><button>180d</button>
+        </div>
+        <div class="sel">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+          Asia/Shanghai
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px"><path d="m6 9 6 6 6-6"/></svg>
+        </div>
+      </div>
+    </header>
+    <nav class="tabs">
+      <button class="tab">活跃度与渗透</button>
+      <button class="tab">Agent效能</button>
+      <button class="tab">Git贡献</button>
+      <button class="tab on">DORA</button>
+    </nav>
+    <div class="content">
+      <div class="inner">
+        <!-- KPI -->
+        <div class="kpis">
+          <div class="kpi">
+            <div class="lbl">部署频率(周)</div>
+            <div class="val brand">4.5</div>
+            <div class="hint">窗口部署 18 次</div>
+          </div>
+          <div class="kpi">
+            <div class="lbl">变更失败率</div>
+            <div class="val err">11.1%</div>
+            <div class="hint">失败 2 / 总 18</div>
+          </div>
+          <div class="kpi">
+            <div class="lbl">MTTR</div>
+            <div class="val">1时</div>
+            <div class="hint">P50 已恢复样本</div>
+          </div>
+          <div class="kpi">
+            <div class="lbl">平均交付周期(P50)</div>
+            <div class="val">1.5天</div>
+            <div class="hint">口径见下方角标</div>
+          </div>
+        </div>
+
+        <!-- Lead time + deploy freq -->
+        <div class="row2">
+          <div class="card">
+            <div class="card-head">
+              <div>
+                <div class="card-title">交付周期趋势</div>
+                <div class="card-desc">P50 / P95 · 按周</div>
+              </div>
+              <div class="seg">
+                <button>Issue→部署</button><button class="on">Issue→Merged</button>
+              </div>
+            </div>
+            <div class="card-body">
+              <div style="display:flex;justify-content:flex-end;gap:6px;margin-bottom:4px"><span class="badge warn">替代口径：Merged</span></div>
+              <div class="trend-legend">
+                <span class="k"><span class="sw c1"></span>P50</span>
+                <span class="k"><span class="sw c4"></span>P95</span>
+              </div>
+              <div class="chart-box">
+                <svg class="chart-svg" viewBox="0 0 700 140" preserveAspectRatio="none">
+                  <g stroke="var(--border)" stroke-width="1">
+                    <line x1="0" y1="0" x2="700" y2="0"/><line x1="0" y1="35" x2="700" y2="35"/>
+                    <line x1="0" y1="70" x2="700" y2="70"/><line x1="0" y1="105" x2="700" y2="105"/><line x1="0" y1="140" x2="700" y2="140"/>
+                  </g>
+                  <polyline fill="none" stroke="var(--chart-1)" stroke-width="2" points="0,60 100,70 200,52 300,40 400,55 500,38 600,46 700,30"/>
+                  <polyline fill="none" stroke="var(--chart-4)" stroke-width="2" stroke-dasharray="4 3" points="0,30 100,42 200,26 300,18 400,30 500,16 600,24 700,10"/>
+                  <g fill="var(--chart-1)"><circle cx="700" cy="30" r="3"/></g>
+                  <g fill="var(--chart-4)"><circle cx="700" cy="10" r="3"/></g>
+                </svg>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-head">
+              <div>
+                <div class="card-title">部署频率趋势</div>
+                <div class="card-desc">按周部署次数</div>
+              </div>
+            </div>
+            <div class="card-body">
+              <div class="chart-box">
+                <svg class="chart-svg" viewBox="0 0 700 140" preserveAspectRatio="none">
+                  <g stroke="var(--border)" stroke-width="1">
+                    <line x1="0" y1="35" x2="700" y2="35"/><line x1="0" y1="70" x2="700" y2="70"/><line x1="0" y1="105" x2="700" y2="105"/><line x1="0" y1="140" x2="700" y2="140"/>
+                  </g>
+                  <rect x="60" y="40" width="60" height="100" rx="4" fill="var(--chart-2)"/>
+                  <rect x="180" y="70" width="60" height="70" rx="4" fill="var(--chart-2)"/>
+                  <rect x="300" y="52" width="60" height="88" rx="4" fill="var(--chart-2)"/>
+                  <rect x="420" y="24" width="60" height="116" rx="4" fill="var(--chart-2)"/>
+                  <rect x="540" y="64" width="60" height="76" rx="4" fill="var(--chart-2)"/>
+                  <rect x="660" y="42" width="40" height="98" rx="4" fill="var(--chart-2)"/>
+                </svg>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Change failure rate + MTTR -->
+        <div class="card">
+          <div class="card-head">
+            <div>
+              <div class="card-title">变更失败率与 MTTR</div>
+              <div class="card-desc">按周 · 失败率与恢复时长</div>
+            </div>
+            <div class="seg">
+              <button class="on">全部</button><button>已恢复</button><button>进行中</button>
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="trend-legend">
+              <span class="k"><span class="sw c1"></span>变更失败率</span>
+              <span class="k"><span class="sw c2"></span>MTTR</span>
+            </div>
+            <div class="chart-box" style="margin-bottom:16px">
+              <svg class="chart-svg" viewBox="0 0 700 140" preserveAspectRatio="none">
+                <g stroke="var(--border)" stroke-width="1">
+                  <line x1="0" y1="0" x2="700" y2="0"/><line x1="0" y1="35" x2="700" y2="35"/>
+                  <line x1="0" y1="70" x2="700" y2="70"/><line x1="0" y1="105" x2="700" y2="105"/><line x1="0" y1="140" x2="700" y2="140"/>
+                </g>
+                <polyline fill="none" stroke="var(--chart-1)" stroke-width="2" points="0,50 100,80 200,60 300,96 400,86 500,104 600,96 700,100"/>
+                <polyline fill="none" stroke="var(--chart-2)" stroke-width="2" stroke-dasharray="4 3" points="0,110 100,96 200,116 300,40 400,60 500,20 600,28 700,18"/>
+              </svg>
+            </div>
+            <table>
+              <thead>
+                <tr>
+                  <th>部署ID</th><th>应用</th><th>失败时间</th><th>恢复时间</th><th class="num">MTTR</th><th>原因</th><th>状态</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><span class="mono">deploy-20260803-001</span></td>
+                  <td>multica-web</td>
+                  <td class="muted">08-03 14:20</td>
+                  <td class="muted">08-03 15:20</td>
+                  <td class="num">1时</td>
+                  <td>db migration failed</td>
+                  <td><span class="badge ok">已恢复</span></td>
+                </tr>
+                <tr>
+                  <td><span class="mono">deploy-20260728-004</span></td>
+                  <td>multica-api</td>
+                  <td class="muted">07-28 09:10</td>
+                  <td class="muted">—</td>
+                  <td class="num muted">-</td>
+                  <td>health check timeout</td>
+                  <td><span class="badge warn">进行中</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="footnote">高保真设计稿（示意）· 全部样式基于 packages/ui 组件与 docs/design.md token，实现时禁止硬编码</div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

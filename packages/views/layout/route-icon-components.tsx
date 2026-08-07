@@ -8,6 +8,7 @@ import {
   Bot,
   Users,
   BarChart3,
+  Gauge,
   Monitor,
   Server,
   BookOpenText,
@@ -20,10 +21,11 @@ import {
   FileAudio,
   FileVideo,
   FileQuestion,
+  GitBranch,
+  CheckCircle2,
   type LucideIcon,
 } from "lucide-react";
 import { resolveRouteIconName, type RouteIconName } from "@multica/core/paths";
-
 /**
  * Icon name → component registry: the rendering half of the route icon
  * contract defined in `@multica/core/paths`.
@@ -41,6 +43,7 @@ export const ROUTE_ICON_COMPONENTS: Record<RouteIconName, LucideIcon> = {
   Bot,
   Users,
   BarChart3,
+  Gauge,
   Monitor,
   Server,
   BookOpenText,
@@ -53,6 +56,8 @@ export const ROUTE_ICON_COMPONENTS: Record<RouteIconName, LucideIcon> = {
   FileAudio,
   FileVideo,
   FileQuestion,
+  GitBranch,
+  CheckCircle2,
 };
 
 /**

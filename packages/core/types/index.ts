@@ -1,5 +1,40 @@
 export type { Issue, IssueStatus, IssuePriority, IssueAssigneeType, IssueMetadata, IssueMetadataValue, IssueReaction } from "./issue";
 export type {
+  Workflow,
+  WorkflowStatus,
+  WorkflowStage,
+  WorkflowNode,
+  WorkflowNodeStatus,
+  WorkflowNodeType,
+  WorkflowProgress,
+  WorkflowListResponse,
+  WorkflowTransition,
+  WorkflowTransitionsResponse,
+  CreateWorkflowRequest,
+  AdvanceWorkflowResponse,
+  ArtifactReviewStatus,
+} from "./workflow";
+export type {
+  Artifact,
+  ArtifactStatus,
+  ArtifactType,
+  ArtifactContentType,
+  ArtifactListResponse,
+  ArtifactVersion,
+  ArtifactVersionsResponse,
+  ArtifactDiffResponse,
+  DiffLine,
+  ArtifactReview,
+  ArtifactReviewsResponse,
+  ArtifactStats,
+  ReviewAction,
+  ReviewArtifactRequest,
+  ReviewArtifactResponse,
+  ReviewQueueItem,
+  ReviewQueueResponse,
+  CreateArtifactRequest,
+} from "./artifact";
+export type {
   Agent,
   AgentStatus,
   AgentRuntimeMode,
@@ -76,12 +111,62 @@ export type {
   RuntimeLocalSkillImportResult,
   IssueUsageSummary,
 } from "./agent";
+export type {
+  MonitoringStatusCounts,
+  MonitoringIssueDistribution,
+  MonitoringProjectProgress,
+  MonitoringActivity,
+  MonitoringActivityEntity,
+  MonitoringCommentPoint,
+  MonitoringComments,
+  MonitoringCompletionPoint,
+  MonitoringCompletion,
+} from "./monitoring";
+export type {
+  AnalyticsSourceStatus,
+  AnalyticsActivitySummary,
+  AnalyticsHeatmapDayHour,
+  AnalyticsHeatmapDay,
+  AnalyticsActivityHeatmap,
+  AnalyticsHeatmapMetric,
+  AnalyticsTopMember,
+  AnalyticsAdoptionSummary,
+  AnalyticsAdoptionTrendPoint,
+  AnalyticsFunnel,
+  AnalyticsAgentPerformance,
+  AnalyticsAgentTopItem,
+  AnalyticsSkillAccumulation,
+  AnalyticsSkillTopReused,
+  AnalyticsSkillsOverview,
+  AnalyticsCollaborationSummary,
+  AnalyticsBlockerItem,
+  AnalyticsElocGroupBy,
+  AnalyticsElocItem,
+  AnalyticsEloc,
+  AnalyticsQuality,
+  AnalyticsRepoActivityItem,
+  AnalyticsRepoActivity,
+  AnalyticsPrItem,
+  AnalyticsPrs,
+  AnalyticsLeadTimeMetric,
+  AnalyticsLeadTimePoint,
+  AnalyticsLeadTime,
+  AnalyticsDeploymentTrendPoint,
+  AnalyticsDeploymentFailure,
+  AnalyticsDeployments,
+  AnalyticsLifecycleEventType,
+  AnalyticsLifecycleEvent,
+  AnalyticsLifecycle,
+  AnalyticsDepartment,
+  AnalyticsDepartments,
+} from "./analytics";
 export { RUNTIME_PROFILE_PROTOCOL_FAMILIES } from "./agent";
 export type { Workspace, WorkspaceRepo, Member, MemberRole, User, MemberWithUser, Invitation, ShareLink } from "./workspace";
 export type { InboxItem, InboxSeverity, InboxItemType, InboxWorkspaceUnread } from "./inbox";
 export type { NotificationGroupKey, NotificationGroupValue, NotificationPreferences, NotificationPreferenceResponse } from "./notification-preference";
 export type { Comment, CommentType, CommentAuthorType, CommentTriggerPreview, CommentTriggerPreviewAgent, CommentTriggerSource, CommentTriggerOutcome, CommentTriggerStatus, Reaction } from "./comment";
 export type { Label, LabelResourceType, CreateLabelRequest, UpdateLabelRequest, ListLabelsResponse, IssueLabelsResponse, ResourceLabelsResponse } from "./label";
+export type { IssueTemplate, CreateIssueTemplateRequest, UpdateIssueTemplateRequest, ListIssueTemplatesResponse } from "./issue-template";
 export type { IssueProperty, IssuePropertyType, IssuePropertyOption, IssuePropertyConfig, IssuePropertyValue, IssuePropertyValues, CreatePropertyRequest, UpdatePropertyRequest, ListPropertiesResponse, IssuePropertiesResponse } from "./property";
 export { ISSUE_PROPERTY_TYPES, isKnownPropertyType } from "./property";
 export type {
@@ -194,6 +279,7 @@ export type {
 } from "./autopilot";
 export type {
   Squad,
+  SquadChild,
   SquadMember,
   SquadMemberType,
   SquadMemberPreview,

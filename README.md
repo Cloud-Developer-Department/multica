@@ -177,6 +177,10 @@ The `multica` CLI connects your local machine to Multica — authenticate, manag
 | `multica workspace switch <id\|slug>` | Switch the default workspace for this profile |
 | `multica issue list` | List issues in your workspace |
 | `multica issue create` | Create a new issue |
+| `multica workflow create` | Create an R&D workflow from an issue |
+| `multica workflow get` | Get workflow status and current node/agent/task |
+| `multica artifact submit` | Submit a phase artifact for a workflow node |
+| `multica artifact list` | List artifacts for a workflow |
 | `multica update` | Update to the latest version |
 
 See the [CLI and Daemon Guide](CLI_AND_DAEMON.md) for the full command reference.

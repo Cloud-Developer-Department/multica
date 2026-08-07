@@ -1,0 +1,84 @@
+{
+  "range": {
+    "1": "直近24時間",
+    "7": "直近7日間",
+    "30": "直近30日間"
+  },
+  "page": {
+    "title": "データモニタリング"
+  },
+  "toolbar": {
+    "data_updated": "データ更新時刻",
+    "auto_refresh": "自動更新",
+    "refresh": "更新",
+    "refreshing": "更新中…",
+    "no_update": "更新なし",
+    "auto_refresh_paused_badge": "自動更新停止中",
+    "enabled": "自動更新を有効化しました（60秒）",
+    "disabled": "自動更新を無効化しました",
+    "paused_toast": "連続失敗が上限に達したため、自動更新を停止しました",
+    "up_to_date": "データは最新です（{{time}}）",
+    "refresh_partial_failed": "一部のデータ更新に失敗しました。前回のデータを表示します"
+  },
+  "kpi": {
+    "section": "主要指標",
+    "total_label": "全 Issue",
+    "in_progress_label": "進行中",
+    "in_progress_sub": "全体の {{pct}}",
+    "completion_label": "完了率",
+    "delay_label": "遅延率",
+    "delay_no_data": "期限付きタスクのデータがありません",
+    "online_runtime_label": "オンラインのランタイム",
+    "online_runtime_sub": "全 {{total}} 個",
+    "online_rate_label": "オンライン率",
+    "online_rate_sub": "{{online}}/{{total}} オンライン"
+  },
+  "module": {
+    "section": "データモジュール",
+    "other": "その他",
+    "issue_distribution_title": "Issue ステータス分布",
+    "issue_distribution_empty": "Issue データがありません",
+    "issue_distribution_empty_desc": "Issue を作成するとここに分布が表示されます",
+    "project_progress_title": "プロジェクト進捗",
+    "project_progress_empty": "プロジェクトデータがありません",
+    "project_progress_empty_desc": "プロジェクトを作成するとここに進捗が表示されます",
+    "agent_workload_title": "エージェントの作業量",
+    "agent_workload_empty": "アクティブな記録がありません",
+    "team_activity_title": "チームのアクティビティ",
+    "team_activity_empty": "アクティブな記録がありません",
+    "comments_title": "コメントの活発度",
+    "comments_total": "合計 {{count}}",
+    "comments_today": "今日 {{count}}",
+    "comments_series": "コメント数",
+    "comments_empty": "コメントデータがありません",
+    "comments_empty_desc": "コメントが作成されるとここに活発度が表示されます",
+    "completion_title": "完了率 / 遅延率の推移",
+    "completion_empty": "推移データがありません",
+    "completion_empty_desc": "期限付きタスクがあるとここに推移が表示されます",
+    "completion_series": "完了率",
+    "delay_series": "遅延率"
+  },
+  "donut": {
+    "total_label": "全 Issue"
+  },
+  "runtime": {
+    "title": "ランタイムステータス",
+    "summary": "オンライン {{online}} / 全 {{total}}",
+    "empty_title": "ランタイムが見つかりません",
+    "col_name": "ランタイム名",
+    "col_type": "タイプ",
+    "col_status": "状態",
+    "col_heartbeat": "最終ハートビート",
+    "col_resources": "リソース使用量",
+    "minutes_ago": "{{minutes}} 分前",
+    "prev_page": "前へ",
+    "next_page": "次へ"
+  },
+  "error": {
+    "module_title": "データの読み込みに失敗しました",
+    "page_title": "データの読み込みに失敗しました",
+    "page_desc": "しばらくして再試行するか、接続を確認してください",
+    "retry": "再試行",
+    "reload": "再読み込み"
+  }
+}

@@ -73,6 +73,19 @@ Projects have their own **lead** — **just like an issue's assignee, a lead can
 
 Deleting a project **does not delete the issues inside it**: those issues simply detach from the project and remain in the workspace.
 
+## Board view
+
+The board (Kanban) groups issues into status columns and supports drag-and-drop. Parent and sub-issues render as a **tree** inside each column:
+
+- **Expand / collapse**: parents with sub-issues show a chevron on the left of the card. Click to expand (children appear indented beneath the parent) or collapse (the whole subtree hides). The collapsed state is persisted and is independent from the table view's collapse state.
+- **Drag semantics**:
+  - Drag a **parent** card → the whole subtree moves with it (reorder within a column, or change status/assignee across columns).
+  - Drag a **leaf sub-issue** → it moves on its own.
+  - Drag a **sub-issue across columns** → it detaches from its parent and becomes a top-level task in the target column (the drag preview shows a "will become a top-level task" hint).
+- **Children follow the parent column**: a sub-issue renders in its parent's column regardless of its own status. Only when the parent is not visible (filtered out) does the sub-issue fall back to its own status column.
+
+> Turn off the "Show sub-issues" switch at the top right of the board to show root tasks only.
+
 ## Next
 
 - [Comments and mentions](/comments) — collaborating under an issue

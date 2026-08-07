@@ -1,0 +1,16 @@
+-- Delegation provenance + idempotency for the /delegate command (LIU-13).
+--
+-- When the main-issue leader posts a /delegate comment that @-mentions a
+-- sub-squad, the platform auto-creates a child issue assigned to that squad.
+-- This column records WHICH comment created the child issue:
+--
+--   1. provenance — the child can be traced back to the exact delegate comment;
+--   2. edit idempotency — the edit recompute keys on (delegation_comment_id,
+--      assignee_id) so a description-only edit never re-creates an existing
+--      active child (O5 / AC-6).
+--
+-- NULL for every issue that was not created by a delegate comment. ON DELETE
+-- SET NULL keeps a deleted comment from orphaning its children; the children
+-- themselves are never cascade-deleted (structural edits are blocked, but a
+-- comment can still be removed by an admin).
+ALTER TABLE issue ADD COLUMN delegation_comment_id UUID NULL REFERENCES comment(id) ON DELETE SET NULL;

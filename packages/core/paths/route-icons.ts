@@ -29,6 +29,7 @@ export type RouteIconName =
   | "Bot"
   | "Users"
   | "BarChart3"
+  | "Gauge"
   | "Monitor"
   | "Server"
   | "BookOpenText"
@@ -40,7 +41,9 @@ export type RouteIconName =
   | "FileArchive"
   | "FileAudio"
   | "FileVideo"
-  | "FileQuestion";
+  | "FileQuestion"
+  | "GitBranch"
+  | "CheckCircle2";
 
 /** i18n label key (under the `layout.nav` namespace) for a page. */
 export type NavLabelKey =
@@ -53,9 +56,14 @@ export type NavLabelKey =
   | "agents"
   | "squads"
   | "usage"
+  | "monitoring"
+  | "analytics"
   | "runtimes"
   | "skills"
-  | "settings";
+  | "settings"
+  | "workflows"
+  | "artifacts"
+  | "reviews";
 
 /** Stable identifier for each workspace navigation page. */
 export type WorkspacePageKey =
@@ -68,9 +76,14 @@ export type WorkspacePageKey =
   | "agents"
   | "squads"
   | "usage"
+  | "monitoring"
+  | "analytics"
   | "runtimes"
   | "skills"
-  | "settings";
+  | "settings"
+  | "workflows"
+  | "artifacts"
+  | "reviews";
 
 export interface WorkspacePage {
   /** Route segment at index 1 of `/{slug}/{segment}/...`. */
@@ -95,9 +108,14 @@ export const WORKSPACE_PAGES: Record<WorkspacePageKey, WorkspacePage> = {
   agents: { segment: "agents", icon: "Bot", navKey: "agents" },
   squads: { segment: "squads", icon: "Users", navKey: "squads" },
   usage: { segment: "usage", icon: "BarChart3", navKey: "usage" },
+  monitoring: { segment: "dashboard", icon: "BarChart3", navKey: "monitoring" },
+  analytics: { segment: "analytics", icon: "Gauge", navKey: "analytics" },
   runtimes: { segment: "runtimes", icon: "Monitor", navKey: "runtimes" },
   skills: { segment: "skills", icon: "BookOpenText", navKey: "skills" },
   settings: { segment: "settings", icon: "Settings", navKey: "settings" },
+  workflows: { segment: "workflows", icon: "GitBranch", navKey: "workflows" },
+  artifacts: { segment: "artifacts", icon: "FileText", navKey: "artifacts" },
+  reviews: { segment: "reviews", icon: "CheckCircle2", navKey: "reviews" },
 };
 
 /** Reverse lookup: route segment → page key. */

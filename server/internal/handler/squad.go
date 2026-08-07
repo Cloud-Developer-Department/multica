@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -20,26 +21,37 @@ import (
 // ── Response types ──────────────────────────────────────────────────────────
 
 type SquadResponse struct {
-	ID            string                       `json:"id"`
-	WorkspaceID   string                       `json:"workspace_id"`
-	Name          string                       `json:"name"`
-	Description   string                       `json:"description"`
-	Instructions  string                       `json:"instructions"`
-	AvatarURL     *string                      `json:"avatar_url"`
-	LeaderID      string                       `json:"leader_id"`
-	CreatorID     string                       `json:"creator_id"`
-	CreatedAt     string                       `json:"created_at"`
-	UpdatedAt     string                       `json:"updated_at"`
-	ArchivedAt    *string                      `json:"archived_at"`
-	ArchivedBy    *string                      `json:"archived_by"`
-	MemberCount   int                          `json:"member_count"`
-	MemberPreview []SquadMemberPreviewResponse `json:"member_preview"`
+	ID                     string                       `json:"id"`
+	WorkspaceID            string                       `json:"workspace_id"`
+	Name                   string                       `json:"name"`
+	Description            string                       `json:"description"`
+	Instructions           string                       `json:"instructions"`
+	AvatarURL              *string                      `json:"avatar_url"`
+	LeaderID               string                       `json:"leader_id"`
+	CreatorID              string                       `json:"creator_id"`
+	CreatedAt              string                       `json:"created_at"`
+	UpdatedAt              string                       `json:"updated_at"`
+	ArchivedAt             *string                      `json:"archived_at"`
+	ArchivedBy             *string                      `json:"archived_by"`
+	ParentSquadID          *string                      `json:"parent_squad_id"`
+	UpgradeOnMemberMention bool                         `json:"upgrade_on_member_mention"`
+	MemberCount            int                          `json:"member_count"`
+	MemberPreview          []SquadMemberPreviewResponse `json:"member_preview"`
+	ChildSquads            []SquadChildResponse         `json:"child_squads"`
 }
 
 type SquadMemberPreviewResponse struct {
 	MemberType string `json:"member_type"`
 	MemberID   string `json:"member_id"`
 	Role       string `json:"role"`
+}
+
+// SquadChildResponse is the lightweight child-squad summary embedded in a
+// parent squad's GET/list payload (LIU-8 squad nesting).
+type SquadChildResponse struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	MemberCount int    `json:"member_count"`
 }
 
 type squadMemberSummary struct {
@@ -60,19 +72,22 @@ type SquadMemberResponse struct {
 
 func squadToResponse(s db.Squad) SquadResponse {
 	return SquadResponse{
-		ID:            uuidToString(s.ID),
-		WorkspaceID:   uuidToString(s.WorkspaceID),
-		Name:          s.Name,
-		Description:   s.Description,
-		Instructions:  s.Instructions,
-		AvatarURL:     textToPtr(s.AvatarUrl),
-		LeaderID:      uuidToString(s.LeaderID),
-		CreatorID:     uuidToString(s.CreatorID),
-		CreatedAt:     timestampToString(s.CreatedAt),
-		UpdatedAt:     timestampToString(s.UpdatedAt),
-		ArchivedAt:    timestampToPtr(s.ArchivedAt),
-		ArchivedBy:    uuidToPtr(s.ArchivedBy),
-		MemberPreview: []SquadMemberPreviewResponse{},
+		ID:                     uuidToString(s.ID),
+		WorkspaceID:            uuidToString(s.WorkspaceID),
+		Name:                   s.Name,
+		Description:            s.Description,
+		Instructions:           s.Instructions,
+		AvatarURL:              textToPtr(s.AvatarUrl),
+		LeaderID:               uuidToString(s.LeaderID),
+		CreatorID:              uuidToString(s.CreatorID),
+		CreatedAt:              timestampToString(s.CreatedAt),
+		UpdatedAt:              timestampToString(s.UpdatedAt),
+		ArchivedAt:             timestampToPtr(s.ArchivedAt),
+		ArchivedBy:             uuidToPtr(s.ArchivedBy),
+		ParentSquadID:          uuidToPtr(s.ParentSquadID),
+		UpgradeOnMemberMention: s.UpgradeOnMemberMention,
+		MemberPreview:          []SquadMemberPreviewResponse{},
+		ChildSquads:            []SquadChildResponse{},
 	}
 }
 
@@ -174,6 +189,45 @@ func (h *Handler) loadSquadMemberSummary(ctx context.Context, squadID pgtype.UUI
 	return summary, nil
 }
 
+// loadChildSquadSummaries returns the child-squad summaries (id, name, member
+// count) for a squad. v1 nesting is one level deep, so a squad's children
+// never have children of their own.
+func (h *Handler) loadChildSquadSummaries(ctx context.Context, squadID pgtype.UUID) ([]SquadChildResponse, error) {
+	rows, err := h.Queries.ListChildSquadSummaries(ctx, squadID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]SquadChildResponse, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, SquadChildResponse{
+			ID:          uuidToString(row.ID),
+			Name:        row.Name,
+			MemberCount: int(row.MemberCount),
+		})
+	}
+	return out, nil
+}
+
+// loadChildSquadSummariesByWorkspace batches child summaries for every squad
+// in a workspace, keyed by the parent squad id. Used by ListSquads so the
+// whole list payload carries child_squads in one pass.
+func (h *Handler) loadChildSquadSummariesByWorkspace(ctx context.Context, workspaceID pgtype.UUID) (map[string][]SquadChildResponse, error) {
+	rows, err := h.Queries.ListChildSquadSummariesByWorkspace(ctx, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	byParent := make(map[string][]SquadChildResponse, len(rows))
+	for _, row := range rows {
+		parentID := uuidToString(row.ParentSquadID)
+		byParent[parentID] = append(byParent[parentID], SquadChildResponse{
+			ID:          uuidToString(row.ID),
+			Name:        row.Name,
+			MemberCount: int(row.MemberCount),
+		})
+	}
+	return byParent, nil
+}
+
 func (h *Handler) squadToResponseWithPreview(ctx context.Context, squad db.Squad) (SquadResponse, error) {
 	resp := squadToResponse(squad)
 	summary, err := h.loadSquadMemberSummary(ctx, squad.ID)
@@ -181,6 +235,11 @@ func (h *Handler) squadToResponseWithPreview(ctx context.Context, squad db.Squad
 		return resp, err
 	}
 	applySquadMemberSummary(&resp, summary)
+	children, err := h.loadChildSquadSummaries(ctx, squad.ID)
+	if err != nil {
+		return resp, err
+	}
+	resp.ChildSquads = children
 	return resp, nil
 }
 
@@ -214,10 +273,22 @@ func (h *Handler) ListSquads(w http.ResponseWriter, r *http.Request) {
 		addSquadMemberPreview(summary, row.MemberType, row.MemberID, row.Role)
 	}
 
+	// Child-squad summaries (LIU-8 nesting) batched across the whole list so
+	// every payload carries child_squads without an N+1.
+	childByParent, err := h.loadChildSquadSummariesByWorkspace(r.Context(), wsUUID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to list child squad summaries")
+		return
+	}
+
 	resp := make([]SquadResponse, len(squads))
 	for i, s := range squads {
 		resp[i] = squadToResponse(s)
 		applySquadMemberSummary(&resp[i], summaries[uuidToString(s.ID)])
+		resp[i].ChildSquads = childByParent[uuidToString(s.ID)]
+		if resp[i].ChildSquads == nil {
+			resp[i].ChildSquads = []SquadChildResponse{}
+		}
 	}
 	writeJSON(w, http.StatusOK, resp)
 }
@@ -233,10 +304,21 @@ func (h *Handler) CreateSquad(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Name        string  `json:"name"`
-		Description string  `json:"description"`
-		LeaderID    string  `json:"leader_id"`
-		AvatarURL   *string `json:"avatar_url"`
+		Name                   string   `json:"name"`
+		Description            string   `json:"description"`
+		LeaderID               string   `json:"leader_id"`
+		AvatarURL              *string  `json:"avatar_url"`
+		IncludedSquadIDs       []string `json:"included_squad_ids"`
+		// F1 (LIU-9 子任务A): optional members added atomically with the create.
+		// Each entry is validated before anything is written; any invalid entry
+		// fails the whole request and the response carries failed_members (B07).
+		Members []struct {
+			MemberType string `json:"member_type"`
+			MemberID   string `json:"member_id"`
+			Role       string `json:"role"`
+		} `json:"members"`
+		// Per-squad safety valve for the F3 member-mention upgrade (default true).
+		UpgradeOnMemberMention *bool `json:"upgrade_on_member_mention"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
@@ -276,18 +358,120 @@ func (h *Handler) CreateSquad(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// F1 (LIU-9 子任务A): validate every requested member BEFORE any write.
+	// All-or-nothing semantics (AC-1.3): any invalid member fails the whole
+	// create and the 400 response carries the failed_members list so the
+	// front-end can highlight exactly which entries were rejected (B07).
+	type validatedMember struct {
+		memberType string
+		memberID   pgtype.UUID
+		role       string
+	}
+	var (
+		failedMembers []map[string]string
+		members       = make([]validatedMember, 0, len(req.Members))
+	)
+	seenMembers := make(map[string]struct{}, len(req.Members))
+	for _, m := range req.Members {
+		fail := func(reason string) {
+			failedMembers = append(failedMembers, map[string]string{
+				"member_type": m.MemberType,
+				"member_id":   m.MemberID,
+				"reason":      reason,
+			})
+		}
+		if m.MemberType != "agent" && m.MemberType != "member" {
+			fail("member_type must be 'agent' or 'member'")
+			continue
+		}
+		memberUUID, err := util.ParseUUID(m.MemberID)
+		if err != nil {
+			fail("invalid member_id")
+			continue
+		}
+		// AC-1.5: duplicates (including re-listing the leader) are conflicts,
+		// never silently merged.
+		key := m.MemberType + ":" + uuidToString(memberUUID)
+		if _, dup := seenMembers[key]; dup {
+			fail("duplicate member")
+			continue
+		}
+		if m.MemberType == "agent" && uuidToString(memberUUID) == uuidToString(leaderUUID) {
+			fail("leader is already a member")
+			continue
+		}
+		if m.MemberType == "agent" {
+			agent, err := h.Queries.GetAgentInWorkspace(r.Context(), db.GetAgentInWorkspaceParams{
+				ID: memberUUID, WorkspaceID: wsUUID,
+			})
+			if err != nil {
+				fail("agent not found in this workspace")
+				continue
+			}
+			if !h.memberCanWireAgent(r.Context(), member, agent, workspaceID) {
+				fail("you can only add an agent you have access to")
+				continue
+			}
+		} else {
+			if _, err := h.Queries.GetMemberByUserAndWorkspace(r.Context(), db.GetMemberByUserAndWorkspaceParams{
+				UserID: memberUUID, WorkspaceID: wsUUID,
+			}); err != nil {
+				fail("member not found in this workspace")
+				continue
+			}
+		}
+		seenMembers[key] = struct{}{}
+		members = append(members, validatedMember{
+			memberType: m.MemberType,
+			memberID:   memberUUID,
+			role:       m.Role,
+		})
+	}
+	if len(failedMembers) > 0 {
+		writeJSON(w, http.StatusBadRequest, map[string]any{
+			"error":          "one or more members are invalid; no squad was created",
+			"failed_members": failedMembers,
+		})
+		return
+	}
+
+	// Validate included_squad_ids (LIU-8 squad nesting, v1 one level): every
+	// included squad must exist in this workspace, be unarchived, and not
+	// already belong to another parent. Any invalid id fails the whole
+	// request with a 400 before anything is written.
+	childUUIDs, err := h.validateIncludedSquads(r, wsUUID, req.IncludedSquadIDs)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
 	avatarURL := pgtype.Text{}
 	if req.AvatarURL != nil {
 		avatarURL = pgtype.Text{String: *req.AvatarURL, Valid: true}
 	}
 
-	squad, err := h.Queries.CreateSquad(r.Context(), db.CreateSquadParams{
-		WorkspaceID: wsUUID,
-		Name:        req.Name,
-		Description: req.Description,
-		LeaderID:    leaderUUID,
-		CreatorID:   member.UserID,
-		AvatarUrl:   avatarURL,
+	// Create the parent squad and attach every included child in a single
+	// transaction so a failure mid-way cannot leave a half-nested squad.
+	tx, err := h.TxStarter.Begin(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to start squad create transaction")
+		return
+	}
+	defer tx.Rollback(r.Context())
+	qtx := h.Queries.WithTx(tx)
+
+	upgradeOnMemberMention := pgtype.Bool{Valid: true, Bool: true}
+	if req.UpgradeOnMemberMention != nil {
+		upgradeOnMemberMention = pgtype.Bool{Valid: true, Bool: *req.UpgradeOnMemberMention}
+	}
+	squad, err := qtx.CreateSquad(r.Context(), db.CreateSquadParams{
+		WorkspaceID:            wsUUID,
+		Name:                   req.Name,
+		Description:            req.Description,
+		LeaderID:               leaderUUID,
+		CreatorID:              member.UserID,
+		AvatarUrl:              avatarURL,
+		UpgradeOnMemberMention: upgradeOnMemberMention,
 	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to create squad")
@@ -295,12 +479,50 @@ func (h *Handler) CreateSquad(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Auto-add leader as a member with role "leader".
-	h.Queries.AddSquadMember(r.Context(), db.AddSquadMemberParams{
+	if _, err := qtx.AddSquadMember(r.Context(), db.AddSquadMemberParams{
 		SquadID:    squad.ID,
 		MemberType: "agent",
 		MemberID:   leaderUUID,
 		Role:       "leader",
-	})
+	}); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to add squad leader")
+		return
+	}
+
+	// F1: add every validated member in the same transaction (F2: each may
+	// carry an optional role). Duplicates were rejected above, so a unique
+	// violation here would indicate a race — fail the whole create, never
+	// produce a half-built squad (AC-1.3/1.5).
+	for _, m := range members {
+		if _, err := qtx.AddSquadMember(r.Context(), db.AddSquadMemberParams{
+			SquadID:    squad.ID,
+			MemberType: m.memberType,
+			MemberID:   m.memberID,
+			Role:       m.role,
+		}); err != nil {
+			if isUniqueViolation(err) {
+				writeError(w, http.StatusConflict, "member already in squad")
+				return
+			}
+			writeError(w, http.StatusInternalServerError, "failed to add squad member")
+			return
+		}
+	}
+
+	for _, childID := range childUUIDs {
+		if _, err := qtx.SetSquadParent(r.Context(), db.SetSquadParentParams{
+			ID:            childID,
+			ParentSquadID: squad.ID,
+		}); err != nil {
+			writeError(w, http.StatusInternalServerError, "failed to attach included squad")
+			return
+		}
+	}
+
+	if err := tx.Commit(r.Context()); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to commit squad create transaction")
+		return
+	}
 
 	resp, err := h.squadToResponseWithPreview(r.Context(), squad)
 	if err != nil {
@@ -315,6 +537,65 @@ func (h *Handler) CreateSquad(w http.ResponseWriter, r *http.Request) {
 		1,
 	))
 	writeJSON(w, http.StatusCreated, resp)
+}
+
+// validateIncludedSquads validates the included_squad_ids payload for squad
+// nesting (LIU-8, v1 one level). It returns the child squad UUIDs in request
+// order (duplicates removed), or an error describing the first invalid id.
+// Rules, per the acceptance criteria:
+//   - every id must parse as a UUID and resolve to a squad in this workspace;
+//   - included squads must not be archived;
+//   - included squads must not already belong to another parent (a squad can
+//     only be merged into one parent, and nesting is one level deep).
+func (h *Handler) validateIncludedSquads(r *http.Request, wsUUID pgtype.UUID, ids []string) ([]pgtype.UUID, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	unique := make([]string, 0, len(ids))
+	seen := make(map[string]struct{}, len(ids))
+	for _, raw := range ids {
+		if _, dup := seen[raw]; dup {
+			continue
+		}
+		seen[raw] = struct{}{}
+		unique = append(unique, raw)
+	}
+
+	childUUIDs := make([]pgtype.UUID, 0, len(unique))
+	byID := make(map[string]pgtype.UUID, len(unique))
+	for _, raw := range unique {
+		u, err := util.ParseUUID(raw)
+		if err != nil {
+			return nil, fmt.Errorf("invalid included_squad_ids entry %q", raw)
+		}
+		childUUIDs = append(childUUIDs, u)
+		byID[raw] = u
+	}
+
+	rows, err := h.Queries.ListSquadsByIdsInWorkspace(r.Context(), db.ListSquadsByIdsInWorkspaceParams{
+		ID:          childUUIDs,
+		WorkspaceID: wsUUID,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to validate included squads")
+	}
+	found := make(map[string]db.Squad, len(rows))
+	for _, row := range rows {
+		found[uuidToString(row.ID)] = row
+	}
+	for _, raw := range unique {
+		squad, ok := found[raw]
+		if !ok {
+			return nil, fmt.Errorf("included squad %q does not exist in this workspace", raw)
+		}
+		if squad.ArchivedAt.Valid {
+			return nil, fmt.Errorf("included squad %q is archived", raw)
+		}
+		if squad.ParentSquadID.Valid {
+			return nil, fmt.Errorf("included squad %q already belongs to another squad", raw)
+		}
+	}
+	return childUUIDs, nil
 }
 
 func (h *Handler) GetSquad(w http.ResponseWriter, r *http.Request) {
@@ -351,11 +632,12 @@ func (h *Handler) UpdateSquad(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Name         *string `json:"name"`
-		Description  *string `json:"description"`
-		Instructions *string `json:"instructions"`
-		LeaderID     *string `json:"leader_id"`
-		AvatarURL    *string `json:"avatar_url"`
+		Name                   *string `json:"name"`
+		Description            *string `json:"description"`
+		Instructions           *string `json:"instructions"`
+		LeaderID               *string `json:"leader_id"`
+		AvatarURL              *string `json:"avatar_url"`
+		UpgradeOnMemberMention *bool   `json:"upgrade_on_member_mention"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
@@ -374,6 +656,9 @@ func (h *Handler) UpdateSquad(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.AvatarURL != nil {
 		params.AvatarUrl = pgtype.Text{String: *req.AvatarURL, Valid: true}
+	}
+	if req.UpgradeOnMemberMention != nil {
+		params.UpgradeOnMemberMention = pgtype.Bool{Valid: true, Bool: *req.UpgradeOnMemberMention}
 	}
 	if req.LeaderID != nil {
 		lid, ok := parseUUIDOrBadRequest(w, *req.LeaderID, "leader_id")
@@ -465,11 +750,32 @@ func (h *Handler) DeleteSquad(w http.ResponseWriter, r *http.Request) {
 	userID := requestUserID(r)
 	userUUID, _ := parseUUIDOrBadRequest(w, userID, "user_id")
 
-	if _, err := h.Queries.ArchiveSquad(r.Context(), db.ArchiveSquadParams{
+	// Archive the squad and detach its children in one transaction: per the
+	// lifecycle acceptance criteria, archiving a parent must clear its
+	// children's parent_squad_id so they become independent squads again
+	// (they are NOT archived along with the parent).
+	tx, err := h.TxStarter.Begin(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to start squad archive transaction")
+		return
+	}
+	defer tx.Rollback(r.Context())
+	qtx := h.Queries.WithTx(tx)
+
+	if _, err := qtx.ArchiveSquad(r.Context(), db.ArchiveSquadParams{
 		ID:         squad.ID,
 		ArchivedBy: userUUID,
 	}); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to archive squad")
+		return
+	}
+	if _, err := qtx.ClearChildSquadParents(r.Context(), squad.ID); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to detach child squads")
+		return
+	}
+
+	if err := tx.Commit(r.Context()); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to commit squad archive transaction")
 		return
 	}
 
