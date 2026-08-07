@@ -1,0 +1,41 @@
+{
+  "slug": "smoke",
+  "name": "Smoke Template",
+  "description": "Placeholder team template kept only so teamtmpl.Load() has a boot-time fixture. Excluded from the catalog by its leading underscore; replaced by the real equipment-department template.",
+  "category": "Engineering",
+  "icon": "Users",
+  "accent": "primary",
+  "skills": [
+    {
+      "name": "team-workflow",
+      "description": "Shared collaboration conventions.",
+      "content": "Shared team workflow skill body.",
+      "files": [
+        {
+          "path": "reference.md",
+          "content": "Supporting reference file."
+        }
+      ]
+    }
+  ],
+  "agents": [
+    {
+      "name": "dev-agent",
+      "description": "General developer agent.",
+      "model": "deepseek-v4-flash",
+      "instructions": "You are a general-purpose developer agent.",
+      "skills": ["team-workflow"],
+      "visibility": "workspace",
+      "max_concurrent_tasks": 6
+    }
+  ],
+  "squads": [
+    {
+      "name": "squad-engineering",
+      "description": "Engineering squad.",
+      "instructions": "Build and verify changes.",
+      "leader": "dev-agent",
+      "members": []
+    }
+  ]
+}
