@@ -75,6 +75,8 @@ export interface ListIssueDocumentsParams {
   status?: IssueDocumentStatus;
   issue_id?: string;
   q?: string;
+  sort?: "updated_at" | "title" | "type" | "status" | "version";
+  order?: "asc" | "desc";
   limit?: number;
   offset?: number;
 }

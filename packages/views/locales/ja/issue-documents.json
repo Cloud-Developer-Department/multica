@@ -11,7 +11,11 @@
       "fallback": "イシュー文書の読み込み中にエラーが発生しました。",
       "retry": "再試行"
     },
-    "load_more": "さらに読み込む"
+    "load_more": "さらに読み込む",
+    "no_matches": {
+      "title": "一致する文書がありません",
+      "description": "現在のフィルターまたは検索に一致するイシュー文書がありません。"
+    }
   },
   "table": {
     "issue": "イシュー",
@@ -20,8 +24,7 @@
     "version": "バージョン",
     "status": "ステータス",
     "author": "作成者",
-    "updated": "更新日時",
-    "no_matches": "フィルター条件に一致する文書がありません。"
+    "updated": "更新日時"
   },
   "types": {
     "requirements": "要件定義",
@@ -49,7 +52,6 @@
   "detail": {
     "versions": "バージョン",
     "download": "ダウンロード",
-    "view": "開く",
     "no_content": "この文書にはインラインコンテンツがありません。"
   }
 }

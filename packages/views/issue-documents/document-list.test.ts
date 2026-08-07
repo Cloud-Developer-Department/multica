@@ -1,53 +1,72 @@
-import type { IssueDocumentSummary } from "@multica/core/types";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { ApiClient } from "@multica/core/api/client";
 import {
-  compareDocuments,
   DEFAULT_DOCUMENT_SORT,
   type DocumentSort,
 } from "./components/document-list";
 
-const base: IssueDocumentSummary = {
-  id: "1",
-  workspace_id: "ws",
-  issue_id: "i1",
-  issue_identifier: "MUL-1",
-  issue_title: "Issue one",
-  type: "requirements",
-  title: "requirement.md",
-  version: 1,
-  status: "submitted",
-  content_type: "markdown",
-  file_attachment_id: null,
-  author_type: "member",
-  author_id: "u1",
-  author_name: "Alice",
-  created_at: "2026-01-01T00:00:00Z",
-  updated_at: "2026-01-02T00:00:00Z",
-};
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
-function doc(overrides: Partial<IssueDocumentSummary>): IssueDocumentSummary {
-  return { ...base, ...overrides };
-}
-
-describe("compareDocuments", () => {
-  it("sorts by updated_at desc by default", () => {
-    const a = doc({ id: "a", updated_at: "2026-01-01T00:00:00Z" });
-    const b = doc({ id: "b", updated_at: "2026-01-03T00:00:00Z" });
-    expect(compareDocuments(a, b, DEFAULT_DOCUMENT_SORT)).toBeGreaterThan(0);
-    expect(compareDocuments(b, a, DEFAULT_DOCUMENT_SORT)).toBeLessThan(0);
+describe("issue-documents server-side sort", () => {
+  it("defaults to updated_at desc", () => {
+    expect(DEFAULT_DOCUMENT_SORT).toEqual({ field: "updated_at", direction: "desc" });
   });
 
-  it("sorts by title ascending when requested", () => {
-    const sort: DocumentSort = { field: "title", direction: "asc" };
-    const a = doc({ id: "a", title: "aaa.md" });
-    const b = doc({ id: "b", title: "zzz.md" });
-    expect(compareDocuments(a, b, sort)).toBeLessThan(0);
+  it("sends sort / order to the list endpoint", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify({ items: [], total: 0 }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await new ApiClient("https://api.example.test").listIssueDocuments({
+      sort: "title",
+      order: "asc",
+      limit: 50,
+      offset: 0,
+    });
+
+    const url = String(fetchMock.mock.calls[0]?.[0] ?? "");
+    expect(url).toContain("sort=title");
+    expect(url).toContain("order=asc");
+    expect(url).toContain("limit=50");
+    expect(url).toContain("offset=0");
   });
 
-  it("sorts by status descending when requested", () => {
-    const sort: DocumentSort = { field: "status", direction: "desc" };
-    const a = doc({ id: "a", status: "submitted" });
-    const b = doc({ id: "b", status: "approved" });
-    expect(compareDocuments(a, b, sort)).toBeLessThan(0);
+  it("omits sort/order when not passed (server keeps the default updated_at desc)", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify({ items: [], total: 0 }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await new ApiClient("https://api.example.test").listIssueDocuments({ limit: 50 });
+
+    const url = String(fetchMock.mock.calls[0]?.[0] ?? "");
+    expect(url).toContain("limit=50");
+    expect(url).not.toContain("sort=");
+    expect(url).not.toContain("order=");
+  });
+
+  it("toggles direction on the same field and switches field to desc", () => {
+    const toggle = (prev: DocumentSort, field: DocumentSort["field"]): DocumentSort =>
+      prev.field === field
+        ? { field, direction: prev.direction === "asc" ? "desc" : "asc" }
+        : { field, direction: "desc" };
+
+    const first = toggle(DEFAULT_DOCUMENT_SORT, "title");
+    expect(first).toEqual({ field: "title", direction: "desc" });
+    const second = toggle(first, "title");
+    expect(second).toEqual({ field: "title", direction: "asc" });
   });
 });

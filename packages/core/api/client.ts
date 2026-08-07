@@ -796,6 +796,8 @@ export class ApiClient {
     if (params?.status) search.set("status", params.status);
     if (params?.issue_id) search.set("issue_id", params.issue_id);
     if (params?.q?.trim()) search.set("q", params.q.trim());
+    if (params?.sort) search.set("sort", params.sort);
+    if (params?.order) search.set("order", params.order);
     if (params?.limit !== undefined) search.set("limit", String(params.limit));
     if (params?.offset !== undefined) search.set("offset", String(params.offset));
     const raw = await this.fetch<unknown>(`/api/issue-documents?${search}`);

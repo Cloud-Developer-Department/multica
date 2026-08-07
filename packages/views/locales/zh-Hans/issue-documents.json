@@ -11,7 +11,11 @@
       "fallback": "加载 Issue 流程文档时出错。",
       "retry": "重试"
     },
-    "load_more": "加载更多"
+    "load_more": "加载更多",
+    "no_matches": {
+      "title": "没有匹配的文档",
+      "description": "没有符合当前筛选或搜索条件的 Issue 流程文档。"
+    }
   },
   "table": {
     "issue": "Issue",
@@ -20,8 +24,7 @@
     "version": "版本",
     "status": "状态",
     "author": "作者",
-    "updated": "更新时间",
-    "no_matches": "没有符合过滤条件的文档。"
+    "updated": "更新时间"
   },
   "types": {
     "requirements": "需求文档",
@@ -49,7 +52,6 @@
   "detail": {
     "versions": "版本历史",
     "download": "下载",
-    "view": "打开",
     "no_content": "该文档没有内联内容。"
   }
 }

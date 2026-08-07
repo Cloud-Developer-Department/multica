@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
 )
@@ -12,6 +13,12 @@ import (
 // ErrIssueDocumentNotFound is returned when a document row is missing or does
 // not belong to the requesting workspace.
 var ErrIssueDocumentNotFound = errors.New("issue document not found")
+
+// ErrIssueDocumentVersionConflict is returned when the (issue_id, type,
+// version) unique index rejects the insert because a concurrent submit took
+// the same computed version first (CLO-283 R6). Callers should surface it as a
+// 409 "please retry" instead of a generic 500.
+var ErrIssueDocumentVersionConflict = errors.New("issue document version conflict; retry the submission")
 
 // IssueDocumentService owns the write side of the Issue Documents domain
 // (CLO-278): registering a new version of an issue-flow document. Read paths
@@ -92,6 +99,14 @@ func (s *IssueDocumentService) Submit(ctx context.Context, p SubmitIssueDocument
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return db.IssueDocument{}, ErrIssueDocumentNotFound
+		}
+		// Concurrent submits of the same (issue, type) both read MAX(version)+1
+		// and collide on the idx_issue_document_issue_type_version unique
+		// index; the loser surfaces 23505. Translate that into a typed conflict
+		// so the handler can answer 409 instead of a misleading 500.
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return db.IssueDocument{}, ErrIssueDocumentVersionConflict
 		}
 		return db.IssueDocument{}, err
 	}

@@ -26,30 +26,6 @@ export const DEFAULT_DOCUMENT_SORT: DocumentSort = {
   direction: "desc",
 };
 
-export function compareDocuments(a: IssueDocumentSummary, b: IssueDocumentSummary, sort: DocumentSort): number {
-  const dir = sort.direction === "asc" ? 1 : -1;
-  let result = 0;
-  switch (sort.field) {
-    case "title":
-      result = a.title.localeCompare(b.title);
-      break;
-    case "type":
-      result = a.type.localeCompare(b.type);
-      break;
-    case "status":
-      result = a.status.localeCompare(b.status);
-      break;
-    case "version":
-      result = a.version - b.version;
-      break;
-    case "updated_at":
-    default:
-      result = Date.parse(a.updated_at) - Date.parse(b.updated_at);
-      break;
-  }
-  return result * dir;
-}
-
 function SortIcon({ sort, field }: { sort: DocumentSort; field: DocumentSortField }) {
   if (sort.field !== field) return <ArrowUpDown className="size-3 text-muted-foreground/50" />;
   return sort.direction === "asc" ? (
@@ -94,14 +70,6 @@ export function DocumentList({ items, sort, onSort, onSelect }: DocumentListProp
   const { t } = useT("issue-documents");
   const timeAgo = useTimeAgo();
 
-  if (items.length === 0) {
-    return (
-      <div className="flex flex-1 items-center justify-center py-16 text-sm text-muted-foreground">
-        {t(($) => $.table.no_matches)}
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-0 flex-1 overflow-auto">
       <Table>
@@ -122,6 +90,16 @@ export function DocumentList({ items, sort, onSort, onSelect }: DocumentListProp
               key={doc.id}
               className="cursor-pointer"
               onClick={() => onSelect(doc)}
+              // Keyboard accessibility (CLO-283 R3, §6.4): a clickable row must
+              // be focusable and activatable with Enter / Space.
+              tabIndex={0}
+              role="button"
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  onSelect(doc);
+                }
+              }}
             >
               <TableCell className="max-w-64">
                 <span className="block truncate font-medium">{doc.title}</span>

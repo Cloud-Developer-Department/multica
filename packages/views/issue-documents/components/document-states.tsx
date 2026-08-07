@@ -31,6 +31,25 @@ export function DocumentListEmpty() {
   );
 }
 
+/**
+ * Empty state when filters / search are active but match nothing — distinct
+ * from "no documents at all" (CLO-283 R8). Rendered only from the page, which
+ * knows whether any filter is applied; the list component no longer carries an
+ * unreachable empty branch.
+ */
+export function DocumentListNoMatches() {
+  const { t } = useT("issue-documents");
+  return (
+    <div className="flex flex-1 items-center justify-center">
+      <CollectionPageState
+        icon={FileStack}
+        title={t(($) => $.page.no_matches.title)}
+        description={t(($) => $.page.no_matches.description)}
+      />
+    </div>
+  );
+}
+
 /** Error state with a retry affordance when the list request fails. */
 export function DocumentListError({ onRetry }: { onRetry: () => void }) {
   const { t } = useT("issue-documents");

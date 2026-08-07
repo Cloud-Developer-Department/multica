@@ -12,7 +12,6 @@ import {
 } from "./components/document-detail-drawer";
 import {
   DocumentList,
-  compareDocuments,
   DEFAULT_DOCUMENT_SORT,
   type DocumentSort,
   type DocumentSortField,
@@ -20,6 +19,7 @@ import {
 import {
   DocumentListEmpty,
   DocumentListError,
+  DocumentListNoMatches,
   DocumentListSkeleton,
 } from "./components/document-states";
 import {
@@ -50,11 +50,19 @@ export function IssueDocumentsPage() {
 
   const debouncedSearch = useDebouncedValue(search);
 
+  const hasActiveFilters =
+    typeFilter !== "all" || statusFilter !== "all" || debouncedSearch.trim() !== "";
+
   const query = useInfiniteQuery(
     issueDocumentInfiniteListOptions(wsId, {
       type: typeFilter === "all" ? undefined : typeFilter,
       status: statusFilter === "all" ? undefined : statusFilter,
       q: debouncedSearch.trim() || undefined,
+      // Sorting is server-side (CLO-283 R1): the backend orders before
+      // LIMIT/OFFSET, so a non-default sort stays stable across pages. The
+      // sort is part of the query key, so changing it refetches from page 0.
+      sort: sort.field,
+      order: sort.direction,
     }),
   );
 
@@ -63,12 +71,6 @@ export function IssueDocumentsPage() {
     [query.data],
   );
   const total = query.data?.pages[0]?.total ?? 0;
-
-  const sortedItems = useMemo(() => {
-    const copy = [...items];
-    copy.sort((a, b) => compareDocuments(a, b, sort));
-    return copy;
-  }, [items, sort]);
 
   const handleSort = (field: DocumentSortField) => {
     setSort((prev) =>
@@ -109,12 +111,16 @@ export function IssueDocumentsPage() {
 
       {query.isLoading ? (
         <DocumentListSkeleton />
-      ) : sortedItems.length === 0 ? (
-        <DocumentListEmpty />
+      ) : items.length === 0 ? (
+        hasActiveFilters ? (
+          <DocumentListNoMatches />
+        ) : (
+          <DocumentListEmpty />
+        )
       ) : (
         <>
           <DocumentList
-            items={sortedItems}
+            items={items}
             sort={sort}
             onSort={handleSort}
             onSelect={setSelected}

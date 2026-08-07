@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { Download, ExternalLink } from "lucide-react";
+import { Download } from "lucide-react";
 import { useWorkspaceId } from "@multica/core/hooks";
 import {
   attachmentDownloadPath,
@@ -122,18 +122,6 @@ export function DocumentDetailDrawer({ document, onClose }: DocumentDetailDrawer
                 </li>
               ))}
             </ul>
-          </div>
-        ) : null}
-
-        {isFile && detail?.file_attachment_id ? (
-          <div className="shrink-0 border-t pt-3">
-            <a
-              href={attachmentDownloadPath(detail.file_attachment_id)}
-              className={buttonVariants({ variant: "outline", size: "sm" })}
-            >
-              <ExternalLink aria-hidden="true" className="size-3.5" />
-              {t(($) => $.detail.view)}
-            </a>
           </div>
         ) : null}
       </SheetContent>

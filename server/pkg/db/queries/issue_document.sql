@@ -32,8 +32,12 @@ FROM issue_document
 WHERE workspace_id = $1 AND issue_id = $2 AND type = $3;
 
 -- name: SupersedeIssueDocumentByIssueType :exec
+-- Mark older versions superseded WITHOUT touching updated_at: that column is
+-- the document's own "last written" timestamp, and the list sorts by it. A
+-- superseded historical version must not jump to the top of "recently
+-- updated" just because a newer version was submitted (CLO-283 R10).
 UPDATE issue_document
-SET status = 'superseded', updated_at = now()
+SET status = 'superseded'
 WHERE workspace_id = $1 AND issue_id = $2 AND type = $3
   AND status <> 'superseded';
 
@@ -45,6 +49,7 @@ SELECT d.id, d.workspace_id, d.issue_id, d.type, d.title, d.content_type,
        u.name AS member_author_name, a.name AS agent_author_name
 FROM issue_document d
 JOIN issue i ON i.id = d.issue_id
+JOIN workspace w ON w.id = d.workspace_id
 LEFT JOIN member m ON m.id = d.author_id AND d.author_type = 'member'
 LEFT JOIN "user" u ON u.id = m.user_id
 LEFT JOIN agent a ON a.id = d.author_id AND d.author_type = 'agent'
@@ -56,6 +61,7 @@ WHERE d.workspace_id = $1
         LOWER(d.title) LIKE '%' || LOWER(sqlc.narg('q')) || '%'
      OR LOWER(i.title) LIKE '%' || LOWER(sqlc.narg('q')) || '%'
      OR CAST(i.number AS TEXT) LIKE LOWER(sqlc.narg('q')) || '%'
+     OR LOWER(w.issue_prefix || '-' || CAST(i.number AS TEXT)) LIKE '%' || LOWER(sqlc.narg('q')) || '%'
      OR LOWER(COALESCE(u.name, a.name)) LIKE '%' || LOWER(sqlc.narg('q')) || '%'
   ))
 ORDER BY d.updated_at DESC, d.id DESC
@@ -65,6 +71,7 @@ LIMIT $2 OFFSET $3;
 SELECT COUNT(*)
 FROM issue_document d
 JOIN issue i ON i.id = d.issue_id
+JOIN workspace w ON w.id = d.workspace_id
 LEFT JOIN member m ON m.id = d.author_id AND d.author_type = 'member'
 LEFT JOIN "user" u ON u.id = m.user_id
 LEFT JOIN agent a ON a.id = d.author_id AND d.author_type = 'agent'
@@ -76,6 +83,7 @@ WHERE d.workspace_id = $1
         LOWER(d.title) LIKE '%' || LOWER(sqlc.narg('q')) || '%'
      OR LOWER(i.title) LIKE '%' || LOWER(sqlc.narg('q')) || '%'
      OR CAST(i.number AS TEXT) LIKE LOWER(sqlc.narg('q')) || '%'
+     OR LOWER(w.issue_prefix || '-' || CAST(i.number AS TEXT)) LIKE '%' || LOWER(sqlc.narg('q')) || '%'
      OR LOWER(COALESCE(u.name, a.name)) LIKE '%' || LOWER(sqlc.narg('q')) || '%'
   ));
 

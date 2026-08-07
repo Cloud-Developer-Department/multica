@@ -201,7 +201,7 @@ export const EMPTY_ISSUE_DOCUMENT_DETAIL: IssueDocumentDetail = {
   issue_title: "",
   type: "other",
   title: "",
-  version: 0,
+  version: 1,
   status: "submitted",
   content_type: "markdown",
   file_attachment_id: null,

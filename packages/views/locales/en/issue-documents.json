@@ -11,7 +11,11 @@
       "fallback": "Something went wrong while loading issue documents.",
       "retry": "Retry"
     },
-    "load_more": "Load more"
+    "load_more": "Load more",
+    "no_matches": {
+      "title": "No documents match",
+      "description": "No issue documents match the current filters or search."
+    }
   },
   "table": {
     "issue": "Issue",
@@ -20,8 +24,7 @@
     "version": "Version",
     "status": "Status",
     "author": "Author",
-    "updated": "Updated",
-    "no_matches": "No documents match your filters."
+    "updated": "Updated"
   },
   "types": {
     "requirements": "Requirements",
@@ -49,7 +52,6 @@
   "detail": {
     "versions": "Versions",
     "download": "Download",
-    "view": "Open",
     "no_content": "This document has no inline content."
   }
 }
