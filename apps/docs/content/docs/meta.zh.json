@@ -17,6 +17,7 @@
     "agents-create",
     "skills",
     "squads",
+    "resource-templates",
     "---智能体怎么运行---",
     "daemon-runtimes",
     "install-agent-runtime",
