@@ -446,9 +446,17 @@ describe("CreateSquadModal", () => {
     await waitFor(() => {
       expect(mocks.createSquad).toHaveBeenCalledTimes(1);
     });
-    await waitFor(() => {
-      expect(mocks.addSquadMember).toHaveBeenCalledTimes(2);
-    });
+    // One-shot payload: every selected member rides in the same request, the
+    // human member gets the default "member" role (CLO-418), and the old
+    // addSquadMember step never runs.
+    const payload = mocks.createSquad.mock.calls[0]![0] as {
+      members?: { member_type: string; member_id: string; role?: string }[];
+    };
+    expect(payload.members).toEqual([
+      { member_type: "agent", member_id: "agent-other-1", role: "Reviewer" },
+      { member_type: "member", member_id: "user-other", role: "member" },
+    ]);
+    expect(mocks.addSquadMember).not.toHaveBeenCalled();
     await waitFor(() => {
       expect(mocks.toastSuccess).toHaveBeenCalledTimes(1);
     });

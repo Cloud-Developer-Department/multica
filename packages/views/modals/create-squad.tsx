@@ -100,6 +100,25 @@ export function CreateSquadModal({ onClose }: { onClose: () => void }) {
         description: description.trim() || undefined,
         leader_id: leaderId,
         avatar_url: avatarUrl ?? undefined,
+<<<<<<< HEAD
+=======
+        // Only send the field when squads were actually picked; an empty
+        // selection omits it so the payload stays minimal.
+        included_squad_ids:
+          selectedSquads.length > 0
+            ? selectedSquads.map((s) => s.id)
+            : undefined,
+        members:
+          selectedMembers.length > 0
+            ? selectedMembers.map((m) => ({
+                member_type: m.type,
+                member_id: m.id,
+                // CLO-418: the backend requires a role for every member; the
+                // UI default is "member" when the user left it blank.
+                role: m.role?.trim() || "member",
+              }))
+            : undefined,
+>>>>>>> 5eeab432d (fix(web): import wizard default-fail conflict flow, member role defaults (CLO-417/418))
       });
       queryClient.invalidateQueries({ queryKey: workspaceKeys.squads(wsId) });
 
