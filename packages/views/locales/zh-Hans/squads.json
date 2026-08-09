@@ -13,7 +13,8 @@
     },
     "no_matches": "没有匹配的小队",
     "row_menu": "小队操作",
-    "archive_action": "归档"
+    "archive_action": "归档",
+    "nested_in": "所属：{{name}}"
   },
   "inspector": {
     "details_section": "详情",
@@ -95,5 +96,9 @@
     "filter_label": "筛选",
     "filter_active_count_other": "{{count}} 项筛选",
     "clear_filters": "清除筛选"
+  },
+  "child_squads": {
+    "section_title": "子小队",
+    "section_count_other": "已并入 {{count}} 个小队"
   }
 }

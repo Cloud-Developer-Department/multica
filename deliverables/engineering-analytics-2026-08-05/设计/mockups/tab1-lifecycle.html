@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>研发效能分析 · Tab1 生命周期与部门维度 · 高保真设计稿</title>
+<style>
+  :root{
+    color-scheme: light;
+    --app-shell: oklch(0.964435 0.001327 286.375);
+    --page-canvas: oklch(0.988087 0 0);
+    --surface: oklch(1 0 0);
+    --surface-raised: oklch(1 0 0);
+    --surface-hover: oklch(0.967 0.001 286.375);
+    --surface-border: oklch(0.92 0.004 286.32);
+    --foreground: oklch(0.141 0.005 285.823);
+    --muted: oklch(0.967 0.001 286.375);
+    --muted-foreground: oklch(0.552 0.016 285.938);
+    --border: oklch(0.945 0.003 286.32);
+    --input: oklch(0.92 0.004 286.32);
+    --brand: oklch(0.55 0.16 255);
+    --success: oklch(0.55 0.16 145);
+    --warning: oklch(0.75 0.16 85);
+    --destructive: oklch(0.577 0.245 27.325);
+    --info: oklch(0.55 0.18 250);
+    --chart-1: oklch(0.55 0.16 255);
+    --chart-2: oklch(0.66 0.13 255);
+    --chart-3: oklch(0.76 0.10 255);
+    --chart-4: oklch(0.85 0.06 255);
+    --chart-5: oklch(0.92 0.03 255);
+    --radius: 0.625rem;
+    --surface-shadow: 0 1px 2px rgb(15 23 42 / 0.04), 0 1px 1px rgb(15 23 42 / 0.03);
+    --font-sans: "Inter", "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:var(--font-sans);background:var(--page-canvas);color:var(--foreground);font-size:14px}
+  .app{display:flex;height:100vh;background:var(--app-shell)}
+  .sidebar{width:232px;flex-shrink:0;background:var(--app-shell);border-right:1px solid var(--border);padding:16px 8px;font-size:14px}
+  .side-logo{display:flex;align-items:center;gap:8px;padding:4px 8px 16px;font-weight:500}
+  .side-logo .dot{width:20px;height:20px;border-radius:6px;background:var(--brand);display:inline-block}
+  .side-item{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;color:var(--muted-foreground);margin-bottom:2px}
+  .side-item.active{background:var(--surface-hover);color:var(--foreground);font-weight:500}
+  .side-item .ic{width:16px;height:16px;opacity:.75}
+  .side-group{font-size:11px;color:var(--muted-foreground);text-transform:uppercase;letter-spacing:.04em;padding:12px 8px 4px}
+  .main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+  .phead{height:48px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);padding:0 16px;background:var(--page-canvas)}
+  .phead-title{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:500}
+  .phead-title svg{width:16px;height:16px;color:var(--muted-foreground)}
+  .phead-right{display:flex;align-items:center;gap:12px}
+  .seg{display:inline-flex;align-items:center;gap:2px;background:var(--muted);border-radius:8px;padding:2px}
+  .seg button{border:none;background:transparent;font-size:12px;font-weight:500;padding:4px 10px;border-radius:6px;color:var(--muted-foreground);cursor:pointer;font-family:inherit}
+  .seg button.on{background:var(--surface);color:var(--foreground);box-shadow:0 1px 2px rgb(15 23 42/.08)}
+  .sel{display:flex;align-items:center;gap:6px;border:1px solid var(--input);border-radius:8px;padding:5px 10px;font-size:13px;color:var(--foreground);background:var(--surface)}
+  .sel svg{width:14px;height:14px;color:var(--muted-foreground)}
+  .sel.hl{border-color:color-mix(in oklch, var(--brand) 40%, transparent)}
+  .tabs{display:flex;gap:20px;border-bottom:1px solid var(--border);padding:0 16px;background:var(--page-canvas)}
+  .tab{border:none;background:none;font-family:inherit;font-size:14px;color:var(--muted-foreground);padding:10px 2px;cursor:pointer;border-bottom:2px solid transparent;display:flex;align-items:center;gap:6px}
+  .tab.on{color:var(--foreground);font-weight:500;border-bottom-color:var(--foreground)}
+  .badge{font-size:11px;font-weight:500;border-radius:999px;padding:1px 7px;background:var(--muted);color:var(--muted-foreground);border:1px solid var(--border)}
+  .badge.ok{background:color-mix(in oklch, var(--success) 12%, transparent);color:var(--success);border-color:color-mix(in oklch, var(--success) 30%, transparent)}
+  .badge.warn{background:color-mix(in oklch, var(--warning) 12%, transparent);color:var(--warning);border-color:color-mix(in oklch, var(--warning) 30%, transparent)}
+  .badge.err{background:color-mix(in oklch, var(--destructive) 12%, transparent);color:var(--destructive);border-color:color-mix(in oklch, var(--destructive) 30%, transparent)}
+  .content{flex:1;overflow:auto;padding:24px}
+  .inner{max-width:1152px;margin:0 auto;display:flex;flex-direction:column;gap:20px}
+  .card{border:1px solid var(--surface-border);border-radius:10px;background:var(--surface);box-shadow:var(--surface-shadow);overflow:hidden}
+  .card-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px 8px}
+  .card-title{font-size:14px;font-weight:500}
+  .card-desc{font-size:12px;color:var(--muted-foreground);margin-top:2px}
+  .card-body{padding:4px 16px 16px}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+  .muted{color:var(--muted-foreground)}
+  .num{font-variant-numeric:tabular-nums;text-align:right}
+  .metric-block{padding:12px 16px}
+  .metric-block+.metric-block{border-top:1px solid var(--border)}
+  .m-lbl{font-size:12px;color:var(--muted-foreground)}
+  .m-val{font-size:24px;font-weight:500;font-variant-numeric:tabular-nums;margin:2px 0 6px}
+  .m-val.brand{color:var(--brand)}
+  .m-val.ok{color:var(--success)}
+  .m-bar{height:6px;border-radius:999px;background:var(--muted);overflow:hidden}
+  .m-bar i{display:block;height:100%;border-radius:999px}
+  .m-bar .c1{background:var(--brand)}
+  .m-bar .c2{background:var(--success)}
+  .m-note{font-size:12px;color:var(--muted-foreground);margin-top:6px}
+  .evt-row{display:flex;align-items:center;gap:10px;padding:8px 16px;border-bottom:1px solid var(--border);font-size:13px}
+  .evt-row:last-child{border-bottom:none}
+  .evt-row .nm{flex:1;font-weight:500}
+  .evt-row .tm{font-size:12px;color:var(--muted-foreground)}
+  .dept-row{display:grid;grid-template-columns:minmax(0,1.6fr) auto;gap:12px;align-items:center;padding:10px 16px;border-bottom:1px solid var(--border);cursor:pointer}
+  .dept-row:hover{background:var(--surface-hover)}
+  .dept-row:last-child{border-bottom:none}
+  .dept-name{font-size:13px;font-weight:500}
+  .dept-note{font-size:12px;color:var(--muted-foreground);margin-top:2px}
+  .dept-right{display:flex;align-items:center;gap:10px}
+  .dept-bar{width:120px;height:6px;border-radius:999px;background:var(--muted);overflow:hidden}
+  .dept-bar i{display:block;height:100%;background:var(--chart-4)}
+  .empty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:40px 16px;text-align:center;color:var(--muted-foreground)}
+  .empty .big{width:32px;height:32px;color:var(--muted-foreground);opacity:.6;margin-bottom:4px}
+  .empty .t{font-size:14px;font-weight:500;color:var(--foreground)}
+  .empty .d{font-size:12px;max-width:420px}
+  .btn{border:1px solid var(--input);background:var(--surface);border-radius:8px;padding:5px 12px;font-size:12px;font-weight:500;color:var(--foreground);cursor:pointer;font-family:inherit}
+  .footnote{font-size:12px;color:var(--muted-foreground);text-align:center;padding:8px;border-top:1px solid var(--border)}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="side-logo"><span class="dot"></span>云开发者俱乐部</div>
+    <div class="side-group">个人</div>
+    <div class="side-item"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/></svg>收件箱</div>
+    <div class="side-item"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>对话</div>
+    <div class="side-group">工作区</div>
+    <div class="side-item"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>Issue</div>
+    <div class="side-item"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>项目</div>
+    <div class="side-item"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>智能体</div>
+    <div class="side-item"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>小队</div>
+    <div class="side-item"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 14l4-4 4 3 5-6"/></svg>用量</div>
+    <div class="side-item active"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 15l-2-3m2 3 2-3m-2 3v3"/><path d="M4 19a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2z"/></svg>效能分析</div>
+    <div class="side-group">配置</div>
+    <div class="side-item"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v4m0 14v4M4.2 4.2l2.8 2.8m10 10 2.8 2.8M1 12h4m14 0h4M4.2 19.8l2.8-2.8M17 7l2.8-2.8"/></svg>设置</div>
+  </aside>
+  <div class="main">
+    <header class="phead">
+      <div class="phead-title">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 15l-2-3m2 3 2-3m-2 3v3"/><path d="M4 19a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2z"/></svg>
+        研发效能分析
+      </div>
+      <div class="phead-right">
+        <div class="seg">
+          <button>7d</button><button class="on">30d</button><button>90d</button><button>180d</button>
+        </div>
+        <div class="sel hl">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 9h.01M9 13h.01M9 17h.01"/></svg>
+          部门：全部
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px"><path d="m6 9 6 6 6-6"/></svg>
+        </div>
+        <div class="sel">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+          Asia/Shanghai
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px"><path d="m6 9 6 6 6-6"/></svg>
+        </div>
+      </div>
+    </header>
+    <nav class="tabs">
+      <button class="tab on">活跃度与渗透</button>
+      <button class="tab">Agent效能</button>
+      <button class="tab">Git贡献</button>
+      <button class="tab">DORA</button>
+    </nav>
+    <div class="content">
+      <div class="inner">
+        <div class="muted" style="font-size:12px;padding:2px 4px">… 上方 ①–⑤（活跃热力图 / 渗透率等）为 CLO-236 v1.0 已交付，本稿聚焦 ⑥⑦⑧ 增量区块 …</div>
+
+        <!-- Lifecycle + Cutoff -->
+        <div class="row2">
+          <div class="card">
+            <div class="card-head">
+              <div>
+                <div class="card-title">用户生命周期</div>
+                <div class="card-desc">入职开通率 / 离职权限熔断 · 点击查看明细</div>
+              </div>
+              <span class="badge">LDAP/手动</span>
+            </div>
+            <div class="metric-block">
+              <div class="m-lbl">入职开通率</div>
+              <div class="m-val brand">100%</div>
+              <div class="m-note">新入职 3 · 已开通 3</div>
+            </div>
+            <div class="metric-block">
+              <div class="m-lbl">离职权限熔断</div>
+              <div class="m-val">2次</div>
+              <div class="m-note">窗口内离职权限熔断事件数</div>
+            </div>
+            <div class="evt-row">
+              <span class="badge ok">入职开通</span><span class="nm">赵六</span><span class="tm">08-02 09:00</span><span class="badge ok">成功</span>
+            </div>
+            <div class="evt-row">
+              <span class="badge">离职</span><span class="nm">孙七</span><span class="tm">08-04 18:00</span><span class="muted">-</span>
+            </div>
+            <div class="evt-row">
+              <span class="badge warn">权限熔断</span><span class="nm">孙七</span><span class="tm">08-04 18:05</span><span class="badge ok">成功</span>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-head">
+              <div>
+                <div class="card-title">权限熔断成功率</div>
+                <div class="card-desc">熔断成功 ÷ 应熔断</div>
+              </div>
+              <span class="badge">LDAP/手动</span>
+            </div>
+            <div class="metric-block">
+              <div class="m-lbl">熔断成功率</div>
+              <div class="m-val ok">100%</div>
+              <div class="m-bar"><i class="c2" style="width:100%"></i></div>
+              <div class="m-note">熔断成功 2 / 应熔断 2</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Department slicer -->
+        <div class="card">
+          <div class="card-head">
+            <div>
+              <div class="card-title">部门维度切片</div>
+              <div class="card-desc">选择部门后 Tab1 / Tab2 按部门成员重新聚合</div>
+            </div>
+            <div class="sel" style="padding:4px 10px;font-size:12px">
+              部门：研发效能平台组
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px"><path d="m6 9 6 6 6-6"/></svg>
+            </div>
+          </div>
+          <div class="dept-row" style="background:color-mix(in oklch, var(--brand) 6%, transparent)">
+            <div>
+              <div class="dept-name">研发效能平台组</div>
+              <div class="dept-note">成员 5 · 活跃 4</div>
+            </div>
+            <div class="dept-right">
+              <div class="dept-bar"><i style="width:80%"></i></div>
+              <span class="num" style="font-size:12px;color:var(--muted-foreground)">80%</span>
+            </div>
+          </div>
+          <div class="dept-row">
+            <div>
+              <div class="dept-name">核心研发组</div>
+              <div class="dept-note">成员 7 · 活跃 5</div>
+            </div>
+            <div class="dept-right">
+              <div class="dept-bar"><i style="width:71%"></i></div>
+              <span class="num" style="font-size:12px;color:var(--muted-foreground)">71%</span>
+            </div>
+          </div>
+          <div class="dept-row">
+            <div>
+              <div class="dept-name">平台运维组</div>
+              <div class="dept-note">成员 4 · 活跃 2</div>
+            </div>
+            <div class="dept-right">
+              <div class="dept-bar"><i style="width:50%"></i></div>
+              <span class="num" style="font-size:12px;color:var(--muted-foreground)">50%</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- LDAP guide state (E18) -->
+        <div class="card">
+          <div class="card-head">
+            <div>
+              <div class="card-title">用户身份数据源未接入（示例：LDAP 未配置时 ⑥⑦⑧ 呈现引导态）</div>
+            </div>
+          </div>
+          <div class="empty">
+            <svg class="big" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            <div class="t">用户身份数据源未接入</div>
+            <div class="d">接入 LDAP/IDP 或配置部门映射后启用。</div>
+            <button class="btn" style="margin-top:8px">前往配置</button>
+          </div>
+        </div>
+        <div class="footnote">高保真设计稿（示意）· 全部样式基于 packages/ui 组件与 docs/design.md token，实现时禁止硬编码</div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

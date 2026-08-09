@@ -134,6 +134,22 @@ daemon 在后台运行，保持你的机器与 Multica 的连接。它会自动�
 
 大功告成！你的 Agent 现在是团队的一员了。 🎉
 
+### 5. 研发流程与阶段产物（Workflow / Artifact）
+
+对于软件研发类需求，可以创建结构化研发流程并提交阶段产物：
+
+```bash
+multica workflow create --name "学生管理系统开发流程" --issue-id CLO-123
+multica workflow get <workflow-id>
+multica artifact submit --workflow-id <workflow-id> --node-id <node-id> --type requirement --name requirement.md --file ./requirement.md
+multica artifact list --workflow-id <workflow-id>
+```
+
+关键节点的 Artifact 需**人工审核通过后**流程才能继续推进；审核 / 推进 / 批准等操作仅限
+人类执行，Agent 无法绕过（CLI 不提供相应命令，后端对机器凭据返回 403）。完整命令参考见
+`CLI_AND_DAEMON.md`，设计与执行规范见 `docs/workflow_artifact_cli_design.md` 与
+`docs/agent_workflow_execution.md`。
+
 ---
 
 ## 架构

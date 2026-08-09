@@ -1,0 +1,1548 @@
+diff --git a/packages/core/issues/stores/view-store.ts b/packages/core/issues/stores/view-store.ts
+index 4f0d7235..bfdb5340 100644
+--- a/packages/core/issues/stores/view-store.ts
++++ b/packages/core/issues/stores/view-store.ts
+@@ -197,6 +197,9 @@ export interface IssueViewState {
+   tableCollapsedParents: string[];
+   tableHierarchy: boolean;
+   tableCalculation: TableCalculation;
++  /** Collapsed parent issue ids in the board tree view, isolated from the
++   *  table's collapse state so switching views doesn't share expansion state. */
++  boardCollapsedParents: string[];
+   setViewMode: (mode: ViewMode) => void;
+   setGanttZoom: (zoom: GanttZoom) => void;
+   toggleGanttShowCompleted: () => void;
+@@ -234,6 +237,7 @@ export interface IssueViewState {
+   toggleTableParentCollapsed: (issueId: string) => void;
+   toggleTableHierarchy: () => void;
+   setTableCalculation: (calculation: TableCalculation) => void;
++  toggleBoardParentCollapsed: (issueId: string) => void;
+ }
+ 
+ export const viewStoreSlice = (set: StoreApi<IssueViewState>["setState"]): IssueViewState => ({
+@@ -276,6 +280,7 @@ export const viewStoreSlice = (set: StoreApi<IssueViewState>["setState"]): Issue
+   tableCollapsedParents: [],
+   tableHierarchy: true,
+   tableCalculation: "none",
++  boardCollapsedParents: [],
+ 
+   setViewMode: (mode) => set({ viewMode: mode }),
+   setGanttZoom: (zoom) => set({ ganttZoom: zoom }),
+@@ -465,6 +470,12 @@ export const viewStoreSlice = (set: StoreApi<IssueViewState>["setState"]): Issue
+   toggleTableHierarchy: () =>
+     set((state) => ({ tableHierarchy: !state.tableHierarchy })),
+   setTableCalculation: (tableCalculation) => set({ tableCalculation }),
++  toggleBoardParentCollapsed: (issueId) =>
++    set((state) => ({
++      boardCollapsedParents: state.boardCollapsedParents.includes(issueId)
++        ? state.boardCollapsedParents.filter((id) => id !== issueId)
++        : [...state.boardCollapsedParents, issueId],
++    })),
+ });
+ 
+ export const viewStorePersistOptions = (name: string) => ({
+@@ -505,6 +516,7 @@ export const viewStorePersistOptions = (name: string) => ({
+     tableCollapsedParents: state.tableCollapsedParents,
+     tableHierarchy: state.tableHierarchy,
+     tableCalculation: state.tableCalculation,
++    boardCollapsedParents: state.boardCollapsedParents,
+   }),
+   // Default Zustand merge is shallow, so a persisted `cardProperties` snapshot
+   // saved before a new toggle was introduced wins entirely and the new key is
+@@ -568,6 +580,9 @@ export function mergeViewStatePersisted<T extends IssueViewState>(
+     tableCollapsedParents: Array.isArray(p.tableCollapsedParents)
+       ? p.tableCollapsedParents
+       : current.tableCollapsedParents,
++    boardCollapsedParents: Array.isArray(p.boardCollapsedParents)
++      ? p.boardCollapsedParents
++      : current.boardCollapsedParents,
+   };
+ }
+ 
+diff --git a/packages/views/issues/components/board-card.tsx b/packages/views/issues/components/board-card.tsx
+index f2c2b606..8bde01e8 100644
+--- a/packages/views/issues/components/board-card.tsx
++++ b/packages/views/issues/components/board-card.tsx
+@@ -11,7 +11,7 @@ import { useWorkspaceId } from "@multica/core/hooks";
+ import { propertyListOptions } from "@multica/core/properties";
+ import { CustomPropertyValueDisplay } from "./pickers/custom-property-picker";
+ import { formatDateOnly, isPastDateOnly } from "@multica/core/issues/date";
+-import { CalendarClock, CalendarDays } from "lucide-react";
++import { CalendarClock, CalendarDays, ChevronDown, ChevronRight } from "lucide-react";
+ import { ActorAvatar } from "../../common/actor-avatar";
+ import { PropertyIcon } from "../../common/property-icon";
+ import { useWorkspacePaths } from "@multica/core/paths";
+@@ -62,11 +62,22 @@ export const BoardCardContent = memo(function BoardCardContent({
+   editable = false,
+   childProgress,
+   project,
++  depth = 0,
++  hasChildren = false,
++  collapsed = false,
++  onToggleCollapsed,
+ }: {
+   issue: Issue;
+   editable?: boolean;
+   childProgress?: ChildProgress;
+   project?: Project;
++  /** Tree depth (0 = root) — indents the card by `depth * 18px`. */
++  depth?: number;
++  /** Whether this card has children (drives the expand/collapse chevron). */
++  hasChildren?: boolean;
++  /** Whether the parent is currently collapsed (children hidden). */
++  collapsed?: boolean;
++  onToggleCollapsed?: () => void;
+ }) {
+   const { t } = useT("issues");
+   const timeAgo = useTimeAgo();
+@@ -177,10 +188,38 @@ export const BoardCardContent = memo(function BoardCardContent({
+   const showRightMeta = !!showStartDate || !!showDueDate || !!showChildProgress || showUpdatedHint;
+ 
+   return (
+-    <div className="rounded-lg border-[0.5px] border-surface-border bg-surface py-3 px-2.5 shadow-[var(--surface-shadow)] transition-colors group-hover/card:border-foreground/15 group-hover/card:bg-surface-hover group-data-[popup-open]/card:border-foreground/15 group-data-[popup-open]/card:bg-surface-hover">
+-      {/* Row 1: priority + identifier (left), agent activity + assignee (right) */}
++    <div
++      style={depth ? { marginLeft: depth * 18 } : undefined}
++      className="rounded-lg border-[0.5px] border-surface-border bg-surface py-3 px-2.5 shadow-[var(--surface-shadow)] transition-colors group-hover/card:border-foreground/15 group-hover/card:bg-surface-hover group-data-[popup-open]/card:border-foreground/15 group-data-[popup-open]/card:bg-surface-hover"
++    >
++      {/* Row 1: toggle + priority + identifier (left), agent activity + assignee (right) */}
+       <div className="flex items-center justify-between gap-2">
+         <div className="flex items-center gap-1.5 min-w-0">
++          {hasChildren && (
++            <button
++              type="button"
++              aria-label={
++                collapsed
++                  ? t(($) => $.board.expand_subtree)
++                  : t(($) => $.board.collapse_subtree)
++              }
++              className="-ml-0.5 -mr-0.5 rounded p-0.5 text-muted-foreground hover:bg-accent"
++              onClick={(event) => {
++                event.stopPropagation();
++                event.preventDefault();
++                onToggleCollapsed?.();
++              }}
++              onPointerDown={(event) => {
++                event.stopPropagation();
++              }}
++            >
++              {collapsed ? (
++                <ChevronRight className="size-3.5" />
++              ) : (
++                <ChevronDown className="size-3.5" />
++              )}
++            </button>
++          )}
+           {priorityIconNode}
+           <p className="text-xs text-muted-foreground truncate">{issue.identifier}</p>
+         </div>
+@@ -322,11 +361,22 @@ export const DraggableBoardCard = memo(function DraggableBoardCard({
+   childProgress,
+   project,
+   disableSorting,
++  depth = 0,
++  hasChildren = false,
++  collapsed = false,
++  onToggleCollapsed,
+ }: {
+   issue: Issue;
+   childProgress?: ChildProgress;
+   project?: Project;
+   disableSorting?: boolean;
++  /** Tree depth (0 = root) — indents the card by `depth * 18px`. */
++  depth?: number;
++  /** Whether this card has children (drives the expand/collapse chevron). */
++  hasChildren?: boolean;
++  /** Whether the parent is currently collapsed (children hidden). */
++  collapsed?: boolean;
++  onToggleCollapsed?: () => void;
+ }) {
+   const p = useWorkspacePaths();
+   const {
+@@ -366,6 +416,10 @@ export const DraggableBoardCard = memo(function DraggableBoardCard({
+             editable
+             childProgress={childProgress}
+             project={project}
++            depth={depth}
++            hasChildren={hasChildren}
++            collapsed={collapsed}
++            onToggleCollapsed={onToggleCollapsed}
+           />
+         </AppLink>
+       </div>
+diff --git a/packages/views/issues/components/board-column.tsx b/packages/views/issues/components/board-column.tsx
+index b01799ad..99c29051 100644
+--- a/packages/views/issues/components/board-column.tsx
++++ b/packages/views/issues/components/board-column.tsx
+@@ -23,6 +23,7 @@ import { useViewStoreApi } from "@multica/core/issues/stores/view-store-context"
+ import { StatusHeading } from "./status-heading";
+ import { DraggableBoardCard } from "./board-card";
+ import type { ChildProgress } from "./list-row";
++import type { BoardNodeInfo } from "./board-tree-model";
+ import { useT } from "../../i18n";
+ import { ActorAvatar } from "../../common/actor-avatar";
+ import { useRestoredScrollOffset, useRestoredScrollRef } from "../../platform";
+@@ -89,6 +90,7 @@ export const BoardColumn = memo(function BoardColumn({
+   group,
+   issueIds,
+   issueMap,
++  nodeInfo,
+   childProgressMap,
+   projectMap,
+   totalCount,
+@@ -96,10 +98,12 @@ export const BoardColumn = memo(function BoardColumn({
+   projectId,
+   onCreateIssue,
+   sortLabel,
++  onToggleCollapsed,
+ }: {
+   group: BoardColumnGroup;
+   issueIds: string[];
+   issueMap: Map<string, Issue>;
++  nodeInfo?: ReadonlyMap<string, BoardNodeInfo>;
+   childProgressMap?: Map<string, ChildProgress>;
+   projectMap?: Map<string, Project>;
+   totalCount?: number;
+@@ -108,6 +112,7 @@ export const BoardColumn = memo(function BoardColumn({
+   projectId?: string;
+   onCreateIssue?: (defaults: IssueCreateDefaults) => void;
+   sortLabel?: string | null;
++  onToggleCollapsed?: (issueId: string) => void;
+ }) {
+   const status = group.status;
+   const cfg = status ? STATUS_CONFIG[status] : null;
+@@ -156,21 +161,32 @@ export const BoardColumn = memo(function BoardColumn({
+   );
+ 
+   const computeItemKey = (_index: number, issue: Issue) => issue.id;
+-  const itemContent = (index: number, issue: Issue) => (
+-    // pt-2 on every card but the first reproduces the previous `space-y-2`
+-    // gap; padding (not margin) is inside Virtuoso's measured item box so its
+-    // height math stays correct.
+-    <div className={index === 0 ? undefined : "pt-2"}>
+-      <DraggableBoardCard
+-        issue={issue}
+-        childProgress={childProgressMap?.get(issue.id)}
+-        project={
+-          issue.project_id ? projectMap?.get(issue.project_id) : undefined
+-        }
+-        disableSorting={!!sortLabel}
+-      />
+-    </div>
+-  );
++  const itemContent = (index: number, issue: Issue) => {
++    const node = nodeInfo?.get(issue.id);
++    return (
++      // pt-2 on every card but the first reproduces the previous `space-y-2`
++      // gap; padding (not margin) is inside Virtuoso's measured item box so its
++      // height math stays correct.
++      <div className={index === 0 ? undefined : "pt-2"}>
++        <DraggableBoardCard
++          issue={issue}
++          childProgress={childProgressMap?.get(issue.id)}
++          project={
++            issue.project_id ? projectMap?.get(issue.project_id) : undefined
++          }
++          disableSorting={!!sortLabel}
++          depth={node?.depth ?? 0}
++          hasChildren={node?.hasChildren ?? false}
++          collapsed={node?.collapsed ?? false}
++          onToggleCollapsed={
++            node?.hasChildren && onToggleCollapsed
++              ? () => onToggleCollapsed(issue.id)
++              : undefined
++          }
++        />
++      </div>
++    );
++  };
+ 
+   return (
+     <div style={{ width: BOARD_COL_WIDTH }} className={`flex shrink-0 flex-col rounded-xl ${cfg?.columnBg ?? "bg-muted/40"} p-2`}>
+diff --git a/packages/views/issues/components/board-tree-model.test.ts b/packages/views/issues/components/board-tree-model.test.ts
+new file mode 100644
+index 00000000..ff07052d
+--- /dev/null
++++ b/packages/views/issues/components/board-tree-model.test.ts
+@@ -0,0 +1,152 @@
++import { describe, expect, it } from "vitest";
++import type { Issue } from "@multica/core/types";
++import {
++  buildChildrenMap,
++  collectSubtreeIds,
++  flattenBoardTree,
++  type BoardNodeInfo,
++} from "./board-tree-model";
++
++function mk(
++  id: string,
++  position: number,
++  parent: string | null = null,
++  created = "2025-01-01T00:00:00Z",
++): Issue {
++  return {
++    id,
++    workspace_id: "ws-1",
++    number: 1,
++    identifier: `MUL-${id}`,
++    title: id,
++    description: null,
++    status: "todo",
++    priority: "none",
++    assignee_type: null,
++    assignee_id: null,
++    creator_type: "member",
++    creator_id: "user-1",
++    parent_issue_id: parent,
++    project_id: null,
++    position,
++    stage: null,
++    start_date: null,
++    due_date: null,
++    metadata: {},
++    properties: {},
++    labels: [],
++    created_at: created,
++    updated_at: created,
++  };
++}
++
++describe("buildChildrenMap", () => {
++  it("groups direct children by parent, position-sorted", () => {
++    const issues = [
++      mk("p", 1),
++      mk("c2", 5, "p"),
++      mk("c1", 2, "p"),
++      mk("g", 3, "c1"),
++      mk("orphan", 4, "missing-parent"),
++    ];
++    const map = buildChildrenMap(issues);
++    expect(map.get("p")!.map((i) => i.id)).toEqual(["c1", "c2"]);
++    expect(map.get("c1")!.map((i) => i.id)).toEqual(["g"]);
++    // The "orphan" child buckets under its (absent) parent id — the parent
++    // just isn't in the loaded set.
++    expect(map.get("missing-parent")!.map((i) => i.id)).toEqual(["orphan"]);
++    expect(map.get("orphan")).toBeUndefined();
++  });
++
++  it("leaves a parent with no loaded children out of the map", () => {
++    const map = buildChildrenMap([mk("a", 1), mk("b", 2)]);
++    expect(map.has("a")).toBe(false);
++  });
++});
++
++describe("collectSubtreeIds", () => {
++  it("collects direct and indirect descendants in pre-order", () => {
++    const issues = [
++      mk("root", 1),
++      mk("a", 2, "root"),
++      mk("b", 3, "root"),
++      mk("b1", 4, "b"),
++      mk("b2", 5, "b"),
++      mk("a1", 6, "a"),
++    ];
++    const map = buildChildrenMap(issues);
++    expect(collectSubtreeIds(map, "root")).toEqual(["a", "a1", "b", "b1", "b2"]);
++    expect(collectSubtreeIds(map, "b")).toEqual(["b1", "b2"]);
++    expect(collectSubtreeIds(map, "a")).toEqual(["a1"]);
++    expect(collectSubtreeIds(map, "leaf")).toEqual([]);
++  });
++});
++
++describe("flattenBoardTree", () => {
++  it("flattens roots and expanded children into a pre-order sequence", () => {
++    const issues = [
++      mk("root", 1),
++      mk("a", 2, "root"),
++      mk("b", 3, "root"),
++      mk("b1", 4, "b"),
++    ];
++    const childrenMap = buildChildrenMap(issues);
++    const progress = new Map<string, { done: number; total: number }>([
++      ["root", { done: 1, total: 2 }],
++      ["b", { done: 0, total: 1 }],
++    ]);
++    const { ids, nodeInfo } = flattenBoardTree(
++      [mk("root", 1)],
++      childrenMap,
++      progress,
++      new Set(),
++    );
++    expect(ids).toEqual(["root", "a", "b", "b1"]);
++    expect(infoOf(nodeInfo, "root")).toEqual({ depth: 0, hasChildren: true, collapsed: false });
++    expect(infoOf(nodeInfo, "a")).toEqual({ depth: 1, hasChildren: false, collapsed: false });
++    expect(infoOf(nodeInfo, "b")).toEqual({ depth: 1, hasChildren: true, collapsed: false });
++    expect(infoOf(nodeInfo, "b1")).toEqual({ depth: 2, hasChildren: false, collapsed: false });
++  });
++
++  it("stops recursion at collapsed parents but still flags them as parents", () => {
++    const issues = [
++      mk("root", 1),
++      mk("a", 2, "root"),
++      mk("b", 3, "root"),
++      mk("b1", 4, "b"),
++    ];
++    const childrenMap = buildChildrenMap(issues);
++    const progress = new Map<string, { done: number; total: number }>([
++      ["root", { done: 1, total: 2 }],
++      ["b", { done: 0, total: 1 }],
++    ]);
++    const { ids, nodeInfo } = flattenBoardTree(
++      [mk("root", 1)],
++      childrenMap,
++      progress,
++      new Set(["root"]),
++    );
++    expect(ids).toEqual(["root"]);
++    expect(infoOf(nodeInfo, "root")).toEqual({ depth: 0, hasChildren: true, collapsed: true });
++  });
++
++  it("flags hasChildren purely from the progress map when children are unloaded", () => {
++    const progress = new Map<string, { done: number; total: number }>([
++      ["p", { done: 0, total: 3 }],
++    ]);
++    const { ids, nodeInfo } = flattenBoardTree(
++      [mk("p", 1)],
++      new Map(),
++      progress,
++      new Set(),
++    );
++    expect(ids).toEqual(["p"]);
++    expect(infoOf(nodeInfo, "p")).toEqual({ depth: 0, hasChildren: true, collapsed: false });
++  });
++});
++
++function infoOf(map: Map<string, BoardNodeInfo>, id: string): BoardNodeInfo {
++  const info = map.get(id);
++  if (!info) throw new Error(`missing nodeInfo for ${id}`);
++  return info;
++}
+diff --git a/packages/views/issues/components/board-tree-model.ts b/packages/views/issues/components/board-tree-model.ts
+new file mode 100644
+index 00000000..dfc4af06
+--- /dev/null
++++ b/packages/views/issues/components/board-tree-model.ts
+@@ -0,0 +1,82 @@
++import type { Issue } from "@multica/core/types";
++import type { ChildProgress } from "./list-row";
++
++/**
++ * Front-end tree model for the board's parent/sub-issue nesting.
++ *
++ * The board keeps its flat column mirror (`Record<groupId, string[]>` —
++ * flattened pre-order id sequence) so `useDragSettle` stays untouched. The
++ * per-card tree facts (depth, has-children, collapsed) live in a separate
++ * `nodeInfo` map the column resolves by id when rendering.
++ */
++
++export interface BoardNodeInfo {
++  depth: number;
++  hasChildren: boolean;
++  collapsed: boolean;
++}
++
++/** Group a flat issue list into direct children per parent, position-sorted. */
++export function buildChildrenMap(issues: readonly Issue[]): Map<string, Issue[]> {
++  const map = new Map<string, Issue[]>();
++  for (const issue of issues) {
++    if (!issue.parent_issue_id) continue;
++    const bucket = map.get(issue.parent_issue_id);
++    if (bucket) bucket.push(issue);
++    else map.set(issue.parent_issue_id, [issue]);
++  }
++  for (const bucket of map.values()) {
++    bucket.sort(
++      (a, b) => a.position - b.position || a.created_at.localeCompare(b.created_at),
++    );
++  }
++  return map;
++}
++
++/** All descendant ids of `rootId` (direct and indirect), DFS pre-order. */
++export function collectSubtreeIds(
++  childrenMap: ReadonlyMap<string, Issue[]>,
++  rootId: string,
++): string[] {
++  const ids: string[] = [];
++  const visit = (id: string) => {
++    for (const child of childrenMap.get(id) ?? []) {
++      ids.push(child.id);
++      visit(child.id);
++    }
++  };
++  visit(rootId);
++  return ids;
++}
++
++/**
++ * Flatten one or more root issues into the pre-order id sequence the column
++ * renders, populating `nodeInfo` with each card's depth / has-children /
++ * collapsed flags. Collapsed parents stop recursion so their children drop
++ * out of the flattened sequence (they still count as "has children" so the
++ * chevron renders).
++ */
++export function flattenBoardTree(
++  roots: readonly Issue[],
++  childrenMap: ReadonlyMap<string, Issue[]>,
++  childProgressMap: ReadonlyMap<string, ChildProgress>,
++  collapsedSet: ReadonlySet<string>,
++): { ids: string[]; nodeInfo: Map<string, BoardNodeInfo> } {
++  const ids: string[] = [];
++  const nodeInfo = new Map<string, BoardNodeInfo>();
++  const visit = (issue: Issue, depth: number) => {
++    const hasChildren =
++      (childProgressMap.get(issue.id)?.total ?? 0) > 0 ||
++      (childrenMap.get(issue.id)?.length ?? 0) > 0;
++    const collapsed = hasChildren && collapsedSet.has(issue.id);
++    nodeInfo.set(issue.id, { depth, hasChildren, collapsed });
++    ids.push(issue.id);
++    if (!collapsed) {
++      for (const child of childrenMap.get(issue.id) ?? []) {
++        visit(child, depth + 1);
++      }
++    }
++  };
++  for (const root of roots) visit(root, 0);
++  return { ids, nodeInfo };
++}
+diff --git a/packages/views/issues/components/board-view.tsx b/packages/views/issues/components/board-view.tsx
+index e11fd7cf..53066950 100644
+--- a/packages/views/issues/components/board-view.tsx
++++ b/packages/views/issues/components/board-view.tsx
+@@ -1,7 +1,7 @@
+ "use client";
+ 
+ import { useState, useCallback, useMemo, useEffect, useRef, memo } from "react";
+-import { useQuery } from "@tanstack/react-query";
++import { useQuery, useQueryClient } from "@tanstack/react-query";
+ import {
+   DndContext,
+   DragOverlay,
+@@ -13,7 +13,6 @@ import {
+   type DragOverEvent,
+ } from "@dnd-kit/core";
+ import type { QueryKey } from "@tanstack/react-query";
+-import { arrayMove } from "@dnd-kit/sortable";
+ import { toast } from "sonner";
+ import type {
+   Issue,
+@@ -25,6 +24,7 @@ import type {
+ } from "@multica/core/types";
+ import { useLoadMoreByAssigneeGroup, useLoadMoreByStatus } from "@multica/core/issues/mutations";
+ import type { AssigneeGroupedIssuesFilter, IssueSortParam, MyIssuesFilter } from "@multica/core/issues/queries";
++import { childrenByParentsOptions } from "@multica/core/issues/queries";
+ import { useViewStore } from "@multica/core/issues/stores/view-store-context";
+ import { propertyIdFromViewKey } from "@multica/core/issues/stores/view-store";
+ import { propertyListOptions, useSetIssueProperty, useUnsetIssueProperty } from "@multica/core/properties";
+@@ -37,6 +37,7 @@ import { HiddenColumnsPanel, HiddenColumnRow } from "./hidden-columns-panel";
+ import { InfiniteScrollSentinel } from "./infinite-scroll-sentinel";
+ import { ListLoadMoreFooter } from "./list-load-more-footer";
+ import type { ChildProgress } from "./list-row";
++import { collectSubtreeIds, buildChildrenMap, type BoardNodeInfo } from "./board-tree-model";
+ import type { IssueCreateDefaults } from "../surface/types";
+ import type {
+   IssueStatusPageState,
+@@ -47,19 +48,22 @@ import type {
+   IssueGroupPageState,
+ } from "../surface/use-issue-group-branches";
+ import { useDragSettle } from "./use-drag-settle";
++import { useIssueSurfaceActionsOptional } from "../surface/actions-context";
+ import { useT } from "../../i18n";
+ import {
+   type DragMoveUpdates,
+   makeKanbanCollision,
+   statusGroupId,
+   assigneeGroupId,
+-  buildColumns,
+-  computePosition,
++  buildBoardTreeColumns,
++  computeBlockPosition,
+   findColumn,
+-  getMoveAnchors,
+-  insertIdByPosition,
+-  issueMatchesGroup,
++  getSubtreeBlock,
++  getSubtreeMoveAnchors,
++  getSubtreeSyncUpdates,
+   getMoveUpdates,
++  moveBlockInto,
++  moveBlockWithin,
+   propertyGroupId,
+ } from "../utils/drag-utils";
+ 
+@@ -199,6 +203,8 @@ function BoardViewImpl({
+   const { t } = useT("issues");
+   const storeGrouping = useViewStore((s) => s.grouping);
+   const sortBy = useViewStore((s) => s.sortBy);
++  const boardCollapsedParents = useViewStore((s) => s.boardCollapsedParents);
++  const toggleBoardParentCollapsed = useViewStore((s) => s.toggleBoardParentCollapsed);
+   const boardWsId = useWorkspaceId();
+   const { data: workspaceProperties = [] } = useQuery(propertyListOptions(boardWsId));
+   const groupingPropertyId = propertyIdFromViewKey(storeGrouping);
+@@ -402,6 +408,82 @@ function BoardViewImpl({
+     [groupIds],
+   );
+ 
++  // --- Tree state ---
++  // Collapse state is board-scoped (independent of the table's) so switching
++  // views never shares expansion state. `showSubIssues` controls whether the
++  // tree renders at all: when off the query returns roots only, and we feed
++  // the tree build an empty progress map so no chevrons appear either.
++  const showSubIssues = useViewStore((s) => s.showSubIssues);
++  const collapsedSet = useMemo(
++    () => new Set(boardCollapsedParents),
++    [boardCollapsedParents],
++  );
++  const treeProgressMap = showSubIssues ? childProgressMap : EMPTY_PROGRESS_MAP;
++  // Loaded direct children (from the flat page), used to detect pagination
++  // boundary parents for the lazy children fetch.
++  const loadedChildrenMap = useMemo(
++    () => buildChildrenMap(groupedIssues),
++    [groupedIssues],
++  );
++  // Expanded parents that still have unloaded children (R2): the parent is on
++  // the current page but some of its children landed on a later one, so the
++  // tree would otherwise render with missing branches. Lazily pull the full
++  // child subset when the parent is expanded.
++  const queryClient = useQueryClient();
++  const expandedParentsNeedingChildren = useMemo(() => {
++    if (!showSubIssues) return [];
++    const ids = new Set<string>();
++    for (const issue of groupedIssues) {
++      if (collapsedSet.has(issue.id)) continue;
++      const progress = childProgressMap.get(issue.id);
++      if (!progress || progress.total === 0) continue;
++      const loaded = loadedChildrenMap.get(issue.id)?.length ?? 0;
++      if (loaded < progress.total) ids.add(issue.id);
++    }
++    return Array.from(ids).sort();
++  }, [
++    showSubIssues,
++    groupedIssues,
++    collapsedSet,
++    childProgressMap,
++    loadedChildrenMap,
++  ]);
++  const { data: fetchedChildrenMap } = useQuery(
++    childrenByParentsOptions(boardWsId, expandedParentsNeedingChildren, queryClient),
++  );
++  // Merge lazily-fetched children into the flat issue list used for tree
++  // building so expanded branches render completely.
++  const treeIssues = useMemo(() => {
++    if (!fetchedChildrenMap || fetchedChildrenMap.size === 0) return groupedIssues;
++    const byId = new Map(groupedIssues.map((i) => [i.id, i]));
++    const extra: Issue[] = [];
++    for (const children of fetchedChildrenMap.values()) {
++      for (const child of children) {
++        if (!byId.has(child.id)) {
++          byId.set(child.id, child);
++          extra.push(child);
++        }
++      }
++    }
++    return extra.length === 0 ? groupedIssues : [...groupedIssues, ...extra];
++  }, [groupedIssues, fetchedChildrenMap]);
++  // childrenMap for subtree collection (drag payloads + DragOverlay badge).
++  const childrenMap = useMemo(() => buildChildrenMap(treeIssues), [treeIssues]);
++  const treeBuild = useMemo(
++    () =>
++      buildBoardTreeColumns(
++        treeIssues,
++        groups,
++        grouping,
++        collapsedSet,
++        treeProgressMap,
++        groupingOptionIds,
++      ),
++    [treeIssues, groups, grouping, collapsedSet, treeProgressMap, groupingOptionIds],
++  );
++  const nodeInfo = treeBuild.nodeInfo;
++  const surfaceActions = useIssueSurfaceActionsOptional();
++
+   // --- Drag state ---
+   const [activeIssue, setActiveIssue] = useState<Issue | null>(null);
+   // Shared drag/settle primitive: owns the local column mirror, the
+@@ -418,27 +500,43 @@ function BoardViewImpl({
+     recentlyMovedRef,
+     settleVersion,
+     beginSettle,
+-  } = useDragSettle(() => buildColumns(groupedIssues, groups, grouping, groupingOptionIds));
++  } = useDragSettle(() => treeBuild.columns);
+ 
+   useEffect(() => {
+     if (!isDraggingRef.current && !isSettlingRef.current) {
+-      setColumns(buildColumns(groupedIssues, groups, grouping, groupingOptionIds));
++      setColumns(treeBuild.columns);
+     }
+-  }, [groupedIssues, groups, grouping, groupingOptionIds, settleVersion, setColumns, isDraggingRef, isSettlingRef]);
++  }, [treeBuild, settleVersion, setColumns, isDraggingRef, isSettlingRef]);
+ 
+   // --- Issue map ---
+   // Frozen during drag so BoardColumn/DraggableBoardCard props stay
+   // referentially stable even if a TQ refetch lands mid-drag.
+   const issueMap = useMemo(() => {
+     const map = new Map<string, Issue>();
+-    for (const issue of groupedIssues) map.set(issue.id, issue);
++    for (const issue of treeIssues) map.set(issue.id, issue);
+     return map;
+-  }, [groupedIssues]);
++  }, [treeIssues]);
+ 
+   const issueMapRef = useRef(issueMap);
+   if (!isDraggingRef.current && !isSettlingRef.current) {
+     issueMapRef.current = issueMap;
+   }
++  // nodeInfo / childrenMap frozen alongside the issue map so the drag payload
++  // and block math read the same tree the frozen columns were built from.
++  const nodeInfoRef = useRef(nodeInfo);
++  if (!isDraggingRef.current && !isSettlingRef.current) {
++    nodeInfoRef.current = nodeInfo;
++  }
++  const childrenMapRef = useRef(childrenMap);
++  if (!isDraggingRef.current && !isSettlingRef.current) {
++    childrenMapRef.current = childrenMap;
++  }
++  // Descendants that would ride along a subtree move of the dragged card
++  // (drives the DragOverlay "+N 子" badge).
++  const activeSubtreeCount = useMemo(
++    () => (activeIssue ? collectSubtreeIds(childrenMapRef.current, activeIssue.id).length : 0),
++    [activeIssue],
++  );
+ 
+   const sensors = useSensors(
+     useSensor(PointerSensor, {
+@@ -471,11 +569,12 @@ function BoardViewImpl({
+         if (sortBy !== "position") return prev;
+ 
+         recentlyMovedRef.current = true;
+-        const oldIds = prev[activeCol]!.filter((id) => id !== activeId);
+-        const newIds = [...prev[overCol]!];
+-        const overIndex = newIds.indexOf(overId);
+-        const insertIndex = overIndex >= 0 ? overIndex : newIds.length;
+-        newIds.splice(insertIndex, 0, activeId);
++        // Move the whole subtree block (not just the dragged card) so the
++        // preview matches the eventual two-phase write.
++        const block = getSubtreeBlock(prev[activeCol]!, activeId, nodeInfoRef.current);
++        const blockSet = new Set(block);
++        const oldIds = prev[activeCol]!.filter((id) => !blockSet.has(id));
++        const newIds = moveBlockInto(prev[overCol] ?? [], block, overId);
+         return { ...prev, [activeCol]: oldIds, [overCol]: newIds };
+       });
+     },
+@@ -488,8 +587,7 @@ function BoardViewImpl({
+       isDraggingRef.current = false;
+       setActiveIssue(null);
+ 
+-      const resetColumns = () =>
+-        setColumns(buildColumns(groupedIssues, groups, grouping, groupingOptionIds));
++      const resetColumns = () => setColumns(treeBuild.columns);
+ 
+       if (!over) {
+         resetColumns();
+@@ -507,14 +605,21 @@ function BoardViewImpl({
+         return;
+       }
+ 
+-      // Same-column reorder (manual sort only)
++      const map = issueMapRef.current;
++      const currentIssue = map.get(activeId);
++      // Subtree block = the dragged card plus every node currently rendering
++      // under it (its expanded descendants, contiguous in the flattened
++      // column). Collapsed children are absent from the sequence and cannot
++      // leak into the block.
++      const block = getSubtreeBlock(cols[activeCol]!, activeId, nodeInfoRef.current);
++      const blockSet = new Set(block);
++      const descendantIds = collectSubtreeIds(childrenMapRef.current, activeId);
++
++      // Same-column reorder (manual sort only): move the whole block as a unit.
+       let finalColumns = cols;
+       if (activeCol === overCol && sortBy === "position") {
+-        const ids = cols[activeCol]!;
+-        const oldIndex = ids.indexOf(activeId);
+-        const newIndex = ids.indexOf(overId);
+-        if (oldIndex !== -1 && newIndex !== -1 && oldIndex !== newIndex) {
+-          const reordered = arrayMove(ids, oldIndex, newIndex);
++        const reordered = moveBlockWithin(cols[activeCol]!, block, overId);
++        if (reordered.join("\u0000") !== cols[activeCol]!.join("\u0000")) {
+           finalColumns = { ...cols, [activeCol]: reordered };
+           setColumns(finalColumns);
+         }
+@@ -533,72 +638,99 @@ function BoardViewImpl({
+         return;
+       }
+ 
+-      const map = issueMapRef.current;
+-
+       if (sortBy !== "position") {
+-        // Cross-column: only update group (status/assignee), keep original position.
+-        const currentIssue = map.get(activeId);
+-        if (!currentIssue || issueMatchesGroup(currentIssue, finalGroup)) {
++        // Cross-column: only update group (status/assignee), keep original
++        // position. Same-column drops are a no-op even for children, whose
++        // own group value may differ from the column they render in.
++        if (!currentIssue || activeCol === overCol) {
+           resetColumns();
+           return;
+         }
+-        // Optimistically move the card into the target column *now*. Without
+-        // this, the sortBy != "position" path never touches local columns on
+-        // drop, so onDragOver having been a no-op leaves the card in its origin
+-        // column for the whole request — it only jumps across when the mutation
+-        // settles. That is the "snaps back to origin, then moves" glitch.
+-        // Placement mirrors the cache (insertByPosition) so the settle rebuild
+-        // from TanStack Query is a visual no-op.
+-        const targetIds = insertIdByPosition(
+-          (cols[overCol] ?? []).filter((id) => id !== activeId),
+-          activeId,
+-          currentIssue.position,
+-          map,
+-        );
++        // Optimistically move the whole subtree block into the target column
++        // *now* (mirrors the old single-card optimistic move; the block form
++        // keeps expanded children together during the request).
++        const targetIds = moveBlockInto(cols[overCol] ?? [], block, overId);
+         setColumns((prev) => {
+-          const fromIds = (prev[activeCol] ?? []).filter((cid) => cid !== activeId);
++          const fromIds = (prev[activeCol] ?? []).filter((cid) => !blockSet.has(cid));
+           return { ...prev, [activeCol]: fromIds, [overCol]: targetIds };
+         });
+-        onMoveIssue(
+-          activeId,
+-          {
+-            ...getMoveUpdates(finalGroup, currentIssue.position),
+-            ...getMoveAnchors(targetIds, activeId),
+-          },
+-          beginSettle(),
+-        );
++        // D4: a child dragged out of its parent's column is detached — it
++        // becomes a top-level task in the target column. Detachment only fires
++        // when the parent is visible in the current view: a sub-issue whose
++        // parent is filtered/paged out renders as a root (D2), so dragging it
++        // is a plain root move that must not silently clear the parent link.
++        // The card's own subtree follows it (D3 recursive), so descendants
++        // still get synced below.
++        const isDetach =
++          !!currentIssue.parent_issue_id &&
++          map.has(currentIssue.parent_issue_id);
++        const updates: DragMoveUpdates = {
++          ...getMoveUpdates(finalGroup, currentIssue.position),
++          ...getSubtreeMoveAnchors(targetIds, block),
++          ...(isDetach ? { parent_issue_id: null as string | null } : {}),
++        };
++        onMoveIssue(activeId, updates, beginSettle());
+         applyPropertyGroupValue(finalGroup, activeId);
++        // Two-phase: descendants batch-sync the group field (status/assignee;
++        // property columns skip — R5, the parent moves alone).
++        const sync = getSubtreeSyncUpdates(finalGroup);
++        if (sync && descendantIds.length > 0) {
++          void surfaceActions?.batchUpdate(descendantIds, sync).catch(() => {
++            toast.error(t(($) => $.board.subtree_sync_failed));
++          });
++        }
+         return;
+       }
+ 
+       const finalIds = finalColumns[finalCol]!;
+-      const newPosition = computePosition(finalIds, activeId, map);
+-      const currentIssue = map.get(activeId);
++      const newPosition = computeBlockPosition(finalIds, block, map);
++      const currentIssuePos = map.get(activeId);
+ 
+       if (
+-        currentIssue &&
+-        issueMatchesGroup(currentIssue, finalGroup) &&
+-        currentIssue.position === newPosition
++        currentIssuePos &&
++        activeCol === finalCol &&
++        currentIssuePos.position === newPosition
+       ) {
+         return;
+       }
+ 
++      const crossColumn = activeCol !== finalCol;
++      const isDetach =
++        crossColumn &&
++        !!currentIssuePos?.parent_issue_id &&
++        map.has(currentIssuePos.parent_issue_id);
++      // Same-column reorder writes position ONLY — never the group field, since
++      // a child rendered under its parent may carry a different status/assignee
++      // than the column it lives in (follow-the-parent column semantics).
++      const updates: DragMoveUpdates = crossColumn
++        ? {
++            ...getMoveUpdates(finalGroup, newPosition),
++            ...getSubtreeMoveAnchors(finalIds, block),
++            ...(isDetach ? { parent_issue_id: null as string | null } : {}),
++          }
++        : {
++            position: newPosition,
++            ...getSubtreeMoveAnchors(finalIds, block),
++          };
+       // beginSettle() holds the lock and returns the onSettled callback that
+       // releases it and resyncs local columns from the cache: a no-op on
+       // success (onSuccess already patched the moved card in place), the revert
+       // on error (onError restored the snapshot). Without it a failed move would
+       // strand the card at the drop target, since onSettled no longer refetches.
+-      onMoveIssue(
+-        activeId,
+-        {
+-          ...getMoveUpdates(finalGroup, newPosition),
+-          ...getMoveAnchors(finalIds, activeId),
+-        },
+-        beginSettle(),
+-      );
+-      applyPropertyGroupValue(finalGroup, activeId);
++      onMoveIssue(activeId, updates, beginSettle());
++      if (crossColumn) {
++        // Property value changes apply only when crossing columns — a child
++        // nested in a property column keeps its own value on a plain reorder.
++        applyPropertyGroupValue(finalGroup, activeId);
++        const sync = getSubtreeSyncUpdates(finalGroup);
++        if (sync && descendantIds.length > 0) {
++          void surfaceActions?.batchUpdate(descendantIds, sync).catch(() => {
++            toast.error(t(($) => $.board.subtree_sync_failed));
++          });
++        }
++      }
+     },
+-    [groupedIssues, groups, grouping, groupingOptionIds, onMoveIssue, groupIds, groupMap, sortBy, beginSettle, columnsRef, isDraggingRef, setColumns, applyPropertyGroupValue],
++    [treeBuild, onMoveIssue, groupIds, groupMap, sortBy, beginSettle, columnsRef, isDraggingRef, setColumns, applyPropertyGroupValue, surfaceActions, t],
+   );
+ 
+   return (
+@@ -633,6 +765,8 @@ function BoardViewImpl({
+                   group={group}
+                   issueIds={columns[group.id] ?? EMPTY_IDS}
+                   issueMap={issueMapRef.current}
++                  nodeInfo={nodeInfoRef.current}
++                  onToggleCollapsed={toggleBoardParentCollapsed}
+                   childProgressMap={childProgressMap}
+                   projectMap={projectMap}
+                   page={statusPagination[group.status]}
+@@ -646,6 +780,8 @@ function BoardViewImpl({
+                   group={group}
+                   issueIds={columns[group.id] ?? EMPTY_IDS}
+                   issueMap={issueMapRef.current}
++                  nodeInfo={nodeInfoRef.current}
++                  onToggleCollapsed={toggleBoardParentCollapsed}
+                   childProgressMap={childProgressMap}
+                   projectMap={projectMap}
+                   myIssuesOpts={myIssuesOpts}
+@@ -662,6 +798,8 @@ function BoardViewImpl({
+                   group={group}
+                   issueIds={columns[group.id] ?? EMPTY_IDS}
+                   issueMap={issueMapRef.current}
++                  nodeInfo={nodeInfoRef.current}
++                  onToggleCollapsed={toggleBoardParentCollapsed}
+                   childProgressMap={childProgressMap}
+                   projectMap={projectMap}
+                   page={groupPagination[group.id]!}
+@@ -675,6 +813,8 @@ function BoardViewImpl({
+                   group={group}
+                   issueIds={columns[group.id] ?? EMPTY_IDS}
+                   issueMap={issueMapRef.current}
++                  nodeInfo={nodeInfoRef.current}
++                  onToggleCollapsed={toggleBoardParentCollapsed}
+                   childProgressMap={childProgressMap}
+                   projectMap={projectMap}
+                   queryKey={assigneeGroupQueryKey}
+@@ -690,6 +830,8 @@ function BoardViewImpl({
+                   group={group}
+                   issueIds={columns[group.id] ?? EMPTY_IDS}
+                   issueMap={issueMapRef.current}
++                  nodeInfo={nodeInfoRef.current}
++                  onToggleCollapsed={toggleBoardParentCollapsed}
+                   childProgressMap={childProgressMap}
+                   projectMap={projectMap}
+                   projectId={projectId}
+@@ -739,6 +881,14 @@ function BoardViewImpl({
+                   ? projectMap?.get(activeIssue.project_id)
+                   : undefined
+               }
++              hasChildren={(childProgressMap.get(activeIssue.id)?.total ?? 0) > 0}
++            />
++            <ActiveSubtreeBadge
++              count={activeSubtreeCount}
++              isDetaching={
++                !!activeIssue.parent_issue_id &&
++                issueMapRef.current.has(activeIssue.parent_issue_id)
++              }
+             />
+           </div>
+         ) : null}
+@@ -747,12 +897,37 @@ function BoardViewImpl({
+   );
+ }
+ 
++/**
++ * Drag-preview badge for subtree moves: shows how many descendants ride along
++ * when the dragged card has children, and the detach hint when the dragged
++ * card is itself a sub-issue (cross-column drops turn it into a top-level
++ * task, D4).
++ */
++function ActiveSubtreeBadge({ count, isDetaching }: { count: number; isDetaching: boolean }) {
++  const { t } = useT("issues");
++  if (count === 0) return null;
++  return (
++    <div className="mt-1 flex flex-col gap-0.5">
++      <span className="inline-flex w-fit items-center gap-1 rounded-full bg-background px-2 py-0.5 text-[11px] font-medium tabular-nums text-foreground shadow-sm border border-border">
++        {t(($) => $.board.subtree_count, { count })}
++      </span>
++      {isDetaching && (
++        <span className="inline-flex w-fit items-center rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-medium text-amber-700 shadow-sm border border-amber-500/30">
++          {t(($) => $.board.detach_hint)}
++        </span>
++      )}
++    </div>
++  );
++}
++
+ const PaginatedAssigneeBoardColumn = memo(function PaginatedAssigneeBoardColumn({
+   group,
+   issueIds,
+   issueMap,
+   childProgressMap,
+   projectMap,
++  nodeInfo,
++  onToggleCollapsed,
+   queryKey,
+   filter,
+   sort,
+@@ -763,6 +938,8 @@ const PaginatedAssigneeBoardColumn = memo(function PaginatedAssigneeBoardColumn(
+   group: BoardColumnGroup;
+   issueIds: string[];
+   issueMap: Map<string, Issue>;
++  nodeInfo?: ReadonlyMap<string, BoardNodeInfo>;
++  onToggleCollapsed?: (issueId: string) => void;
+   childProgressMap?: Map<string, ChildProgress>;
+   projectMap?: Map<string, Project>;
+   queryKey: QueryKey;
+@@ -787,6 +964,8 @@ const PaginatedAssigneeBoardColumn = memo(function PaginatedAssigneeBoardColumn(
+       group={group}
+       issueIds={issueIds}
+       issueMap={issueMap}
++      nodeInfo={nodeInfo}
++      onToggleCollapsed={onToggleCollapsed}
+       childProgressMap={childProgressMap}
+       projectMap={projectMap}
+       totalCount={total}
+@@ -809,6 +988,8 @@ const ServerPaginatedBoardColumn = memo(function ServerPaginatedBoardColumn({
+   group,
+   issueIds,
+   issueMap,
++  nodeInfo,
++  onToggleCollapsed,
+   childProgressMap,
+   projectMap,
+   page,
+@@ -819,6 +1000,8 @@ const ServerPaginatedBoardColumn = memo(function ServerPaginatedBoardColumn({
+   group: BoardColumnGroup;
+   issueIds: string[];
+   issueMap: Map<string, Issue>;
++  nodeInfo?: ReadonlyMap<string, BoardNodeInfo>;
++  onToggleCollapsed?: (issueId: string) => void;
+   childProgressMap?: Map<string, ChildProgress>;
+   projectMap?: Map<string, Project>;
+   page: IssueStatusPageState | IssueGroupPageState;
+@@ -841,6 +1024,8 @@ const ServerPaginatedBoardColumn = memo(function ServerPaginatedBoardColumn({
+       group={group}
+       issueIds={issueIds}
+       issueMap={issueMap}
++      nodeInfo={nodeInfo}
++      onToggleCollapsed={onToggleCollapsed}
+       childProgressMap={childProgressMap}
+       projectMap={projectMap}
+       totalCount={page.total}
+@@ -856,6 +1041,8 @@ const PaginatedBoardColumn = memo(function PaginatedBoardColumn({
+   group,
+   issueIds,
+   issueMap,
++  nodeInfo,
++  onToggleCollapsed,
+   childProgressMap,
+   projectMap,
+   myIssuesOpts,
+@@ -867,6 +1054,8 @@ const PaginatedBoardColumn = memo(function PaginatedBoardColumn({
+   group: BoardColumnGroup & { status: IssueStatus };
+   issueIds: string[];
+   issueMap: Map<string, Issue>;
++  nodeInfo?: ReadonlyMap<string, BoardNodeInfo>;
++  onToggleCollapsed?: (issueId: string) => void;
+   childProgressMap?: Map<string, ChildProgress>;
+   projectMap?: Map<string, Project>;
+   myIssuesOpts?: { scope: string; filter: MyIssuesFilter };
+@@ -885,6 +1074,8 @@ const PaginatedBoardColumn = memo(function PaginatedBoardColumn({
+       group={group}
+       issueIds={issueIds}
+       issueMap={issueMap}
++      nodeInfo={nodeInfo}
++      onToggleCollapsed={onToggleCollapsed}
+       childProgressMap={childProgressMap}
+       projectMap={projectMap}
+       totalCount={total}
+diff --git a/packages/views/issues/utils/drag-utils.test.ts b/packages/views/issues/utils/drag-utils.test.ts
+index ba4441c7..a448fec7 100644
+--- a/packages/views/issues/utils/drag-utils.test.ts
++++ b/packages/views/issues/utils/drag-utils.test.ts
+@@ -8,8 +8,19 @@ import {
+   issueMatchesGroup,
+   propertyGroupId,
+ } from "./drag-utils";
++import {
++  buildBoardTreeColumns,
++  computeBlockPosition,
++  getSubtreeBlock,
++  getSubtreeMoveAnchors,
++  getSubtreeSyncUpdates,
++  moveBlockInto,
++  moveBlockWithin,
++} from "./drag-utils";
++import type { BoardColumnGroup } from "../components/board-column";
++import type { BoardNodeInfo } from "../components/board-tree-model";
+ 
+-function mk(id: string, position: number): Issue {
++function mk(id: string, position: number, parent: string | null = null): Issue {
+   return {
+     id,
+     workspace_id: "ws-1",
+@@ -17,13 +28,13 @@ function mk(id: string, position: number): Issue {
+     identifier: `MUL-${id}`,
+     title: id,
+     description: null,
+-    status: "todo",
++    status: parent ? "todo" : "todo",
+     priority: "none",
+     assignee_type: null,
+     assignee_id: null,
+     creator_type: "member",
+     creator_id: "user-1",
+-    parent_issue_id: null,
++    parent_issue_id: parent,
+     project_id: null,
+     position,
+     stage: null,
+@@ -130,3 +141,154 @@ describe("property grouping", () => {
+     expect(getMoveUpdates({ id: "c1", title: "Staging", propertyId, propertyOptionId: "opt-staging" }, 5)).toEqual({ position: 5 });
+   });
+ });
++
++describe("buildBoardTreeColumns", () => {
++  const statusGroups: BoardColumnGroup[] = [
++    { id: "status:todo", title: "Todo", status: "todo" },
++    { id: "status:done", title: "Done", status: "done" },
++  ];
++  const progressOf = (total: number) =>
++    new Map<string, { done: number; total: number }>([["p1", { done: 0, total }]]);
++
++  it("nests children under their parent regardless of the child's own status", () => {
++    const childDone = mk("c1", 2, "p1");
++    childDone.status = "done"; // child's own status differs from the parent's column
++    const issues = [mk("p1", 1), childDone, mk("root2", 3)];
++    const { columns, nodeInfo } = buildBoardTreeColumns(
++      issues,
++      statusGroups,
++      "status",
++      new Set(),
++      progressOf(1),
++    );
++    // p1 + its done child land in the todo column (follow-the-parent); the
++    // done child does NOT also appear in the done column.
++    expect(columns["status:todo"]).toEqual(["p1", "c1", "root2"]);
++    expect(columns["status:done"]).toEqual([]);
++    expect(info(nodeInfo, "p1").depth).toBe(0);
++    expect(info(nodeInfo, "c1").depth).toBe(1);
++  });
++
++  it("collapsed parents drop their children from the flattened sequence", () => {
++    const issues = [mk("p1", 1), mk("c1", 2, "p1"), mk("root2", 3)];
++    const { columns } = buildBoardTreeColumns(
++      issues,
++      statusGroups,
++      "status",
++      new Set(["p1"]),
++      progressOf(1),
++    );
++    expect(columns["status:todo"]).toEqual(["p1", "root2"]);
++  });
++
++  it("orphans (parent not in view) become roots bucketed by their own value", () => {
++    const issues = [mk("orphan", 1, "missing-parent")];
++    const { columns } = buildBoardTreeColumns(
++      issues,
++      statusGroups,
++      "status",
++      new Set(),
++      new Map(),
++    );
++    expect(columns["status:todo"]).toEqual(["orphan"]);
++  });
++
++  it("flags hasChildren from childProgressMap even when children are unloaded", () => {
++    const { nodeInfo } = buildBoardTreeColumns(
++      [mk("p1", 1)],
++      statusGroups,
++      "status",
++      new Set(),
++      progressOf(3),
++    );
++    expect(info(nodeInfo, "p1").hasChildren).toBe(true);
++  });
++});
++
++describe("subtree block math", () => {
++  const nodeInfo = new Map<string, BoardNodeInfo>([
++    ["root", { depth: 0, hasChildren: true, collapsed: false }],
++    ["a", { depth: 1, hasChildren: true, collapsed: false }],
++    ["a1", { depth: 2, hasChildren: false, collapsed: false }],
++    ["a2", { depth: 2, hasChildren: false, collapsed: false }],
++    ["b", { depth: 1, hasChildren: false, collapsed: false }],
++  ]);
++  const seq = ["root", "a", "a1", "a2", "b"];
++
++  it("getSubtreeBlock returns the card plus its flattened descendants", () => {
++    expect(getSubtreeBlock(seq, "root", nodeInfo)).toEqual(["root", "a", "a1", "a2", "b"]);
++    expect(getSubtreeBlock(seq, "a", nodeInfo)).toEqual(["a", "a1", "a2"]);
++    expect(getSubtreeBlock(seq, "a2", nodeInfo)).toEqual(["a2"]);
++    expect(getSubtreeBlock(seq, "b", nodeInfo)).toEqual(["b"]);
++  });
++
++  it("collapsed children are excluded because they are not in the sequence", () => {
++    const collapsed = new Map<string, BoardNodeInfo>([
++      ["root", { depth: 0, hasChildren: true, collapsed: true }],
++    ]);
++    expect(getSubtreeBlock(["root"], "root", collapsed)).toEqual(["root"]);
++  });
++
++  it("getSubtreeMoveAnchors uses the ids outside the block boundaries", () => {
++    expect(getSubtreeMoveAnchors(seq, ["a", "a1", "a2"])).toEqual({
++      before_id: "root",
++      after_id: "b",
++    });
++    expect(getSubtreeMoveAnchors(seq, ["root"])).toEqual({ before_id: null, after_id: "a" });
++    expect(getSubtreeMoveAnchors(seq, ["b"])).toEqual({ before_id: "a2", after_id: null });
++  });
++
++  it("moveBlockWithin relocates a block to overId's slot", () => {
++    expect(moveBlockWithin(seq, ["a", "a1", "a2"], "b")).toEqual(["root", "b", "a", "a1", "a2"]);
++    expect(moveBlockWithin(seq, ["root"], "a")).toEqual(["a", "root", "a1", "a2", "b"]);
++  });
++
++  it("moveBlockWithin treats dropping a parent onto its own descendant as a no-op", () => {
++    expect(moveBlockWithin(seq, ["a", "a1", "a2"], "a1")).toEqual(seq);
++  });
++
++  it("moveBlockInto inserts a block into another sequence at overId", () => {
++    const target = ["x", "y"];
++    expect(moveBlockInto(target, ["a", "a1", "a2"], "y")).toEqual(["x", "a", "a1", "a2", "y"]);
++    expect(moveBlockInto(target, ["a"], "missing")).toEqual(["x", "y", "a"]);
++  });
++
++  it("computeBlockPosition places the parent between its outside neighbors", () => {
++    const map = mapOf(mk("root", 10), mk("a", 20), mk("a1", 21), mk("a2", 22), mk("b", 30));
++    // root block [root] stays first → between (nothing before) and "a" → 20 - 1
++    expect(computeBlockPosition(["root", "a", "a1", "a2", "b"], ["root"], map)).toBe(19);
++    // a-block [a,a1,a2] sits at the end after "b" → before(30) + 1
++    expect(computeBlockPosition(["root", "b", "a", "a1", "a2"], ["a", "a1", "a2"], map)).toBe(31);
++  });
++});
++
++describe("getSubtreeSyncUpdates", () => {
++  it("returns status for status columns", () => {
++    expect(getSubtreeSyncUpdates({ id: "s1", title: "Done", status: "done" })).toEqual({
++      status: "done",
++    });
++  });
++
++  it("returns assignee fields for assignee columns", () => {
++    expect(
++      getSubtreeSyncUpdates({
++        id: "a1",
++        title: "Bob",
++        assigneeType: "member",
++        assigneeId: "user-1",
++      }),
++    ).toEqual({ assignee_type: "member", assignee_id: "user-1" });
++  });
++
++  it("returns null for property columns (no cascade, R5)", () => {
++    expect(
++      getSubtreeSyncUpdates({ id: "c1", title: "Staging", propertyId: "prop", propertyOptionId: "opt" }),
++    ).toBeNull();
++  });
++});
++
++function info(map: Map<string, BoardNodeInfo>, id: string): BoardNodeInfo {
++  const value = map.get(id);
++  if (!value) throw new Error(`missing nodeInfo for ${id}`);
++  return value;
++}
+diff --git a/packages/views/issues/utils/drag-utils.ts b/packages/views/issues/utils/drag-utils.ts
+index d20f75a9..5402925a 100644
+--- a/packages/views/issues/utils/drag-utils.ts
++++ b/packages/views/issues/utils/drag-utils.ts
+@@ -7,6 +7,12 @@ import type { Issue, IssueAssigneeType, IssueStatus, UpdateIssueRequest } from "
+ import type { IssueGrouping } from "@multica/core/issues/stores/view-store";
+ import { propertyIdFromViewKey } from "@multica/core/issues/stores/view-store";
+ import type { BoardColumnGroup } from "../components/board-column";
++import type { ChildProgress } from "../components/list-row";
++import {
++  buildChildrenMap,
++  flattenBoardTree,
++  type BoardNodeInfo,
++} from "../components/board-tree-model";
+ 
+ export type DragMoveTargetUpdates = Pick<
+   UpdateIssueRequest,
+@@ -16,6 +22,12 @@ export type DragMoveTargetUpdates = Pick<
+ export type DragMoveUpdates = DragMoveTargetUpdates & {
+   before_id: string | null;
+   after_id: string | null;
++  /**
++   * Set to `null` when a dragged sub-issue is dropped into another column and
++   * detaches from its parent (becomes a top-level task, D4). Omitted for
++   * ordinary moves.
++   */
++  parent_issue_id?: string | null;
+ };
+ 
+ const UNASSIGNED_GROUP_ID = "assignee:unassigned";
+@@ -84,6 +96,168 @@ export function buildColumns(
+   return cols;
+ }
+ 
++/**
++ * Tree-ified column build for the board. Unlike {@link buildColumns} (which
++ * buckets every issue by its OWN group value), children are pulled under
++ * their parent's column: a child renders wherever its parent does, regardless
++ * of the child's own status/assignee/property (Board's "follow the parent
++ * column" semantics). Issues whose parent is absent from the loaded view are
++ * roots and fall back to their own group value.
++ *
++ * The returned column mirror is still a flat pre-order id sequence per
++ * column (useDragSettle-compatible); `nodeInfo` carries the per-card depth /
++ * has-children / collapsed facts the column resolves by id when rendering.
++ */
++export function buildBoardTreeColumns(
++  issues: Issue[],
++  groups: BoardColumnGroup[],
++  grouping: IssueGrouping,
++  collapsedSet: ReadonlySet<string>,
++  childProgressMap: ReadonlyMap<string, ChildProgress>,
++  knownOptionIds?: ReadonlySet<string>,
++): { columns: Record<string, string[]>; nodeInfo: Map<string, BoardNodeInfo> } {
++  const cols: Record<string, string[]> = {};
++  for (const group of groups) cols[group.id] = [];
++  const nodeInfo = new Map<string, BoardNodeInfo>();
++  const childrenMap = buildChildrenMap(issues);
++  const loadedIds = new Set(issues.map((i) => i.id));
++  // Roots = parentless issues plus issues whose parent is not part of the
++  // currently loaded view (a child whose parent was filtered/paged out).
++  const roots = issues.filter(
++    (issue) => !issue.parent_issue_id || !loadedIds.has(issue.parent_issue_id),
++  );
++  for (const root of roots) {
++    const gid = getIssueGroupId(root, grouping, knownOptionIds);
++    if (!cols[gid]) continue;
++    const { ids, nodeInfo: flatInfo } = flattenBoardTree(
++      [root],
++      childrenMap,
++      childProgressMap,
++      collapsedSet,
++    );
++    cols[gid].push(...ids);
++    for (const [id, info] of flatInfo) nodeInfo.set(id, info);
++  }
++  return { columns: cols, nodeInfo };
++}
++
++/**
++ * Contiguous subtree block for `activeId` in a flattened column sequence:
++ * the dragged card plus every node that currently renders under it (its
++ * expanded descendants, which always follow it in pre-order). Collapsed
++ * children are absent from the sequence, so the block never leaks them.
++ */
++export function getSubtreeBlock(
++  ids: readonly string[],
++  activeId: string,
++  nodeInfo: ReadonlyMap<string, BoardNodeInfo>,
++): string[] {
++  const start = ids.indexOf(activeId);
++  if (start === -1) return [activeId];
++  const depth = nodeInfo.get(activeId)?.depth ?? 0;
++  let end = start + 1;
++  while (end < ids.length && (nodeInfo.get(ids[end]!)?.depth ?? 0) > depth) {
++    end += 1;
++  }
++  return ids.slice(start, end);
++}
++
++/**
++ * Move/insert a subtree block (contiguous run of ids) so that it lands in the
++ * slot `overId` currently occupies. Returns a new sequence; the block keeps
++ * its internal order.
++ */
++export function moveBlockInto(
++  ids: readonly string[],
++  block: readonly string[],
++  overId: string,
++): string[] {
++  const blockSet = new Set(block);
++  const rest = ids.filter((id) => !blockSet.has(id));
++  const overIndex = rest.indexOf(overId);
++  const insertAt = overIndex >= 0 ? overIndex : rest.length;
++  return [...rest.slice(0, insertAt), ...block, ...rest.slice(insertAt)];
++}
++
++/**
++ * Relocate a subtree block within a single column so the block ends up at the
++ * slot `overId` occupies (same-column reorder). Mirrors the old
++ * `arrayMove(ids, oldIndex, newIndex)` placement but for a multi-id block.
++ * Dropping a parent onto one of its own descendants is a no-op.
++ */
++export function moveBlockWithin(
++  ids: readonly string[],
++  block: readonly string[],
++  overId: string,
++): string[] {
++  if (block.includes(overId)) return [...ids];
++  const start = ids.indexOf(block[0]!);
++  const blockLen = block.length;
++  if (start === -1) return [...ids];
++  const overIndex = ids.indexOf(overId);
++  const newStart =
++    overIndex <= start ? overIndex : overIndex - blockLen + 1;
++  if (newStart === start) return [...ids];
++  const next = [...ids];
++  next.splice(start, blockLen);
++  next.splice(newStart, 0, ...block);
++  return next;
++}
++
++/**
++ * Anchors for a subtree block move: the ids immediately OUTSIDE the block's
++ * boundaries in `ids`, which is what the parent's position should anchor to.
++ */
++export function getSubtreeMoveAnchors(
++  ids: readonly string[],
++  block: readonly string[],
++): Pick<DragMoveUpdates, "before_id" | "after_id"> {
++  const start = ids.indexOf(block[0]!);
++  if (start === -1) return { before_id: null, after_id: null };
++  const end = start + block.length;
++  return {
++    before_id: start > 0 ? ids[start - 1]! : null,
++    after_id: end < ids.length ? ids[end]! : null,
++  };
++}
++
++/**
++ * Position for a subtree block placed in `ids`: midpoint between the ids that
++ * bracket the block. Same formula as {@link computePosition} but for a block
++ * (the parent's position only — descendants keep theirs).
++ */
++export function computeBlockPosition(
++  ids: readonly string[],
++  block: readonly string[],
++  issueMap: Map<string, Issue>,
++): number {
++  const start = ids.indexOf(block[0]!);
++  if (start === -1) return 0;
++  const getPos = (id: string) => issueMap.get(id)?.position ?? 0;
++  const end = start + block.length;
++  if (block.length === ids.length) return getPos(block[0]!);
++  if (start === 0) return end < ids.length ? getPos(ids[end]!) - 1 : getPos(block[0]!);
++  if (end === ids.length) return getPos(ids[start - 1]!) + 1;
++  return (getPos(ids[start - 1]!) + getPos(ids[end]!)) / 2;
++}
++
++/**
++ * Group-field updates to push to a subtree's descendants during a cross-column
++ * move. Only status/assignee are syncable via batch-update; property values
++ * are intentionally omitted (R5: property cascade is not supported, the parent
++ * moves alone).
++ */
++export function getSubtreeSyncUpdates(
++  group: BoardColumnGroup,
++): Pick<UpdateIssueRequest, "status" | "assignee_type" | "assignee_id"> | null {
++  if (group.status) return { status: group.status };
++  if (group.propertyId !== undefined) return null;
++  return {
++    assignee_type: group.assigneeType ?? null,
++    assignee_id: group.assigneeId ?? null,
++  };
++}
++
+ export function computePosition(ids: string[], activeId: string, issueMap: Map<string, Issue>): number {
+   const idx = ids.indexOf(activeId);
+   if (idx === -1) return 0;
+diff --git a/packages/views/locales/en/issues.json b/packages/views/locales/en/issues.json
+index 4547f51f..40bb1fce 100644
+--- a/packages/views/locales/en/issues.json
++++ b/packages/views/locales/en/issues.json
+@@ -228,7 +228,12 @@
+     "empty_column": "No issues",
+     "empty_grouping": "No matching issues",
+     "no_value": "No value",
+-    "ordered_by": "Board ordered by {{field}}"
++    "ordered_by": "Board ordered by {{field}}",
++    "expand_subtree": "Expand sub-issues",
++    "collapse_subtree": "Collapse sub-issues",
++    "subtree_count": "+{{count}} sub-issues",
++    "detach_hint": "Will become a top-level issue",
++    "subtree_sync_failed": "Some sub-issues were not moved"
+   },
+   "detail": {
+     "not_found": "This issue does not exist or has been deleted in this workspace.",
+diff --git a/packages/views/locales/ja/issues.json b/packages/views/locales/ja/issues.json
+index 08510345..b9f2e8e2 100644
+--- a/packages/views/locales/ja/issues.json
++++ b/packages/views/locales/ja/issues.json
+@@ -226,7 +226,12 @@
+     "empty_column": "イシューなし",
+     "empty_grouping": "一致するイシューがありません",
+     "no_value": "値なし",
+-    "ordered_by": "{{field}} 順に並べたボード"
++    "ordered_by": "{{field}} 順に並べたボード",
++    "expand_subtree": "サブイシューを展開",
++    "collapse_subtree": "サブイシューを折りたたむ",
++    "subtree_count": "サブイシュー +{{count}}",
++    "detach_hint": "トップレベルのイシューになります",
++    "subtree_sync_failed": "一部のサブイシューを移動できませんでした"
+   },
+   "detail": {
+     "not_found": "このイシューはこのワークスペースに存在しないか、削除されています。",
+diff --git a/packages/views/locales/ko/issues.json b/packages/views/locales/ko/issues.json
+index d8a60654..6df5d2d5 100644
+--- a/packages/views/locales/ko/issues.json
++++ b/packages/views/locales/ko/issues.json
+@@ -226,7 +226,12 @@
+     "empty_column": "이슈 없음",
+     "empty_grouping": "일치하는 이슈가 없습니다",
+     "no_value": "값 없음",
+-    "ordered_by": "{{field}} 기준으로 정렬된 보드"
++    "ordered_by": "{{field}} 기준으로 정렬된 보드",
++    "expand_subtree": "하위 이슈 펼치기",
++    "collapse_subtree": "하위 이슈 접기",
++    "subtree_count": "하위 이슈 +{{count}}",
++    "detach_hint": "최상위 이슈가 됩니다",
++    "subtree_sync_failed": "일부 하위 이슈를 이동하지 못했습니다"
+   },
+   "detail": {
+     "not_found": "이 워크스페이스에 해당 이슈가 없거나 삭제되었습니다.",
+diff --git a/packages/views/locales/zh-Hans/issues.json b/packages/views/locales/zh-Hans/issues.json
+index 37999d66..531c1433 100644
+--- a/packages/views/locales/zh-Hans/issues.json
++++ b/packages/views/locales/zh-Hans/issues.json
+@@ -226,7 +226,12 @@
+     "empty_column": "无 issue",
+     "empty_grouping": "没有匹配的 issue",
+     "no_value": "未设置",
+-    "ordered_by": "按{{field}}排序"
++    "ordered_by": "按{{field}}排序",
++    "expand_subtree": "展开子任务",
++    "collapse_subtree": "折叠子任务",
++    "subtree_count": "子任务 +{{count}}",
++    "detach_hint": "将转为顶层任务",
++    "subtree_sync_failed": "部分子任务状态未同步"
+   },
+   "detail": {
+     "not_found": "这个 issue 不存在或已在该工作区被删除。",

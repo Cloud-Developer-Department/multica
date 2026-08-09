@@ -458,14 +458,16 @@ func TestCreateComment_DualRoleAgentWorkerCommentWakesLeader(t *testing.T) {
 }
 
 // TestCreateComment_SquadLeaderMentionTaskDoesNotSelfTriggerAssignedFallback
-// pins MUL-4024's direct-mention gap:
+// pins MUL-4024's direct-mention gap under the SR3 contract (LIU-8 follow-up):
 //
 //   - A member explicitly @mentions the issue's assigned squad leader by agent
-//     id, which queues a generic mention task for L (is_leader_task=false,
-//     squad_id=NULL).
-//   - L posts a plain reply while running that mention task.
-//   - The assigned-squad fallback must not treat that generic mention task as a
-//     same-squad worker result and queue L again as the leader.
+//     id. Under SR3 the leader is the unique leader of one non-archived squad,
+//     so the mention UPGRADES to a squad-level leader task
+//     (is_leader_task=true, squad_id set) instead of a generic mention task.
+//   - L posts a plain reply while running that leader task.
+//   - The assigned-squad fallback must not treat the reply as a same-squad
+//     worker result and queue L again as the leader — the leader-role
+//     self-suppression covers the leader task exactly as it does for @squad.
 func TestCreateComment_SquadLeaderMentionTaskDoesNotSelfTriggerAssignedFallback(t *testing.T) {
 	if testHandler == nil || testPool == nil {
 		t.Skip("database not available")
@@ -522,27 +524,29 @@ func TestCreateComment_SquadLeaderMentionTaskDoesNotSelfTriggerAssignedFallback(
 		"content": "[@Leader](mention://agent/" + fx.LeaderID + ") can you check this?",
 	})
 
-	var mentionTaskID string
+	// SR3: the unique-leader mention queues a squad-level LEADER task, not a
+	// generic mention task.
+	var leaderTaskID string
 	if err := testPool.QueryRow(ctx, `
 		SELECT id FROM agent_task_queue
 		WHERE issue_id = $1 AND agent_id = $2 AND status = 'queued'
-		  AND is_leader_task = FALSE AND squad_id IS NULL
+		  AND is_leader_task = TRUE AND squad_id = $3
 		ORDER BY created_at DESC
 		LIMIT 1
-	`, issueID, fx.LeaderID).Scan(&mentionTaskID); err != nil {
-		t.Fatalf("load leader mention task: %v", err)
+	`, issueID, fx.LeaderID, fx.SquadID).Scan(&leaderTaskID); err != nil {
+		t.Fatalf("load leader task after SR3 upgrade: %v", err)
 	}
-	if _, err := testPool.Exec(ctx, `UPDATE agent_task_queue SET status = 'running' WHERE id = $1`, mentionTaskID); err != nil {
-		t.Fatalf("mark mention task running: %v", err)
+	if _, err := testPool.Exec(ctx, `UPDATE agent_task_queue SET status = 'running' WHERE id = $1`, leaderTaskID); err != nil {
+		t.Fatalf("mark leader task running: %v", err)
 	}
 
-	postAgentComment(mentionTaskID, map[string]any{
+	postAgentComment(leaderTaskID, map[string]any{
 		"content":   "checked, no action needed",
 		"parent_id": trigger.ID,
 	})
 
 	if got := countQueuedLeaderTasks(); got != 0 {
-		t.Fatalf("leader reply from generic mention task queued %d leader tasks, want 0", got)
+		t.Fatalf("leader reply from leader-role task queued %d leader tasks, want 0", got)
 	}
 }
 

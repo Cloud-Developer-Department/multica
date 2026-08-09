@@ -1,0 +1,84 @@
+{
+  "range": {
+    "1": "최근 24시간",
+    "7": "최근 7일",
+    "30": "최근 30일"
+  },
+  "page": {
+    "title": "모니터링 대시보드"
+  },
+  "toolbar": {
+    "data_updated": "데이터 업데이트 시각",
+    "auto_refresh": "자동 새로고침",
+    "refresh": "새로고침",
+    "refreshing": "새로고침 중…",
+    "no_update": "업데이트 없음",
+    "auto_refresh_paused_badge": "자동 새로고침 일시중지",
+    "enabled": "자동 새로고침 켜짐 (60초)",
+    "disabled": "자동 새로고침 꺼짐",
+    "paused_toast": "연속 실패 한도 도달 — 자동 새로고침 일시중지",
+    "up_to_date": "데이터가 최신입니다 ({{time}})",
+    "refresh_partial_failed": "일부 데이터 새로고침 실패 — 이전 데이터를 표시합니다"
+  },
+  "kpi": {
+    "section": "핵심 지표",
+    "total_label": "전체 Issue",
+    "in_progress_label": "진행 중",
+    "in_progress_sub": "전체의 {{pct}}",
+    "completion_label": "완료율",
+    "delay_label": "지연율",
+    "delay_no_data": "기한 데이터 없음",
+    "online_runtime_label": "온라인 런타임",
+    "online_runtime_sub": "총 {{total}}개",
+    "online_rate_label": "온라인 비율",
+    "online_rate_sub": "온라인 {{online}}/{{total}}"
+  },
+  "module": {
+    "section": "데이터 모듈",
+    "other": "기타",
+    "issue_distribution_title": "Issue 상태 분포",
+    "issue_distribution_empty": "Issue 데이터 없음",
+    "issue_distribution_empty_desc": "Issue를 만들면 여기에 분포가 표시됩니다",
+    "project_progress_title": "프로젝트 진행도",
+    "project_progress_empty": "프로젝트 데이터 없음",
+    "project_progress_empty_desc": "프로젝트를 만들면 여기에 진행도가 표시됩니다",
+    "agent_workload_title": "에이전트 작업량",
+    "agent_workload_empty": "활동 기록 없음",
+    "team_activity_title": "팀 활동",
+    "team_activity_empty": "활동 기록 없음",
+    "comments_title": "댓글 활동",
+    "comments_total": "총 {{count}}",
+    "comments_today": "오늘 {{count}}",
+    "comments_series": "댓글 수",
+    "comments_empty": "댓글 데이터 없음",
+    "comments_empty_desc": "댓글이 생기면 여기에 활동이 표시됩니다",
+    "completion_title": "완료율 / 지연율 추이",
+    "completion_empty": "추이 데이터 없음",
+    "completion_empty_desc": "기한 있는 작업이 있으면 여기에 추이가 표시됩니다",
+    "completion_series": "완료율",
+    "delay_series": "지연율"
+  },
+  "donut": {
+    "total_label": "전체 Issue"
+  },
+  "runtime": {
+    "title": "런타임 상태",
+    "summary": "온라인 {{online}} / 총 {{total}}",
+    "empty_title": "런타임 없음",
+    "col_name": "런타임 이름",
+    "col_type": "유형",
+    "col_status": "상태",
+    "col_heartbeat": "최근 하트비트",
+    "col_resources": "리소스 사용량",
+    "minutes_ago": "{{minutes}}분 전",
+    "prev_page": "이전",
+    "next_page": "다음"
+  },
+  "error": {
+    "module_title": "데이터 로드 실패",
+    "page_title": "데이터 로드 실패",
+    "page_desc": "잠시 후 다시 시도하거나 연결을 확인하세요",
+    "retry": "재시도",
+    "reload": "다시 로드"
+  }
+}

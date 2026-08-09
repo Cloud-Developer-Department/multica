@@ -90,6 +90,16 @@ const (
 	EventProjectResourceUpdated = "project_resource:updated"
 	EventProjectResourceDeleted = "project_resource:deleted"
 
+	// Workflow events (Workflow state machine domain, CLO-146)
+	EventWorkflowCreated      = "workflow:created"
+	EventWorkflowUpdated      = "workflow:updated"
+	EventWorkflowAdvanced     = "workflow:advanced"
+	EventWorkflowNodeUpdated  = "workflow:node:updated"
+
+	// Artifact events (Artifact review-loop domain, CLO-146)
+	EventArtifactCreated  = "artifact:created"
+	EventArtifactReviewed = "artifact:reviewed"
+
 	// Label events
 	EventLabelCreated       = "label:created"
 	EventLabelUpdated       = "label:updated"
@@ -101,6 +111,12 @@ const (
 	EventPropertyCreated        = "property:created"
 	EventPropertyUpdated        = "property:updated"
 	EventIssuePropertiesChanged = "issue_properties:changed"
+
+	// Issue template events (CLO-159). Templates are hard-deleted, so there
+	// is a template:deleted event (unlike properties which archive).
+	EventIssueTemplateCreated = "issue_template:created"
+	EventIssueTemplateUpdated = "issue_template:updated"
+	EventIssueTemplateDeleted = "issue_template:deleted"
 
 	// Pin events
 	EventPinCreated   = "pin:created"

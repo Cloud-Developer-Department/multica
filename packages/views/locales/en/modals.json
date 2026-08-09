@@ -93,7 +93,16 @@
     "submitting": "Creating...",
     "toast_created": "Squad created",
     "toast_failed": "Failed to create squad",
-    "toast_member_add_failed": "Failed to add {{name}}: {{error}}"
+    "toast_member_add_failed": "Failed to add {{name}}: {{error}}",
+    "include_squads_label": "Include Squads",
+    "include_squads_optional": "(optional)",
+    "include_squads_hint": "Merge existing squads under this one — their leader and members will be managed by the new squad leader.",
+    "include_squads_placeholder": "Select squads to merge into this squad",
+    "group_squads": "Squads",
+    "member_role_label": "Role for {{name}}",
+    "member_role_optional": "(optional)",
+    "member_role_placeholder": "e.g. Reviewer, Frontend Lead",
+    "toast_members_failed": "Invalid members, squad not created: {{names}}"
   },
   "create_project": {
     "title": "New Project",
@@ -145,6 +154,7 @@
     "sr_agent": "Quick create issue",
     "manual_breadcrumb": "Create manually",
     "agent_breadcrumb": "Create with agent",
+    "template_button": "Template",
     "title_placeholder": "Issue title",
     "description_placeholder": "Add description...",
     "more_options_aria": "More options",

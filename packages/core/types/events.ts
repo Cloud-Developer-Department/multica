@@ -1,5 +1,6 @@
 import type { Issue, IssueMetadata, IssueReaction } from "./issue";
 import type { IssueProperty, IssuePropertyValues } from "./property";
+import type { IssueTemplate } from "./issue-template";
 import type { Agent } from "./agent";
 import type { InboxItem } from "./inbox";
 import type { Comment, Reaction } from "./comment";
@@ -69,6 +70,9 @@ export type WSEventType =
   | "label:created"
   | "label:updated"
   | "label:deleted"
+  | "issue_template:created"
+  | "issue_template:updated"
+  | "issue_template:deleted"
   | "issue_labels:changed"
   | "issue_metadata:changed"
   | "issue_properties:changed"
@@ -121,6 +125,18 @@ export interface IssueDeletedPayload {
 export interface IssueLabelsChangedPayload {
   issue_id: string;
   labels: Label[];
+}
+
+export interface IssueTemplateCreatedPayload {
+  issue_template: IssueTemplate;
+}
+
+export interface IssueTemplateUpdatedPayload {
+  issue_template: IssueTemplate;
+}
+
+export interface IssueTemplateDeletedPayload {
+  issue_template_id: string;
 }
 
 export interface IssueMetadataChangedPayload {
@@ -531,6 +547,9 @@ export interface WSEventPayloadMap {
   "label:created": unknown;
   "label:updated": unknown;
   "label:deleted": unknown;
+  "issue_template:created": IssueTemplateCreatedPayload;
+  "issue_template:updated": IssueTemplateUpdatedPayload;
+  "issue_template:deleted": IssueTemplateDeletedPayload;
   "pin:created": unknown;
   "pin:deleted": unknown;
   "pin:reordered": unknown;

@@ -11,7 +11,7 @@ import { useWorkspaceId } from "@multica/core/hooks";
 import { propertyListOptions } from "@multica/core/properties";
 import { CustomPropertyValueDisplay } from "./pickers/custom-property-picker";
 import { formatDateOnly, isPastDateOnly } from "@multica/core/issues/date";
-import { CalendarClock, CalendarDays } from "lucide-react";
+import { CalendarClock, CalendarDays, ChevronDown, ChevronRight } from "lucide-react";
 import { ActorAvatar } from "../../common/actor-avatar";
 import { PropertyIcon } from "../../common/property-icon";
 import { useWorkspacePaths } from "@multica/core/paths";
@@ -62,11 +62,22 @@ export const BoardCardContent = memo(function BoardCardContent({
   editable = false,
   childProgress,
   project,
+  depth = 0,
+  hasChildren = false,
+  collapsed = false,
+  onToggleCollapsed,
 }: {
   issue: Issue;
   editable?: boolean;
   childProgress?: ChildProgress;
   project?: Project;
+  /** Tree depth (0 = root) — indents the card by `depth * 18px`. */
+  depth?: number;
+  /** Whether this card has children (drives the expand/collapse chevron). */
+  hasChildren?: boolean;
+  /** Whether the parent is currently collapsed (children hidden). */
+  collapsed?: boolean;
+  onToggleCollapsed?: () => void;
 }) {
   const { t } = useT("issues");
   const timeAgo = useTimeAgo();
@@ -177,10 +188,38 @@ export const BoardCardContent = memo(function BoardCardContent({
   const showRightMeta = !!showStartDate || !!showDueDate || !!showChildProgress || showUpdatedHint;
 
   return (
-    <div className="rounded-lg border-[0.5px] border-surface-border bg-surface py-3 px-2.5 shadow-[var(--surface-shadow)] transition-colors group-hover/card:border-foreground/15 group-hover/card:bg-surface-hover group-data-[popup-open]/card:border-foreground/15 group-data-[popup-open]/card:bg-surface-hover">
-      {/* Row 1: priority + identifier (left), agent activity + assignee (right) */}
+    <div
+      style={depth ? { marginLeft: depth * 18 } : undefined}
+      className="rounded-lg border-[0.5px] border-surface-border bg-surface py-3 px-2.5 shadow-[var(--surface-shadow)] transition-colors group-hover/card:border-foreground/15 group-hover/card:bg-surface-hover group-data-[popup-open]/card:border-foreground/15 group-data-[popup-open]/card:bg-surface-hover"
+    >
+      {/* Row 1: toggle + priority + identifier (left), agent activity + assignee (right) */}
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-1.5 min-w-0">
+          {hasChildren && (
+            <button
+              type="button"
+              aria-label={
+                collapsed
+                  ? t(($) => $.board.expand_subtree)
+                  : t(($) => $.board.collapse_subtree)
+              }
+              className="-ml-0.5 -mr-0.5 rounded p-0.5 text-muted-foreground hover:bg-accent"
+              onClick={(event) => {
+                event.stopPropagation();
+                event.preventDefault();
+                onToggleCollapsed?.();
+              }}
+              onPointerDown={(event) => {
+                event.stopPropagation();
+              }}
+            >
+              {collapsed ? (
+                <ChevronRight className="size-3.5" />
+              ) : (
+                <ChevronDown className="size-3.5" />
+              )}
+            </button>
+          )}
           {priorityIconNode}
           <p className="text-xs text-muted-foreground truncate">{issue.identifier}</p>
         </div>
@@ -322,11 +361,22 @@ export const DraggableBoardCard = memo(function DraggableBoardCard({
   childProgress,
   project,
   disableSorting,
+  depth = 0,
+  hasChildren = false,
+  collapsed = false,
+  onToggleCollapsed,
 }: {
   issue: Issue;
   childProgress?: ChildProgress;
   project?: Project;
   disableSorting?: boolean;
+  /** Tree depth (0 = root) — indents the card by `depth * 18px`. */
+  depth?: number;
+  /** Whether this card has children (drives the expand/collapse chevron). */
+  hasChildren?: boolean;
+  /** Whether the parent is currently collapsed (children hidden). */
+  collapsed?: boolean;
+  onToggleCollapsed?: () => void;
 }) {
   const p = useWorkspacePaths();
   const {
@@ -366,6 +416,10 @@ export const DraggableBoardCard = memo(function DraggableBoardCard({
             editable
             childProgress={childProgress}
             project={project}
+            depth={depth}
+            hasChildren={hasChildren}
+            collapsed={collapsed}
+            onToggleCollapsed={onToggleCollapsed}
           />
         </AppLink>
       </div>

@@ -73,6 +73,32 @@ import type {
   DashboardRunTimeDaily,
   DashboardFailureDaily,
   DashboardFailureByAgent,
+  MonitoringIssueDistribution,
+  MonitoringActivity,
+  MonitoringComments,
+  MonitoringCompletion,
+  AnalyticsActivitySummary,
+  AnalyticsActivityHeatmap,
+  AnalyticsHeatmapMetric,
+  AnalyticsTopMember,
+  AnalyticsAdoptionSummary,
+  AnalyticsAdoptionTrendPoint,
+  AnalyticsFunnel,
+  AnalyticsAgentPerformance,
+  AnalyticsAgentTopItem,
+  AnalyticsSkillsOverview,
+  AnalyticsCollaborationSummary,
+  AnalyticsBlockerItem,
+  AnalyticsEloc,
+  AnalyticsElocGroupBy,
+  AnalyticsQuality,
+  AnalyticsRepoActivity,
+  AnalyticsPrs,
+  AnalyticsLeadTime,
+  AnalyticsLeadTimeMetric,
+  AnalyticsDeployments,
+  AnalyticsLifecycle,
+  AnalyticsDepartments,
   RuntimeUpdate,
   RuntimeModelListRequest,
   RuntimeLocalSkillListRequest,
@@ -107,6 +133,10 @@ import type {
   UpdatePropertyRequest,
   ListPropertiesResponse,
   IssuePropertiesResponse,
+  IssueTemplate,
+  CreateIssueTemplateRequest,
+  UpdateIssueTemplateRequest,
+  ListIssueTemplatesResponse,
   CreateLabelRequest,
   UpdateLabelRequest,
   ListLabelsResponse,
@@ -154,6 +184,8 @@ import type {
   RedeemSlackBindingTokenResponse,
   Squad,
   SquadMember,
+  CreateSquadRequest,
+  UpdateSquadRequest,
   SquadMemberStatusListResponse,
   BillingBalance,
   BillingTransactionsPage,
@@ -164,6 +196,21 @@ import type {
   CreateBillingCheckoutSessionResponse,
   BillingCheckoutSessionStatus,
   CreateBillingPortalSessionResponse,
+  Workflow,
+  WorkflowListResponse,
+  WorkflowTransitionsResponse,
+  CreateWorkflowRequest,
+  AdvanceWorkflowResponse,
+  Artifact,
+  ArtifactListResponse,
+  ArtifactVersionsResponse,
+  ArtifactDiffResponse,
+  ArtifactReviewsResponse,
+  ArtifactStats,
+  ReviewQueueResponse,
+  ReviewArtifactRequest,
+  ReviewArtifactResponse,
+  CreateArtifactRequest,
 } from "../types";
 import type { OnboardingCompletionPath } from "../onboarding/types";
 import type { CreateFeedbackResponse, FeedbackKind } from "../feedback/types";
@@ -199,6 +246,48 @@ import {
   DashboardFailureByAgentListSchema,
   DashboardUsageByAgentListSchema,
   DashboardUsageDailyListSchema,
+  EMPTY_MONITORING_ACTIVITY,
+  EMPTY_MONITORING_COMMENTS,
+  EMPTY_MONITORING_COMPLETION,
+  EMPTY_MONITORING_ISSUE_DISTRIBUTION,
+  MonitoringActivitySchema,
+  MonitoringCommentsSchema,
+  MonitoringCompletionSchema,
+  MonitoringIssueDistributionSchema,
+  AnalyticsActivitySummarySchema,
+  AnalyticsActivityHeatmapSchema,
+  AnalyticsAdoptionSummarySchema,
+  AnalyticsFunnelSchema,
+  AnalyticsAgentPerformanceSchema,
+  AnalyticsSkillsOverviewSchema,
+  AnalyticsCollaborationSummarySchema,
+  AnalyticsElocSchema,
+  AnalyticsQualitySchema,
+  AnalyticsRepoActivitySchema,
+  AnalyticsPrsSchema,
+  AnalyticsLeadTimeSchema,
+  AnalyticsDeploymentsSchema,
+  AnalyticsLifecycleSchema,
+  AnalyticsDepartmentsSchema,
+  AnalyticsTopMemberListSchema,
+  AnalyticsAdoptionTrendPointListSchema,
+  AnalyticsAgentTopItemListSchema,
+  AnalyticsBlockerItemListSchema,
+  EMPTY_ANALYTICS_ACTIVITY_SUMMARY,
+  EMPTY_ANALYTICS_ACTIVITY_HEATMAP,
+  EMPTY_ANALYTICS_ADOPTION_SUMMARY,
+  EMPTY_ANALYTICS_FUNNEL,
+  EMPTY_ANALYTICS_AGENT_PERFORMANCE,
+  EMPTY_ANALYTICS_SKILLS_OVERVIEW,
+  EMPTY_ANALYTICS_COLLABORATION_SUMMARY,
+  EMPTY_ANALYTICS_ELOC,
+  EMPTY_ANALYTICS_QUALITY,
+  EMPTY_ANALYTICS_REPO_ACTIVITY,
+  EMPTY_ANALYTICS_PRS,
+  EMPTY_ANALYTICS_LEAD_TIME,
+  EMPTY_ANALYTICS_DEPLOYMENTS,
+  EMPTY_ANALYTICS_LIFECYCLE,
+  EMPTY_ANALYTICS_DEPARTMENTS,
   EMPTY_AGENT_TEMPLATE_DETAIL,
   EMPTY_AGENT_TEMPLATE_SUMMARY_LIST,
   EMPTY_APP_CONFIG,
@@ -280,6 +369,10 @@ import {
   IssuePropertySchema,
   ListPropertiesResponseSchema,
   IssuePropertiesResponseSchema,
+  IssueTemplateSchema,
+  ListIssueTemplatesResponseSchema,
+  EMPTY_ISSUE_TEMPLATE,
+  EMPTY_LIST_ISSUE_TEMPLATES_RESPONSE,
   EMPTY_ISSUE_PROPERTY,
   EMPTY_LIST_PROPERTIES_RESPONSE,
   EMPTY_ISSUE_PROPERTIES_RESPONSE,
@@ -1657,6 +1750,410 @@ export class ApiClient {
     );
   }
 
+  // ---------------------------------------------------------------------------
+  // Data-monitoring dashboard — four aggregation endpoints for
+  // `/{slug}/dashboard` (CLO-166 / CLO-171). The monitoring page degrades
+  // module-by-module, so each method parses leniently and falls back to an
+  // empty payload: a missing endpoint / contract drift surfaces as that
+  // module's error/empty state instead of taking the page down.
+  // ---------------------------------------------------------------------------
+
+  async getMonitoringIssueDistribution(
+    params: { days?: number; tz?: string },
+  ): Promise<MonitoringIssueDistribution> {
+    const search = new URLSearchParams();
+    if (params.days) search.set("days", String(params.days));
+    if (params.tz) search.set("tz", params.tz);
+    const raw = await this.fetch<unknown>(`/api/dashboard/issue-distribution?${search}`);
+    return parseWithFallback<MonitoringIssueDistribution>(
+      raw,
+      MonitoringIssueDistributionSchema,
+      EMPTY_MONITORING_ISSUE_DISTRIBUTION,
+      { endpoint: "GET /api/dashboard/issue-distribution" },
+    );
+  }
+
+  async getMonitoringActivity(
+    params: { days?: number; tz?: string },
+  ): Promise<MonitoringActivity> {
+    const search = new URLSearchParams();
+    if (params.days) search.set("days", String(params.days));
+    if (params.tz) search.set("tz", params.tz);
+    const raw = await this.fetch<unknown>(`/api/dashboard/activity?${search}`);
+    return parseWithFallback<MonitoringActivity>(
+      raw,
+      MonitoringActivitySchema,
+      EMPTY_MONITORING_ACTIVITY,
+      { endpoint: "GET /api/dashboard/activity" },
+    );
+  }
+
+  async getMonitoringComments(
+    params: { days?: number; tz?: string },
+  ): Promise<MonitoringComments> {
+    const search = new URLSearchParams();
+    if (params.days) search.set("days", String(params.days));
+    if (params.tz) search.set("tz", params.tz);
+    const raw = await this.fetch<unknown>(`/api/dashboard/comments?${search}`);
+    return parseWithFallback<MonitoringComments>(
+      raw,
+      MonitoringCommentsSchema,
+      EMPTY_MONITORING_COMMENTS,
+      { endpoint: "GET /api/dashboard/comments" },
+    );
+  }
+
+  async getMonitoringCompletion(
+    params: { days?: number; tz?: string },
+  ): Promise<MonitoringCompletion> {
+    const search = new URLSearchParams();
+    if (params.days) search.set("days", String(params.days));
+    if (params.tz) search.set("tz", params.tz);
+    const raw = await this.fetch<unknown>(`/api/dashboard/completion?${search}`);
+    return parseWithFallback<MonitoringCompletion>(
+      raw,
+      MonitoringCompletionSchema,
+      EMPTY_MONITORING_COMPLETION,
+      { endpoint: "GET /api/dashboard/completion" },
+    );
+  }
+
+  // -------------------------------------------------------------------------
+  // Engineering analytics platform — `/{slug}/analytics` (CLO-228 v2.0).
+  // All endpoints live under `/api/analytics` and require a workspace member.
+  // A1–A5 / B1–B6 accept an optional `department_id`; G/D/L series never do.
+  // Lenient parse + empty fallbacks keep a missing endpoint / contract drift
+  // inside a module's error/empty state instead of taking the page down.
+  // -------------------------------------------------------------------------
+
+  private analyticsSearch(
+    params: {
+      days?: number;
+      tz?: string;
+      project_id?: string | null;
+      department_id?: string | null;
+    } = {},
+  ): URLSearchParams {
+    const search = new URLSearchParams();
+    if (params.days) search.set("days", String(params.days));
+    if (params.tz) search.set("tz", params.tz);
+    if (params.project_id) search.set("project_id", params.project_id);
+    if (params.department_id) search.set("department_id", params.department_id);
+    return search;
+  }
+
+  // --- Tab1 活跃度与渗透 (A1–A5) -------------------------------------------
+
+  async getAnalyticsActivitySummary(
+    params: { days?: number; tz?: string; project_id?: string | null; department_id?: string | null },
+  ): Promise<AnalyticsActivitySummary> {
+    const search = this.analyticsSearch(params);
+    const raw = await this.fetch<unknown>(`/api/analytics/activity/summary?${search}`);
+    return parseWithFallback<AnalyticsActivitySummary>(
+      raw,
+      AnalyticsActivitySummarySchema,
+      EMPTY_ANALYTICS_ACTIVITY_SUMMARY,
+      { endpoint: "GET /api/analytics/activity/summary" },
+    );
+  }
+
+  async getAnalyticsActivityHeatmap(
+    params: {
+      days?: number;
+      tz?: string;
+      project_id?: string | null;
+      department_id?: string | null;
+      metric?: AnalyticsHeatmapMetric;
+    },
+  ): Promise<AnalyticsActivityHeatmap> {
+    const search = this.analyticsSearch(params);
+    if (params.metric) search.set("metric", params.metric);
+    const raw = await this.fetch<unknown>(`/api/analytics/activity/heatmap?${search}`);
+    return parseWithFallback<AnalyticsActivityHeatmap>(
+      raw,
+      AnalyticsActivityHeatmapSchema,
+      EMPTY_ANALYTICS_ACTIVITY_HEATMAP,
+      { endpoint: "GET /api/analytics/activity/heatmap" },
+    );
+  }
+
+  async getAnalyticsTopMembers(
+    params: {
+      days?: number;
+      tz?: string;
+      project_id?: string | null;
+      department_id?: string | null;
+      limit?: number;
+    },
+  ): Promise<AnalyticsTopMember[]> {
+    const search = this.analyticsSearch(params);
+    if (params.limit) search.set("limit", String(params.limit));
+    const raw = await this.fetch<unknown>(`/api/analytics/activity/top-members?${search}`);
+    // Contract A3 returns `{ "items": [...] }` — unwrap before parsing the array.
+    return parseWithFallback<AnalyticsTopMember[]>(
+      (raw as { items?: unknown } | null)?.items,
+      AnalyticsTopMemberListSchema,
+      [],
+      { endpoint: "GET /api/analytics/activity/top-members" },
+    );
+  }
+
+  async getAnalyticsAdoptionSummary(
+    params: { days?: number; tz?: string; project_id?: string | null; department_id?: string | null },
+  ): Promise<AnalyticsAdoptionSummary> {
+    const search = this.analyticsSearch(params);
+    const raw = await this.fetch<unknown>(`/api/analytics/adoption/summary?${search}`);
+    return parseWithFallback<AnalyticsAdoptionSummary>(
+      raw,
+      AnalyticsAdoptionSummarySchema,
+      EMPTY_ANALYTICS_ADOPTION_SUMMARY,
+      { endpoint: "GET /api/analytics/adoption/summary" },
+    );
+  }
+
+  async getAnalyticsAdoptionTrend(
+    params: { days?: number; tz?: string; project_id?: string | null; department_id?: string | null },
+  ): Promise<AnalyticsAdoptionTrendPoint[]> {
+    const search = this.analyticsSearch(params);
+    const raw = await this.fetch<unknown>(`/api/analytics/adoption/trend?${search}`);
+    // Contract A5 returns `{ "points": [...] }` — unwrap before parsing the array.
+    return parseWithFallback<AnalyticsAdoptionTrendPoint[]>(
+      (raw as { points?: unknown } | null)?.points,
+      AnalyticsAdoptionTrendPointListSchema,
+      [],
+      { endpoint: "GET /api/analytics/adoption/trend" },
+    );
+  }
+
+  // --- Tab2 Agent 效能 (B1–B6) --------------------------------------------
+
+  async getAnalyticsFunnel(
+    params: { days?: number; tz?: string; project_id?: string | null; department_id?: string | null },
+  ): Promise<AnalyticsFunnel> {
+    const search = this.analyticsSearch(params);
+    const raw = await this.fetch<unknown>(`/api/analytics/agents/funnel?${search}`);
+    return parseWithFallback<AnalyticsFunnel>(
+      raw,
+      AnalyticsFunnelSchema,
+      EMPTY_ANALYTICS_FUNNEL,
+      { endpoint: "GET /api/analytics/agents/funnel" },
+    );
+  }
+
+  async getAnalyticsAgentPerformance(
+    params: { days?: number; tz?: string; project_id?: string | null; department_id?: string | null },
+  ): Promise<AnalyticsAgentPerformance> {
+    const search = this.analyticsSearch(params);
+    const raw = await this.fetch<unknown>(`/api/analytics/agents/performance?${search}`);
+    return parseWithFallback<AnalyticsAgentPerformance>(
+      raw,
+      AnalyticsAgentPerformanceSchema,
+      EMPTY_ANALYTICS_AGENT_PERFORMANCE,
+      { endpoint: "GET /api/analytics/agents/performance" },
+    );
+  }
+
+  async getAnalyticsTopAgents(
+    params: {
+      days?: number;
+      tz?: string;
+      project_id?: string | null;
+      department_id?: string | null;
+      limit?: number;
+    },
+  ): Promise<AnalyticsAgentTopItem[]> {
+    const search = this.analyticsSearch(params);
+    if (params.limit) search.set("limit", String(params.limit));
+    const raw = await this.fetch<unknown>(`/api/analytics/agents/top?${search}`);
+    // Contract B3 returns `{ "items": [...] }` — unwrap before parsing the array.
+    return parseWithFallback<AnalyticsAgentTopItem[]>(
+      (raw as { items?: unknown } | null)?.items,
+      AnalyticsAgentTopItemListSchema,
+      [],
+      { endpoint: "GET /api/analytics/agents/top" },
+    );
+  }
+
+  async getAnalyticsSkillsOverview(
+    params: { days?: number; tz?: string; project_id?: string | null; department_id?: string | null },
+  ): Promise<AnalyticsSkillsOverview> {
+    const search = this.analyticsSearch(params);
+    const raw = await this.fetch<unknown>(`/api/analytics/skills/overview?${search}`);
+    return parseWithFallback<AnalyticsSkillsOverview>(
+      raw,
+      AnalyticsSkillsOverviewSchema,
+      EMPTY_ANALYTICS_SKILLS_OVERVIEW,
+      { endpoint: "GET /api/analytics/skills/overview" },
+    );
+  }
+
+  async getAnalyticsCollaborationSummary(
+    params: { days?: number; tz?: string; project_id?: string | null; department_id?: string | null },
+  ): Promise<AnalyticsCollaborationSummary> {
+    const search = this.analyticsSearch(params);
+    const raw = await this.fetch<unknown>(`/api/analytics/collaboration/summary?${search}`);
+    return parseWithFallback<AnalyticsCollaborationSummary>(
+      raw,
+      AnalyticsCollaborationSummarySchema,
+      EMPTY_ANALYTICS_COLLABORATION_SUMMARY,
+      { endpoint: "GET /api/analytics/collaboration/summary" },
+    );
+  }
+
+  async getAnalyticsBlockers(
+    params: {
+      days?: number;
+      tz?: string;
+      project_id?: string | null;
+      department_id?: string | null;
+      limit?: number;
+    },
+  ): Promise<AnalyticsBlockerItem[]> {
+    const search = this.analyticsSearch(params);
+    if (params.limit) search.set("limit", String(params.limit));
+    const raw = await this.fetch<unknown>(`/api/analytics/collaboration/blockers?${search}`);
+    // Contract B6 returns `{ "items": [...] }` — unwrap before parsing the array.
+    return parseWithFallback<AnalyticsBlockerItem[]>(
+      (raw as { items?: unknown } | null)?.items,
+      AnalyticsBlockerItemListSchema,
+      [],
+      { endpoint: "GET /api/analytics/collaboration/blockers" },
+    );
+  }
+
+  // --- Tab3 Git 贡献 (G1–G4) -----------------------------------------------
+
+  async getAnalyticsEloc(
+    params: {
+      days?: number;
+      tz?: string;
+      project_id?: string | null;
+      group_by?: AnalyticsElocGroupBy;
+    },
+  ): Promise<AnalyticsEloc> {
+    const search = this.analyticsSearch(params);
+    if (params.group_by) search.set("group_by", params.group_by);
+    const raw = await this.fetch<unknown>(`/api/analytics/git/eloc?${search}`);
+    return parseWithFallback<AnalyticsEloc>(
+      raw,
+      AnalyticsElocSchema,
+      EMPTY_ANALYTICS_ELOC,
+      { endpoint: "GET /api/analytics/git/eloc" },
+    );
+  }
+
+  async getAnalyticsQuality(
+    params: { days?: number; tz?: string; project_id?: string | null; repo?: string },
+  ): Promise<AnalyticsQuality> {
+    const search = this.analyticsSearch(params);
+    if (params.repo) search.set("repo", params.repo);
+    const raw = await this.fetch<unknown>(`/api/analytics/git/quality?${search}`);
+    return parseWithFallback<AnalyticsQuality>(
+      raw,
+      AnalyticsQualitySchema,
+      EMPTY_ANALYTICS_QUALITY,
+      { endpoint: "GET /api/analytics/git/quality" },
+    );
+  }
+
+  async getAnalyticsRepoActivity(
+    params: { days?: number; tz?: string; project_id?: string | null },
+  ): Promise<AnalyticsRepoActivity> {
+    const search = this.analyticsSearch(params);
+    const raw = await this.fetch<unknown>(`/api/analytics/git/repos?${search}`);
+    return parseWithFallback<AnalyticsRepoActivity>(
+      raw,
+      AnalyticsRepoActivitySchema,
+      EMPTY_ANALYTICS_REPO_ACTIVITY,
+      { endpoint: "GET /api/analytics/git/repos" },
+    );
+  }
+
+  async getAnalyticsPrs(
+    params: {
+      days?: number;
+      tz?: string;
+      project_id?: string | null;
+      repo: string;
+      state?: string;
+      limit?: number;
+    },
+  ): Promise<AnalyticsPrs> {
+    const search = this.analyticsSearch(params);
+    search.set("repo", params.repo);
+    if (params.state) search.set("state", params.state);
+    if (params.limit) search.set("limit", String(params.limit));
+    const raw = await this.fetch<unknown>(`/api/analytics/git/prs?${search}`);
+    return parseWithFallback<AnalyticsPrs>(
+      raw,
+      AnalyticsPrsSchema,
+      EMPTY_ANALYTICS_PRS,
+      { endpoint: "GET /api/analytics/git/prs" },
+    );
+  }
+
+  // --- Tab4 DORA (D1–D2) ---------------------------------------------------
+
+  async getAnalyticsLeadTime(
+    params: {
+      days?: number;
+      tz?: string;
+      project_id?: string | null;
+      metric?: AnalyticsLeadTimeMetric;
+    },
+  ): Promise<AnalyticsLeadTime> {
+    const search = this.analyticsSearch(params);
+    if (params.metric) search.set("metric", params.metric);
+    const raw = await this.fetch<unknown>(`/api/analytics/dora/lead-time?${search}`);
+    return parseWithFallback<AnalyticsLeadTime>(
+      raw,
+      AnalyticsLeadTimeSchema,
+      EMPTY_ANALYTICS_LEAD_TIME,
+      { endpoint: "GET /api/analytics/dora/lead-time" },
+    );
+  }
+
+  async getAnalyticsDeployments(
+    params: { days?: number; tz?: string; project_id?: string | null },
+  ): Promise<AnalyticsDeployments> {
+    const search = this.analyticsSearch(params);
+    const raw = await this.fetch<unknown>(`/api/analytics/dora/deployments?${search}`);
+    return parseWithFallback<AnalyticsDeployments>(
+      raw,
+      AnalyticsDeploymentsSchema,
+      EMPTY_ANALYTICS_DEPLOYMENTS,
+      { endpoint: "GET /api/analytics/dora/deployments" },
+    );
+  }
+
+  // --- Tab1 ⑥⑦⑧ 身份与部门 (L1–L2) -----------------------------------------
+
+  async getAnalyticsLifecycle(
+    params: { days?: number; tz?: string; project_id?: string | null; department_id?: string | null },
+  ): Promise<AnalyticsLifecycle> {
+    const search = this.analyticsSearch(params);
+    const raw = await this.fetch<unknown>(`/api/analytics/identity/lifecycle?${search}`);
+    return parseWithFallback<AnalyticsLifecycle>(
+      raw,
+      AnalyticsLifecycleSchema,
+      EMPTY_ANALYTICS_LIFECYCLE,
+      { endpoint: "GET /api/analytics/identity/lifecycle" },
+    );
+  }
+
+  async getAnalyticsDepartments(
+    params: { days?: number; tz?: string; project_id?: string | null },
+  ): Promise<AnalyticsDepartments> {
+    const search = this.analyticsSearch(params);
+    const raw = await this.fetch<unknown>(`/api/analytics/identity/departments?${search}`);
+    return parseWithFallback<AnalyticsDepartments>(
+      raw,
+      AnalyticsDepartmentsSchema,
+      EMPTY_ANALYTICS_DEPARTMENTS,
+      { endpoint: "GET /api/analytics/identity/departments" },
+    );
+  }
+
   async initiateUpdate(
     runtimeId: string,
     targetVersion: string,
@@ -2633,14 +3130,14 @@ export class ApiClient {
     }) as Squad;
   }
 
-  async createSquad(data: { name: string; description?: string; leader_id: string; avatar_url?: string }): Promise<Squad> {
+  async createSquad(data: CreateSquadRequest): Promise<Squad> {
     const raw = await this.fetch<unknown>("/api/squads", { method: "POST", body: JSON.stringify(data) });
     return parseWithFallback(raw, SquadSchema, EMPTY_SQUAD, {
       endpoint: "POST /api/squads",
     }) as Squad;
   }
 
-  async updateSquad(id: string, data: { name?: string; description?: string; instructions?: string; leader_id?: string; avatar_url?: string }): Promise<Squad> {
+  async updateSquad(id: string, data: UpdateSquadRequest): Promise<Squad> {
     const raw = await this.fetch<unknown>(`/api/squads/${id}`, { method: "PUT", body: JSON.stringify(data) });
     return parseWithFallback(raw, SquadSchema, EMPTY_SQUAD, {
       endpoint: "PUT /api/squads/:id",
@@ -3012,5 +3509,174 @@ export class ApiClient {
       method: "POST",
       body: JSON.stringify({ token }),
     });
+  }
+
+  // Workflow state machine (CLO-146)
+  async listWorkflows(params?: { status?: string; limit?: number; offset?: number }): Promise<WorkflowListResponse> {
+    const search = new URLSearchParams();
+    if (params?.status) search.set("status", params.status);
+    if (params?.limit != null) search.set("limit", String(params.limit));
+    if (params?.offset != null) search.set("offset", String(params.offset));
+    const qs = search.toString();
+    return this.fetch(`/api/workflows${qs ? `?${qs}` : ""}`);
+  }
+
+  async getWorkflow(id: string): Promise<Workflow> {
+    return this.fetch(`/api/workflows/${id}`);
+  }
+
+  async updateWorkflow(id: string, data: { name?: string; description?: string }): Promise<Workflow> {
+    return this.fetch(`/api/workflows/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async createWorkflow(data: CreateWorkflowRequest): Promise<Workflow> {
+    return this.fetch(`/api/workflows`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async advanceWorkflow(id: string, reason?: string): Promise<AdvanceWorkflowResponse> {
+    return this.fetch(`/api/workflows/${id}/advance`, {
+      method: "POST",
+      body: JSON.stringify({ reason: reason ?? "" }),
+    });
+  }
+
+  async getWorkflowNodes(id: string, params?: { stage?: number; status?: string }): Promise<import("../types/workflow").WorkflowNode[]> {
+    const search = new URLSearchParams();
+    if (params?.stage != null) search.set("stage", String(params.stage));
+    if (params?.status) search.set("status", params.status);
+    const qs = search.toString();
+    return this.fetch(`/api/workflows/${id}/nodes${qs ? `?${qs}` : ""}`);
+  }
+
+  async getWorkflowTransitions(id: string, params?: { node_id?: string; limit?: number; offset?: number }): Promise<WorkflowTransitionsResponse> {
+    const search = new URLSearchParams();
+    if (params?.node_id) search.set("node_id", params.node_id);
+    if (params?.limit != null) search.set("limit", String(params.limit));
+    if (params?.offset != null) search.set("offset", String(params.offset));
+    const qs = search.toString();
+    return this.fetch(`/api/workflows/${id}/transitions${qs ? `?${qs}` : ""}`);
+  }
+
+  async overrideWorkflowNodeStatus(workflowId: string, nodeId: string, data: { status: string; reason: string }): Promise<{ id: string; node_id: string; status: string; issue_id: string }> {
+    return this.fetch(`/api/workflows/${workflowId}/nodes/${nodeId}/status`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  // Artifacts + review loop (CLO-146)
+  async listArtifacts(params?: {
+    type?: string;
+    status?: string;
+    node_id?: string;
+    workflow_id?: string;
+    author_id?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<ArtifactListResponse> {
+    const search = new URLSearchParams();
+    if (params?.type) search.set("type", params.type);
+    if (params?.status) search.set("status", params.status);
+    if (params?.node_id) search.set("node_id", params.node_id);
+    if (params?.workflow_id) search.set("workflow_id", params.workflow_id);
+    if (params?.author_id) search.set("author_id", params.author_id);
+    if (params?.limit != null) search.set("limit", String(params.limit));
+    if (params?.offset != null) search.set("offset", String(params.offset));
+    const qs = search.toString();
+    return this.fetch(`/api/artifacts${qs ? `?${qs}` : ""}`);
+  }
+
+  async createArtifact(data: CreateArtifactRequest): Promise<Artifact> {
+    return this.fetch(`/api/artifacts`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getArtifact(id: string): Promise<Artifact> {
+    return this.fetch(`/api/artifacts/${id}`);
+  }
+
+  async getArtifactVersions(id: string): Promise<ArtifactVersionsResponse> {
+    return this.fetch(`/api/artifacts/${id}/versions`);
+  }
+
+  async getArtifactDiff(id: string, params: { from: number; to?: number }): Promise<ArtifactDiffResponse> {
+    const search = new URLSearchParams({ from: String(params.from) });
+    if (params.to != null) search.set("to", String(params.to));
+    return this.fetch(`/api/artifacts/${id}/diff?${search.toString()}`);
+  }
+
+  async reviewArtifact(id: string, data: ReviewArtifactRequest): Promise<ReviewArtifactResponse> {
+    return this.fetch(`/api/artifacts/${id}/review`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getArtifactReviews(id: string): Promise<ArtifactReviewsResponse> {
+    return this.fetch(`/api/artifacts/${id}/reviews`);
+  }
+
+  async getArtifactStats(params?: { from?: string; to?: string }): Promise<ArtifactStats> {
+    const search = new URLSearchParams();
+    if (params?.from) search.set("from", params.from);
+    if (params?.to) search.set("to", params.to);
+    const qs = search.toString();
+    return this.fetch(`/api/artifacts/stats${qs ? `?${qs}` : ""}`);
+  }
+
+  async getReviewQueue(params?: { limit?: number; offset?: number }): Promise<ReviewQueueResponse> {
+    const search = new URLSearchParams();
+    if (params?.limit != null) search.set("limit", String(params.limit));
+    if (params?.offset != null) search.set("offset", String(params.offset));
+    const qs = search.toString();
+    return this.fetch(`/api/reviews/queue${qs ? `?${qs}` : ""}`);
+  }
+
+  // Issue templates (CLO-159): workspace-scoped presets that pre-fill an
+  // issue's fields on creation. CRUD mirrors labels/properties.
+  async listIssueTemplates(): Promise<ListIssueTemplatesResponse> {
+    const raw = await this.fetch<unknown>(`/api/issue-templates`);
+    return parseWithFallback(raw, ListIssueTemplatesResponseSchema, EMPTY_LIST_ISSUE_TEMPLATES_RESPONSE, {
+      endpoint: "GET /api/issue-templates",
+    });
+  }
+
+  async getIssueTemplate(id: string): Promise<IssueTemplate> {
+    const raw = await this.fetch<unknown>(`/api/issue-templates/${id}`);
+    return parseWithFallback(raw, IssueTemplateSchema, EMPTY_ISSUE_TEMPLATE, {
+      endpoint: "GET /api/issue-templates/{id}",
+    });
+  }
+
+  async createIssueTemplate(data: CreateIssueTemplateRequest): Promise<IssueTemplate> {
+    const raw = await this.fetch<unknown>(`/api/issue-templates`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+    return parseWithFallback(raw, IssueTemplateSchema, EMPTY_ISSUE_TEMPLATE, {
+      endpoint: "POST /api/issue-templates",
+    });
+  }
+
+  async updateIssueTemplate(id: string, data: UpdateIssueTemplateRequest): Promise<IssueTemplate> {
+    const raw = await this.fetch<unknown>(`/api/issue-templates/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+    return parseWithFallback(raw, IssueTemplateSchema, EMPTY_ISSUE_TEMPLATE, {
+      endpoint: "PUT /api/issue-templates/{id}",
+    });
+  }
+
+  async deleteIssueTemplate(id: string): Promise<void> {
+    await this.fetch(`/api/issue-templates/${id}`, { method: "DELETE" });
   }
 }

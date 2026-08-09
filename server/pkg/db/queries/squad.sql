@@ -4,8 +4,10 @@
 -- but the insert previously omitted it, so template-apply squads could never
 -- carry instructions; they only could be patched afterwards via UpdateSquad.
 -- model / permission_mode are agent-level concepts and must NOT be added here.
-INSERT INTO squad (workspace_id, name, description, leader_id, creator_id, avatar_url, instructions)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
+-- upgrade_on_member_mention (LIU-13): COALESCE defaults to true so callers
+-- that omit it keep the member-mention auto-upgrade behavior.
+INSERT INTO squad (workspace_id, name, description, leader_id, creator_id, avatar_url, instructions, upgrade_on_member_mention)
+VALUES ($1, $2, $3, $4, $5, $6, $7, COALESCE(sqlc.narg('upgrade_on_member_mention'), true))
 RETURNING *;
 
 -- name: GetSquad :one
@@ -57,6 +59,7 @@ UPDATE squad SET
     leader_id = COALESCE(sqlc.narg('leader_id'), leader_id),
     avatar_url = COALESCE(sqlc.narg('avatar_url'), avatar_url),
     instructions = COALESCE(sqlc.narg('instructions'), instructions),
+    upgrade_on_member_mention = COALESCE(sqlc.narg('upgrade_on_member_mention'), upgrade_on_member_mention),
     updated_at = now()
 WHERE id = $1
 RETURNING *;
@@ -65,6 +68,72 @@ RETURNING *;
 UPDATE squad SET archived_at = now(), archived_by = $2, updated_at = now()
 WHERE id = $1
 RETURNING *;
+
+-- name: SetSquadParent :execrows
+-- Attach a squad under a parent squad (v1: one level — the handler validates
+-- that the child is not already nested and belongs to the same workspace).
+UPDATE squad SET parent_squad_id = $2, updated_at = now()
+WHERE id = $1;
+
+-- name: ClearSquadParent :execrows
+-- Detach a single squad from its parent (no-op when it has no parent).
+UPDATE squad SET parent_squad_id = NULL, updated_at = now()
+WHERE id = $1 AND parent_squad_id IS NOT NULL;
+
+-- name: ClearChildSquadParents :execrows
+-- Detach every child when a parent squad is archived. Children become
+-- independent squads again and are NOT archived along with the parent.
+UPDATE squad SET parent_squad_id = NULL, updated_at = now()
+WHERE parent_squad_id = $1;
+
+-- name: ListSquadsByIdsInWorkspace :many
+-- Fetch squads by id scoped to a workspace. Used to validate
+-- included_squad_ids at create time (existence / same-workspace / archive /
+-- one-level nesting).
+SELECT * FROM squad WHERE id = ANY($1::uuid[]) AND workspace_id = $2;
+
+-- name: ListChildSquadSummaries :many
+-- Lightweight child-squad summary (id, name, member count) for a single
+-- squad's detail response.
+SELECT s.id, s.name, count(sm.id)::int AS member_count
+FROM squad s
+LEFT JOIN squad_member sm ON sm.squad_id = s.id
+WHERE s.parent_squad_id = $1 AND s.archived_at IS NULL
+GROUP BY s.id
+ORDER BY s.created_at ASC;
+
+-- name: ListChildSquadSummariesByWorkspace :many
+-- Batch child-squad summary for the squad list response. One row per child
+-- squad (carrying its parent id) so the handler can group children under
+-- their parents in a single pass.
+SELECT s.parent_squad_id AS parent_squad_id,
+       s.id             AS id,
+       s.name           AS name,
+       count(sm.id)::int AS member_count
+FROM squad s
+LEFT JOIN squad_member sm ON sm.squad_id = s.id
+WHERE s.workspace_id = $1
+  AND s.parent_squad_id IS NOT NULL
+  AND s.archived_at IS NULL
+GROUP BY s.id
+ORDER BY s.created_at ASC;
+
+-- name: ListChildSquadMembers :many
+-- Members of every non-archived child squad of a given squad, each row
+-- annotated with its child squad's name so the leader roster can label the
+-- origin squad. v1 nesting is one level, so child squads cannot have
+-- children of their own.
+SELECT sm.id               AS id,
+       sm.squad_id         AS squad_id,
+       sm.member_type      AS member_type,
+       sm.member_id        AS member_id,
+       sm.role             AS role,
+       sm.created_at       AS created_at,
+       s.name              AS child_squad_name
+FROM squad_member sm
+JOIN squad s ON s.id = sm.squad_id
+WHERE s.parent_squad_id = $1 AND s.archived_at IS NULL
+ORDER BY s.created_at ASC, sm.created_at ASC;
 
 -- name: AddSquadMember :one
 INSERT INTO squad_member (squad_id, member_type, member_id, role)
@@ -97,11 +166,24 @@ SELECT count(*) FROM squad_member WHERE squad_id = $1;
 SELECT s.* FROM squad s WHERE s.id = $1 AND s.workspace_id = $2;
 
 -- name: ListSquadsByMember :many
--- Find all squads a given entity belongs to in a workspace.
+-- Find all non-archived squads a given entity belongs to in a workspace.
+-- Archived squads are excluded so the F3 member-mention uniqueness judgement
+-- ("exactly one squad") counts only live squads, matching ListSquadsLedByAgent
+-- (R2): a member of 1 active + 1 archived squad must still upgrade, and a
+-- member of only archived squads must not.
 SELECT s.* FROM squad s
 JOIN squad_member sm ON sm.squad_id = s.id
 WHERE s.workspace_id = $1 AND sm.member_type = $2 AND sm.member_id = $3
+  AND s.archived_at IS NULL
 ORDER BY s.created_at ASC;
+
+-- name: ListSquadsLedByAgent :many
+-- Squads an agent leads in a workspace (non-archived). Used by the SR3
+-- auto-upgrade rule: a pure @agent mention becomes squad-level when the
+-- mentioned agent leads exactly one non-archived squad here.
+SELECT * FROM squad
+WHERE leader_id = $1 AND workspace_id = $2 AND archived_at IS NULL
+ORDER BY created_at ASC;
 
 -- name: TransferSquadAssignees :exec
 -- Transfer all issues assigned to a squad to the squad's leader agent.
