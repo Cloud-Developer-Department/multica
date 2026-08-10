@@ -20,10 +20,17 @@ func cleanupIssueDocuments(t *testing.T, issueID string) {
 }
 
 // newIssueDocumentFixture creates a test issue and cleans up both the issue
-// and its issue_document rows on test end.
-func newIssueDocumentFixture(t *testing.T) string {
+// and its issue_document rows on test end. An optional title argument lets a
+// test create several fixtures in one workspace without tripping the
+// active-duplicate-issue guard on CreateIssue (the default title is shared, so
+// two fixtures with it would collide; CLO-471 BUG-001).
+func newIssueDocumentFixture(t *testing.T, title ...string) string {
 	t.Helper()
-	issueID := createTestIssue(t, "Issue Documents test", "todo", "none")
+	issueTitle := "Issue Documents test"
+	if len(title) > 0 && title[0] != "" {
+		issueTitle = title[0]
+	}
+	issueID := createTestIssue(t, issueTitle, "todo", "none")
 	t.Cleanup(func() {
 		cleanupIssueDocuments(t, issueID)
 		deleteTestIssue(t, issueID)
@@ -228,7 +235,9 @@ func TestIssueDocumentFilters(t *testing.T) {
 // stage order via `type`).
 func TestIssueDocumentGroupedByIssue(t *testing.T) {
 	issueA := newIssueDocumentFixture(t)
-	issueB := newIssueDocumentFixture(t)
+	// Distinct title so the second fixture does not collide with the first
+	// under the workspace active-duplicate-issue guard (CLO-471 BUG-001).
+	issueB := newIssueDocumentFixture(t, "Issue Documents test B")
 
 	submit := func(issueID, docType, title string) {
 		t.Helper()
