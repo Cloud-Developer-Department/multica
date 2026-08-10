@@ -13,7 +13,7 @@ import {
 } from "@multica/ui/components/ui/table";
 import { useT, useTimeAgo } from "../../i18n";
 
-export type DocumentSortField = "updated_at" | "title" | "type" | "status" | "version";
+export type DocumentSortField = "updated_at" | "title" | "type" | "version";
 export type DocumentSortDirection = "asc" | "desc";
 
 export interface DocumentSort {
@@ -80,7 +80,6 @@ export function DocumentList({ items, sort, onSort, onSelect }: DocumentListProp
             <SortableHead sort={sort} field="type" label={t(($) => $.table.type)} onSort={onSort} />
             <TableHead>{t(($) => $.table.issue)}</TableHead>
             <SortableHead sort={sort} field="version" label={t(($) => $.table.version)} onSort={onSort} />
-            <SortableHead sort={sort} field="status" label={t(($) => $.table.status)} onSort={onSort} />
             <TableHead>{t(($) => $.table.author)}</TableHead>
             <SortableHead sort={sort} field="updated_at" label={t(($) => $.table.updated)} onSort={onSort} />
           </TableRow>
@@ -115,19 +114,6 @@ export function DocumentList({ items, sort, onSort, onSelect }: DocumentListProp
                 </span>
               </TableCell>
               <TableCell className="tabular-nums">v{doc.version}</TableCell>
-              <TableCell>
-                <Badge
-                  variant={
-                    doc.status === "approved"
-                      ? "default"
-                      : doc.status === "superseded" || doc.status === "rejected"
-                        ? "outline"
-                        : "secondary"
-                  }
-                >
-                  {t(($) => $.statuses[doc.status])}
-                </Badge>
-              </TableCell>
               <TableCell className="max-w-32">
                 <span className="block truncate">{doc.author_name || "—"}</span>
               </TableCell>

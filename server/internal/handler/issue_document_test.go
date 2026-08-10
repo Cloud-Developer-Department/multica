@@ -355,6 +355,154 @@ func TestIssueDocumentGroupedByIssue(t *testing.T) {
 	}
 }
 
+// createTestSubIssue creates an issue under the given parent in the test
+// workspace (mirrors createTestIssue, adding parent_issue_id), cleaning up the
+// issue and any issue_document rows on test end.
+func createTestSubIssue(t *testing.T, parentID, title string) string {
+	t.Helper()
+	w := httptest.NewRecorder()
+	req := newRequest("POST", "/api/issues?workspace_id="+testWorkspaceID, map[string]any{
+		"title":           title,
+		"status":          "todo",
+		"priority":        "none",
+		"parent_issue_id": parentID,
+	})
+	testHandler.CreateIssue(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("CreateIssue %q: expected 201, got %d: %s", title, w.Code, w.Body.String())
+	}
+	var issue IssueResponse
+	if err := json.NewDecoder(w.Body).Decode(&issue); err != nil {
+		t.Fatalf("decode created sub-issue: %v", err)
+	}
+	t.Cleanup(func() {
+		cleanupIssueDocuments(t, issue.ID)
+		deleteTestIssue(t, issue.ID)
+	})
+	return issue.ID
+}
+
+// TestIssueDocumentGroupedByRootIssue verifies the grouped-by-issue list folds
+// sub-issue documents into their top-level root issue's group (CLO-477): a
+// document on a sub-issue does not form its own group — it appears under the
+// root issue's header, and each item still carries its direct issue identifier
+// so the group can distinguish which sub-issue a document belongs to.
+func TestIssueDocumentGroupedByRootIssue(t *testing.T) {
+	rootA := newIssueDocumentFixture(t, "Root issue A")
+	childA := createTestSubIssue(t, rootA, "Child issue of A")
+	grandchildA := createTestSubIssue(t, childA, "Grandchild issue of A")
+	rootB := newIssueDocumentFixture(t, "Root issue B")
+
+	submit := func(issueID, docType, title string) {
+		t.Helper()
+		w := httptest.NewRecorder()
+		req := newRequest("POST", "/api/issue-documents", map[string]any{
+			"issue_id": issueID,
+			"type":     docType,
+			"title":    title,
+			"content":  "# " + title,
+		})
+		testHandler.CreateIssueDocument(w, req)
+		if w.Code != http.StatusCreated {
+			t.Fatalf("CreateIssueDocument(%s/%s): expected 201, got %d: %s", issueID, title, w.Code, w.Body.String())
+		}
+	}
+
+	submit(rootA, "requirements", "rootA_requirements.md")
+	submit(childA, "architecture", "childA_architecture.md")
+	submit(grandchildA, "testing", "grandchildA_testing.md")
+	submit(rootB, "deployment", "rootB_deployment.md")
+
+	var prefix string
+	if err := testPool.QueryRow(context.Background(), `SELECT issue_prefix FROM workspace WHERE id = $1`, testWorkspaceID).Scan(&prefix); err != nil {
+		t.Fatalf("load workspace issue_prefix: %v", err)
+	}
+	loadNumber := func(issueID string) int {
+		t.Helper()
+		var n int
+		if err := testPool.QueryRow(context.Background(), `SELECT number FROM issue WHERE id = $1`, issueID).Scan(&n); err != nil {
+			t.Fatalf("load issue number: %v", err)
+		}
+		return n
+	}
+	numRootA, numRootB := loadNumber(rootA), loadNumber(rootB)
+
+	w := httptest.NewRecorder()
+	req := newRequest("GET", "/api/issue-documents?group=issue", nil)
+	testHandler.ListIssueDocuments(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("grouped list: expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var body struct {
+		Groups []IssueDocumentGroupResponse `json:"groups"`
+		Total  int                          `json:"total"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&body); err != nil {
+		t.Fatalf("decode grouped list: %v", err)
+	}
+	if body.Total != 4 || len(body.Groups) != 2 {
+		t.Fatalf("expected 4 documents folded into 2 root groups, got total=%d groups=%d", body.Total, len(body.Groups))
+	}
+
+	// rootA is the first group (lower root issue number): it holds the rootA,
+	// childA and grandchildA documents — no separate group for the sub-issues.
+	first := body.Groups[0]
+	if first.IssueIdentifier != fmt.Sprintf("%s-%d", prefix, numRootA) {
+		t.Fatalf("first group identifier: expected %s-%d, got %s", prefix, numRootA, first.IssueIdentifier)
+	}
+	if first.Total != 3 || len(first.Items) != 3 {
+		t.Fatalf("root A group: expected 3 documents (incl. sub-issues), got total=%d items=%d", first.Total, len(first.Items))
+	}
+	// Default within-group sort is the R&D stage order: requirements first.
+	if first.Items[0].Type != "requirements" {
+		t.Fatalf("root A first item: expected requirements (stage order), got %s", first.Items[0].Type)
+	}
+	// Each item keeps its direct issue identifier so the group can distinguish
+	// which sub-issue a document belongs to.
+	childIdentifier := fmt.Sprintf("%s-%d", prefix, loadNumber(childA))
+	grandchildIdentifier := fmt.Sprintf("%s-%d", prefix, loadNumber(grandchildA))
+	if first.Items[1].IssueIdentifier != childIdentifier {
+		t.Fatalf("expected childA identifier %s as item 2's issue_identifier, got %s", childIdentifier, first.Items[1].IssueIdentifier)
+	}
+	if first.Items[2].IssueIdentifier != grandchildIdentifier {
+		t.Fatalf("expected grandchildA identifier %s as item 3's issue_identifier, got %s", grandchildIdentifier, first.Items[2].IssueIdentifier)
+	}
+
+	second := body.Groups[1]
+	if second.IssueIdentifier != fmt.Sprintf("%s-%d", prefix, numRootB) || second.Total != 1 {
+		t.Fatalf("second group: expected %s-%d with 1 doc, got %s/%d", prefix, numRootB, second.IssueIdentifier, second.Total)
+	}
+
+	// A type filter applies before grouping: only childA's architecture doc
+	// survives and still lands in the rootA group.
+	w = httptest.NewRecorder()
+	req = newRequest("GET", "/api/issue-documents?group=issue&type=architecture", nil)
+	testHandler.ListIssueDocuments(w, req)
+	if err := json.NewDecoder(w.Body).Decode(&body); err != nil {
+		t.Fatalf("decode filtered grouped list: %v", err)
+	}
+	if body.Total != 1 || len(body.Groups) != 1 {
+		t.Fatalf("filtered grouping: expected 1 doc in 1 root group, got total=%d groups=%d", body.Total, len(body.Groups))
+	}
+	if body.Groups[0].IssueIdentifier != fmt.Sprintf("%s-%d", prefix, numRootA) {
+		t.Fatalf("filtered group: expected root A %s-%d, got %s", prefix, numRootA, body.Groups[0].IssueIdentifier)
+	}
+	if body.Groups[0].Items[0].IssueIdentifier != childIdentifier {
+		t.Fatalf("filtered group item: expected childA identifier %s, got %s", childIdentifier, body.Groups[0].Items[0].IssueIdentifier)
+	}
+
+	// A q search over the sub-issue's own title also folds into the root group.
+	w = httptest.NewRecorder()
+	req = newRequest("GET", "/api/issue-documents?group=issue&q=grandchildA_testing", nil)
+	testHandler.ListIssueDocuments(w, req)
+	if err := json.NewDecoder(w.Body).Decode(&body); err != nil {
+		t.Fatalf("decode q-filtered grouped list: %v", err)
+	}
+	if body.Total != 1 || body.Groups[0].IssueIdentifier != fmt.Sprintf("%s-%d", prefix, numRootA) {
+		t.Fatalf("q-filtered grouping: expected 1 hit under root A, got total=%d", body.Total)
+	}
+}
+
 // TestGetIssueDocumentCrossWorkspace ensures a document in another workspace
 // is not visible (404).
 func TestGetIssueDocumentCrossWorkspace(t *testing.T) {

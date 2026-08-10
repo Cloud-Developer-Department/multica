@@ -114,16 +114,19 @@ var issueDocumentGroupSortColumns = map[string]string{
 	"version": "d.version",
 }
 
-// IssueDocumentGroupResponse is one issue bucket in the grouped list
-// (GET /api/issue-documents?group=issue, CLO-471). It carries the issue's
-// identifier/title as the group header and the documents that matched the
-// active filters, ordered by the requested sort.
+// IssueDocumentGroupResponse is one bucket in the grouped list
+// (GET /api/issue-documents?group=issue, CLO-471 / CLO-477). The group is keyed
+// by the document's top-level *root* issue (the parent chain walked up to its
+// root), so sub-issue documents fold into their total/root issue's bucket
+// instead of forming their own group. The header carries the root issue's
+// identifier/title; `items` keep each row's own direct issue identifier, so a
+// group can still surface which sub-issue a document belongs to.
 type IssueDocumentGroupResponse struct {
-	IssueID         string                   `json:"issue_id"`
-	IssueIdentifier string                   `json:"issue_identifier"`
-	IssueTitle      string                   `json:"issue_title"`
-	Items           []IssueDocumentResponse  `json:"items"`
-	Total           int                      `json:"total"`
+	IssueID         string                  `json:"issue_id"`
+	IssueIdentifier string                  `json:"issue_identifier"`
+	IssueTitle      string                  `json:"issue_title"`
+	Items           []IssueDocumentResponse `json:"items"`
+	Total           int                     `json:"total"`
 }
 
 func issueDocumentRowToResponse(row db.ListIssueDocumentsRow, issuePrefix string) IssueDocumentResponse {
@@ -276,6 +279,39 @@ const listIssueDocumentColumns = `SELECT d.id, d.workspace_id, d.issue_id, d.typ
        i.number AS issue_number, i.title AS issue_title,
        u.name AS member_author_name, a.name AS agent_author_name`
 
+// issueRootsCTE resolves every issue in the workspace to its top-level *root*
+// issue by walking the parent_issue_id chain up to a NULL parent. Grouped-by-
+// issue lists join it so documents are bucketed under their total/root issue
+// (sub-issue documents fold into the parent group, CLO-477). $1 is the
+// workspace id; the recursion starts from root issues so each row carries the
+// root's id/number/title. Mirrors the comment thread-root CTE in comment.sql.
+const issueRootsCTE = `WITH RECURSIVE issue_roots AS (
+    SELECT id, id AS root_id, number AS root_number, title AS root_title
+    FROM issue
+    WHERE workspace_id = $1 AND parent_issue_id IS NULL
+    UNION ALL
+    SELECT c.id, r.root_id, r.root_number, r.root_title
+    FROM issue c
+    JOIN issue_roots r ON c.parent_issue_id = r.id
+)`
+
+// listIssueDocumentGroupColumns extends the flat projection with the root-issue
+// columns provided by the issue_roots recursive CTE (CLO-477).
+const listIssueDocumentGroupColumns = listIssueDocumentColumns + `,
+       r.root_id, r.root_number, r.root_title`
+
+// listIssueDocumentGroupSelectBody mirrors listIssueDocumentSelectBody but also
+// joins issue_roots so each row carries its top-level root issue alongside the
+// direct issue (which still powers the identifier match in the q search).
+const listIssueDocumentGroupSelectBody = `FROM issue_document d
+JOIN issue i ON i.id = d.issue_id
+JOIN workspace w ON w.id = d.workspace_id
+JOIN issue_roots r ON r.id = d.issue_id
+LEFT JOIN member m ON m.id = d.author_id AND d.author_type = 'member'
+LEFT JOIN "user" u ON u.id = m.user_id
+LEFT JOIN agent a ON a.id = d.author_id AND d.author_type = 'agent'
+WHERE %s`
+
 // buildIssueDocumentWhere assembles the WHERE clause + args for a workspace
 // with the given filters. The args start at $1 (workspace id) so both callers
 // can append their own ORDER BY / LIMIT / OFFSET placeholders afterwards.
@@ -322,17 +358,45 @@ func scanListIssueDocumentRow(rows pgx.Rows) (db.ListIssueDocumentsRow, error) {
 	return row, err
 }
 
+// listIssueDocumentGroupedRow is the flat list row plus the root-issue columns
+// added by listIssueDocumentGroupColumns (CLO-477). RootID / RootNumber /
+// RootTitle identify the top-level issue the document's issue rolls up to.
+type listIssueDocumentGroupedRow struct {
+	db.ListIssueDocumentsRow
+	RootID     pgtype.UUID
+	RootNumber int32
+	RootTitle  string
+}
+
+// scanListIssueDocumentGroupedRow scans one grouped-list row, which appends the
+// three root-issue columns after the flat projection.
+func scanListIssueDocumentGroupedRow(rows pgx.Rows) (listIssueDocumentGroupedRow, error) {
+	var row listIssueDocumentGroupedRow
+	err := rows.Scan(
+		&row.ID, &row.WorkspaceID, &row.IssueID, &row.Type, &row.Title,
+		&row.ContentType, &row.FileAttachmentID, &row.Version, &row.Status,
+		&row.AuthorType, &row.AuthorID, &row.CreatedAt, &row.UpdatedAt,
+		&row.IssueNumber, &row.IssueTitle, &row.MemberAuthorName, &row.AgentAuthorName,
+		&row.RootID, &row.RootNumber, &row.RootTitle,
+	)
+	return row, err
+}
+
 // ListIssueDocuments returns the issue-flow documents for the current
 // workspace. By default it returns a flat, paginated list filtered by type /
 // status / issue_id / keyword `q`.
 //
-// With `group=issue` it returns the same documents grouped under their issue
-// (CLO-471): each group carries the issue identifier/title as its header and
-// the matching documents as items. Filters apply before grouping; the `sort` /
-// `order` params order documents *within* each group, and `type` uses the R&D
-// stage order so a group reads as the issue's flow documents. Groups themselves
-// are ordered by issue number so the page is deterministic without a global
-// document sort (grouping makes a cross-group flat sort meaningless).
+// With `group=issue` it returns the same documents grouped under their
+// top-level *root* issue (CLO-471 / CLO-477): each group carries the root
+// issue's identifier/title as its header and the matching documents as items.
+// Sub-issue documents fold into their root issue's group rather than forming
+// their own (each item still carries its direct issue identifier so the group
+// can surface which sub-issue a document belongs to). Filters apply before
+// grouping; the `sort` / `order` params order documents *within* each group,
+// and `type` uses the R&D stage order so a group reads as the issue's flow
+// documents. Groups themselves are ordered by root issue number so the page is
+// deterministic without a global document sort (grouping makes a cross-group
+// flat sort meaningless).
 //
 // Sorting is always server-side (`sort` / `order` whitelisted below): the SQL
 // orders before any LIMIT/OFFSET, so a non-default sort stays stable across
@@ -457,10 +521,13 @@ LIMIT %s OFFSET %s`, listIssueDocumentColumns, whereSql, orderBy, limitRef, offs
 }
 
 // listIssueDocumentGroups is the grouped-by-issue mode of the Issue Documents
-// list (CLO-471). Filters apply exactly as in the flat list; matching documents
-// are bucketed by issue, ordered by issue number, and within each group by the
-// requested sort (default updated_at DESC). No cross-group flat sort exists in
-// this mode — the group header is the natural ordering signal.
+// list (CLO-471 / CLO-477). Filters apply exactly as in the flat list; matching
+// documents are bucketed by their top-level *root* issue (the parent_issue_id
+// chain walked up to its root), so sub-issue documents fold into the root
+// issue's group instead of forming their own. Groups are ordered by root issue
+// number; documents within a group by the requested sort (default: R&D stage
+// order via `type`). No cross-group flat sort exists in this mode — the group
+// header is the natural ordering signal.
 func (h *Handler) listIssueDocumentGroups(w http.ResponseWriter, r *http.Request, wsUUID pgtype.UUID, f issueDocumentListFilter) {
 	// Within-group sort. `type` uses the R&D stage order (see
 	// issueDocumentGroupSortColumns) so a group lists the issue's flow
@@ -489,11 +556,13 @@ func (h *Handler) listIssueDocumentGroups(w http.ResponseWriter, r *http.Request
 
 	whereSql, args := buildIssueDocumentWhere(wsUUID, f)
 
-	// Groups ordered by issue number; documents within a group by the requested
-	// sort. d.id is the final tiebreaker so equal rows stay stable.
-	query := fmt.Sprintf(`%s
-`+listIssueDocumentSelectBody+`
-ORDER BY i.number ASC, %s %s, d.id DESC`, listIssueDocumentColumns, whereSql, sortExpr, sortDir)
+	// The issue_roots recursive CTE resolves every issue to its top-level root;
+	// groups are ordered by root issue number, documents within a group by the
+	// requested sort. d.id is the final tiebreaker so equal rows stay stable.
+	query := fmt.Sprintf(issueRootsCTE+`
+`+listIssueDocumentGroupColumns+`
+`+listIssueDocumentGroupSelectBody+`
+ORDER BY r.root_number ASC, %s %s, d.id DESC`, whereSql, sortExpr, sortDir)
 
 	rows, err := h.DB.Query(r.Context(), query, args...)
 	if err != nil {
@@ -508,24 +577,24 @@ ORDER BY i.number ASC, %s %s, d.id DESC`, listIssueDocumentColumns, whereSql, so
 	byIssue := map[string]*IssueDocumentGroupResponse{}
 	total := 0
 	for rows.Next() {
-		row, err := scanListIssueDocumentRow(rows)
+		row, err := scanListIssueDocumentGroupedRow(rows)
 		if err != nil {
 			slog.Warn("listIssueDocumentGroups scan failed", append(logger.RequestAttrs(r), "error", err)...)
 			writeError(w, http.StatusInternalServerError, "failed to list issue documents")
 			return
 		}
-		issueID := uuidToString(row.IssueID)
-		group := byIssue[issueID]
+		rootID := uuidToString(row.RootID)
+		group := byIssue[rootID]
 		if group == nil {
 			group = &IssueDocumentGroupResponse{
-				IssueID:         issueID,
-				IssueIdentifier: issuePrefix + "-" + strconv.Itoa(int(row.IssueNumber)),
-				IssueTitle:      row.IssueTitle,
+				IssueID:         rootID,
+				IssueIdentifier: issuePrefix + "-" + strconv.Itoa(int(row.RootNumber)),
+				IssueTitle:      row.RootTitle,
 			}
-			byIssue[issueID] = group
+			byIssue[rootID] = group
 			groups = append(groups, group)
 		}
-		group.Items = append(group.Items, issueDocumentRowToResponse(row, issuePrefix))
+		group.Items = append(group.Items, issueDocumentRowToResponse(row.ListIssueDocumentsRow, issuePrefix))
 		group.Total = len(group.Items)
 		total++
 	}

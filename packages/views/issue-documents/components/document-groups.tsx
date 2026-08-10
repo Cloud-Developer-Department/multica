@@ -51,7 +51,6 @@ export function DocumentGroupList({ groups, onSelect }: DocumentGroupListProps) 
                 <TableHead>{t(($) => $.table.type)}</TableHead>
                 <TableHead>{t(($) => $.table.title)}</TableHead>
                 <TableHead>{t(($) => $.table.version)}</TableHead>
-                <TableHead>{t(($) => $.table.status)}</TableHead>
                 <TableHead>{t(($) => $.table.author)}</TableHead>
                 <TableHead>{t(($) => $.table.updated)}</TableHead>
               </TableRow>
@@ -80,19 +79,6 @@ export function DocumentGroupList({ groups, onSelect }: DocumentGroupListProps) 
                     <span className="block truncate font-medium">{doc.title}</span>
                   </TableCell>
                   <TableCell className="tabular-nums">v{doc.version}</TableCell>
-                  <TableCell>
-                    <Badge
-                      variant={
-                        doc.status === "approved"
-                          ? "default"
-                          : doc.status === "superseded" || doc.status === "rejected"
-                            ? "outline"
-                            : "secondary"
-                      }
-                    >
-                      {t(($) => $.statuses[doc.status])}
-                    </Badge>
-                  </TableCell>
                   <TableCell className="max-w-32">
                     <span className="block truncate">{doc.author_name || "—"}</span>
                   </TableCell>

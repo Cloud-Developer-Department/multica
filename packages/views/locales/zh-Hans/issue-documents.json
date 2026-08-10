@@ -22,7 +22,6 @@
     "type": "类型",
     "title": "标题",
     "version": "版本",
-    "status": "状态",
     "author": "作者",
     "updated": "更新时间"
   },
@@ -37,16 +36,8 @@
     "deployment": "部署",
     "other": "其他"
   },
-  "statuses": {
-    "draft": "草稿",
-    "submitted": "已提交",
-    "approved": "已通过",
-    "rejected": "已驳回",
-    "superseded": "已取代"
-  },
   "filters": {
     "all_types": "全部类型",
-    "all_statuses": "全部状态",
     "search": "搜索标题或 issue...",
     "sort_by": "文档排序依据",
     "sort_direction": "切换排序方向",
@@ -54,7 +45,6 @@
       "type": "类型",
       "updated_at": "更新时间",
       "title": "标题",
-      "status": "状态",
       "version": "版本"
     }
   },

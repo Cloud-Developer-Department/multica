@@ -7,7 +7,6 @@ import {
   attachmentDownloadPath,
   type IssueDocumentSummary,
 } from "@multica/core/types";
-import { Badge } from "@multica/ui/components/ui/badge";
 import { buttonVariants } from "@multica/ui/components/ui/button";
 import { Markdown } from "@multica/ui/markdown";
 import {
@@ -61,11 +60,6 @@ export function DocumentDetailDrawer({ document, onClose }: DocumentDetailDrawer
         </SheetHeader>
 
         <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-          {detail ? (
-            <Badge variant={detail.status === "approved" ? "default" : "secondary"}>
-              {t(($) => $.statuses[detail.status])}
-            </Badge>
-          ) : null}
           <span>{document?.author_name || "—"}</span>
           {detail ? <span>· {timeAgo(detail.updated_at)}</span> : null}
         </div>
@@ -115,9 +109,6 @@ export function DocumentDetailDrawer({ document, onClose }: DocumentDetailDrawer
                   className="flex items-center gap-2 text-xs text-muted-foreground"
                 >
                   <span className="tabular-nums">v{v.version}</span>
-                  <Badge variant={v.status === "superseded" ? "outline" : "secondary"}>
-                    {t(($) => $.statuses[v.status])}
-                  </Badge>
                   <span className="ml-auto tabular-nums">{timeAgo(v.updated_at)}</span>
                 </li>
               ))}

@@ -22,7 +22,6 @@
     "type": "Type",
     "title": "Title",
     "version": "Version",
-    "status": "Status",
     "author": "Author",
     "updated": "Updated"
   },
@@ -37,16 +36,8 @@
     "deployment": "Deployment",
     "other": "Other"
   },
-  "statuses": {
-    "draft": "Draft",
-    "submitted": "Submitted",
-    "approved": "Approved",
-    "rejected": "Rejected",
-    "superseded": "Superseded"
-  },
   "filters": {
     "all_types": "All types",
-    "all_statuses": "All statuses",
     "search": "Search title or issue...",
     "sort_by": "Sort documents by",
     "sort_direction": "Toggle sort direction",
@@ -54,7 +45,6 @@
       "type": "Type",
       "updated_at": "Updated",
       "title": "Title",
-      "status": "Status",
       "version": "Version"
     }
   },

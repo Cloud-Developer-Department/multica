@@ -22,7 +22,6 @@ import {
 } from "./components/document-states";
 import {
   DocumentToolbar,
-  type DocumentStatusFilter,
   type DocumentTypeFilter,
 } from "./components/document-toolbar";
 
@@ -40,7 +39,6 @@ export function IssueDocumentsPage() {
   const wsId = useWorkspaceId();
 
   const [typeFilter, setTypeFilter] = useState<DocumentTypeFilter>("all");
-  const [statusFilter, setStatusFilter] = useState<DocumentStatusFilter>("all");
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<DocumentSort>(DEFAULT_DOCUMENT_SORT);
   const [selected, setSelected] = useState<IssueDocumentSummary | null>(null);
@@ -48,17 +46,17 @@ export function IssueDocumentsPage() {
   const debouncedSearch = useDebouncedValue(search);
 
   const hasActiveFilters =
-    typeFilter !== "all" || statusFilter !== "all" || debouncedSearch.trim() !== "";
+    typeFilter !== "all" || debouncedSearch.trim() !== "";
 
-  // The page is grouped by issue (CLO-471): documents are returned bucketed
-  // under their issue, ordered by issue number with documents within a group
-  // sorted server-side by `sort`/`order`. Filtering (type/status/q) applies
-  // before grouping. The grouped response is a single page — the number of
-  // issues that produced documents bounds the group count.
+  // The page is grouped by issue (CLO-471 / CLO-477): documents are returned
+  // bucketed under their top-level root issue, ordered by root issue number
+  // with documents within a group sorted server-side by `sort`/`order`.
+  // Filtering (type/q) applies before grouping. The grouped response is a
+  // single page — the number of issues that produced documents bounds the
+  // group count.
   const query = useQuery(
     issueDocumentGroupListOptions(wsId, {
       type: typeFilter === "all" ? undefined : typeFilter,
-      status: statusFilter === "all" ? undefined : statusFilter,
       q: debouncedSearch.trim() || undefined,
       sort: sort.field,
       order: sort.direction,
@@ -89,11 +87,9 @@ export function IssueDocumentsPage() {
         <DocumentToolbar
           totalCount={0}
           typeFilter={typeFilter}
-          statusFilter={statusFilter}
           search={search}
           sort={sort}
           onTypeFilterChange={setTypeFilter}
-          onStatusFilterChange={setStatusFilter}
           onSearchChange={setSearch}
           onSortFieldChange={handleSortFieldChange}
           onSortDirectionChange={handleSortDirectionChange}
@@ -108,11 +104,9 @@ export function IssueDocumentsPage() {
       <DocumentToolbar
         totalCount={total}
         typeFilter={typeFilter}
-        statusFilter={statusFilter}
         search={search}
         sort={sort}
         onTypeFilterChange={setTypeFilter}
-        onStatusFilterChange={setStatusFilter}
         onSearchChange={setSearch}
         onSortFieldChange={handleSortFieldChange}
         onSortDirectionChange={handleSortDirectionChange}
@@ -140,7 +134,6 @@ export function IssueDocumentsPage() {
 const DEFAULT_DIRECTIONS: Record<DocumentSortField, DocumentSort["direction"]> = {
   type: "asc",
   title: "asc",
-  status: "asc",
   updated_at: "desc",
   version: "desc",
 };

@@ -9,7 +9,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@multica/ui/components/ui/select";
-import type { IssueDocumentStatus, IssueDocumentType } from "@multica/core/types";
+import type { IssueDocumentType } from "@multica/core/types";
 import { useT } from "../../i18n";
 import { CollectionPageHeader } from "../../layout/collection-page";
 import type { DocumentSort, DocumentSortField } from "./document-list";
@@ -26,33 +26,21 @@ export const ISSUE_DOCUMENT_TYPES: IssueDocumentType[] = [
   "other",
 ];
 
-export const ISSUE_DOCUMENT_STATUSES: IssueDocumentStatus[] = [
-  "draft",
-  "submitted",
-  "approved",
-  "rejected",
-  "superseded",
-];
-
 export const ISSUE_DOCUMENT_SORT_FIELDS: DocumentSortField[] = [
   "type",
   "updated_at",
   "title",
-  "status",
   "version",
 ];
 
 export type DocumentTypeFilter = IssueDocumentType | "all";
-export type DocumentStatusFilter = IssueDocumentStatus | "all";
 
 interface DocumentToolbarProps {
   totalCount: number;
   typeFilter: DocumentTypeFilter;
-  statusFilter: DocumentStatusFilter;
   search: string;
   sort: DocumentSort;
   onTypeFilterChange: (value: DocumentTypeFilter) => void;
-  onStatusFilterChange: (value: DocumentStatusFilter) => void;
   onSearchChange: (value: string) => void;
   onSortFieldChange: (field: DocumentSortField) => void;
   onSortDirectionChange: () => void;
@@ -62,11 +50,9 @@ interface DocumentToolbarProps {
 export function DocumentToolbar({
   totalCount,
   typeFilter,
-  statusFilter,
   search,
   sort,
   onTypeFilterChange,
-  onStatusFilterChange,
   onSearchChange,
   onSortFieldChange,
   onSortDirectionChange,
@@ -78,13 +64,6 @@ export function DocumentToolbar({
     ...ISSUE_DOCUMENT_TYPES.map((type) => ({
       value: type,
       label: t(($) => $.types[type]),
-    })),
-  ];
-  const statusItems = [
-    { value: "all" as const, label: t(($) => $.filters.all_statuses) },
-    ...ISSUE_DOCUMENT_STATUSES.map((status) => ({
-      value: status,
-      label: t(($) => $.statuses[status]),
     })),
   ];
   const sortItems = ISSUE_DOCUMENT_SORT_FIELDS.map((field) => ({
@@ -111,24 +90,6 @@ export function DocumentToolbar({
           </SelectTrigger>
           <SelectContent>
             {typeItems.map((item) => (
-              <SelectItem key={item.value} value={item.value}>
-                {item.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select
-          items={statusItems}
-          value={statusFilter}
-          onValueChange={(v) =>
-            onStatusFilterChange((v as DocumentStatusFilter) ?? "all")
-          }
-        >
-          <SelectTrigger className="h-8 w-40">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {statusItems.map((item) => (
               <SelectItem key={item.value} value={item.value}>
                 {item.label}
               </SelectItem>

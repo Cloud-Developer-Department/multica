@@ -3,7 +3,9 @@ import { ApiClient } from "@multica/core/api/client";
 import {
   DEFAULT_DOCUMENT_SORT,
   type DocumentSort,
+  type DocumentSortField,
 } from "./components/document-list";
+import { ISSUE_DOCUMENT_SORT_FIELDS } from "./components/document-toolbar";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -59,7 +61,7 @@ describe("issue-documents server-side sort", () => {
   });
 
   it("toggles direction on the same field and switches field to desc", () => {
-    const toggle = (prev: DocumentSort, field: DocumentSort["field"]): DocumentSort =>
+    const toggle = (prev: DocumentSort, field: DocumentSortField): DocumentSort =>
       prev.field === field
         ? { field, direction: prev.direction === "asc" ? "desc" : "asc" }
         : { field, direction: "desc" };
@@ -68,5 +70,9 @@ describe("issue-documents server-side sort", () => {
     expect(first).toEqual({ field: "title", direction: "desc" });
     const second = toggle(first, "title");
     expect(second).toEqual({ field: "title", direction: "asc" });
+  });
+
+  it("no longer offers status as a sort field (CLO-477)", () => {
+    expect(ISSUE_DOCUMENT_SORT_FIELDS).not.toContain("status");
   });
 });
