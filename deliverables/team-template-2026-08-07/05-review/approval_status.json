@@ -1,0 +1,60 @@
+{
+  "issue": "SGD-21",
+  "feature": "team-template 团队模板能力",
+  "branch": "feature/team-template",
+  "commit_verified": "625c7421",
+  "reviewer": "qa-reviewer-agent",
+  "date": "2026-08-10",
+  "status": "approve",
+  "quality_gate": {
+    "build": "pass",
+    "compile": "pass",
+    "unit_test": "pass",
+    "regression": "pass_with_baseline_notes",
+    "benchmark": "pass",
+    "security_audit": "pass"
+  },
+  "acceptance": {
+    "repeat_apply_all_reused": true,
+    "tx_rollback_no_residue": true,
+    "full_org_10_agents_3_squads_1_skill_with_prompts": true
+  },
+  "findings": [
+    {
+      "severity": "BLOCKER",
+      "count": 0
+    },
+    {
+      "severity": "MINOR",
+      "file": "server/internal/handler/team_template.go",
+      "lines": [373, 452, 521],
+      "axis": "concurrency",
+      "note": "并发重复 apply 竞态：find-or-create 后到请求撞 UNIQUE 返回 500（数据完整性由约束保证，无脏数据）。建议将 unique_violation 转换为 reused 响应。不阻塞放行。"
+    },
+    {
+      "severity": "INFO",
+      "file": "server/internal/handler/team_template.go",
+      "lines": [224],
+      "axis": "maintainability",
+      "note": "ApplyTeamTemplate 单函数偏长（647 行），可拆分为 skill/agent/squad 阶段子函数。非阻塞。"
+    }
+  ],
+  "pre_existing_tech_debt_unrelated_to_feature": [
+    {
+      "file": "server/internal/migrations/migrations_lint_test.go",
+      "line": 91,
+      "note": "migration 前缀复用 lint（202/203/232-239），基线 0ab7ea6e 同样失败；teamtmpl 零新增 migration。"
+    },
+    {
+      "file": "server/internal/handler/comment_delegation_test.go",
+      "line": 797,
+      "note": "测试助手建 agent 未带 runtime_id 撞 NOT NULL，基线同样失败。"
+    },
+    {
+      "file": "server/internal/integrations/ghsnapshot/refresh_db_test.go",
+      "line": 360,
+      "note": "时序 flaky，基线/特性两侧均不稳定。"
+    }
+  ],
+  "handoff": "approve -> 安全审计通过 -> @devops-agent (stage4 SGD-20 部署+收口 PR)"
+}

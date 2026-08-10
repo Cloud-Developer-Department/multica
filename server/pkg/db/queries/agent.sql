@@ -1493,3 +1493,7 @@ SET status = CASE WHEN EXISTS (
     updated_at = now()
 WHERE a.id = $1
 RETURNING *;
+
+-- name: GetAgentByWorkspaceAndName :one
+SELECT * FROM agent
+WHERE workspace_id = $1 AND name = $2 AND archived_at IS NULL AND kind = 'user';

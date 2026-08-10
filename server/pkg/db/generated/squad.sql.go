@@ -219,6 +219,38 @@ func (q *Queries) GetSquadByAssignee(ctx context.Context, arg GetSquadByAssignee
 	return i, err
 }
 
+const getSquadByWorkspaceAndName = `-- name: GetSquadByWorkspaceAndName :one
+SELECT id, workspace_id, name, description, leader_id, creator_id, created_at, updated_at, archived_at, archived_by, avatar_url, instructions, parent_squad_id, upgrade_on_member_mention FROM squad
+WHERE workspace_id = $1 AND name = $2 AND archived_at IS NULL
+`
+
+type GetSquadByWorkspaceAndNameParams struct {
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	Name        string      `json:"name"`
+}
+
+func (q *Queries) GetSquadByWorkspaceAndName(ctx context.Context, arg GetSquadByWorkspaceAndNameParams) (Squad, error) {
+	row := q.db.QueryRow(ctx, getSquadByWorkspaceAndName, arg.WorkspaceID, arg.Name)
+	var i Squad
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.Name,
+		&i.Description,
+		&i.LeaderID,
+		&i.CreatorID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.ArchivedAt,
+		&i.ArchivedBy,
+		&i.AvatarUrl,
+		&i.Instructions,
+		&i.ParentSquadID,
+		&i.UpgradeOnMemberMention,
+	)
+	return i, err
+}
+
 const getSquadInWorkspace = `-- name: GetSquadInWorkspace :one
 SELECT id, workspace_id, name, description, leader_id, creator_id, created_at, updated_at, archived_at, archived_by, avatar_url, instructions, parent_squad_id, upgrade_on_member_mention FROM squad WHERE id = $1 AND workspace_id = $2
 `

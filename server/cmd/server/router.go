@@ -1299,6 +1299,14 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 				r.Get("/", h.ListAgentTemplates)
 				r.Get("/{slug}", h.GetAgentTemplate)
 			})
+
+			// Team templates catalog: browse + detail + one-shot apply that
+			// materialises a whole team (skills + agents + squads) atomically.
+			r.Route("/api/team-templates", func(r chi.Router) {
+				r.Get("/", h.ListTeamTemplates)
+				r.Get("/{slug}", h.GetTeamTemplate)
+				r.Post("/{slug}/apply", h.ApplyTeamTemplate)
+			})
 			// Resource templates (CLO-245): portable agent/squad export,
 			// validation and apply. Backed by internal/resourcetmpl.
 			r.Route("/api/templates", func(r chi.Router) {
