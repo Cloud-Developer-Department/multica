@@ -47,7 +47,16 @@
   "filters": {
     "all_types": "모든 유형",
     "all_statuses": "모든 상태",
-    "search": "제목 또는 이슈 검색..."
+    "search": "제목 또는 이슈 검색...",
+    "sort_by": "문서 정렬 기준",
+    "sort_direction": "정렬 방향 전환",
+    "sort": {
+      "type": "유형",
+      "updated_at": "업데이트",
+      "title": "제목",
+      "status": "상태",
+      "version": "버전"
+    }
   },
   "detail": {
     "versions": "버전",

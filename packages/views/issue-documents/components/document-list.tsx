@@ -21,9 +21,10 @@ export interface DocumentSort {
   direction: DocumentSortDirection;
 }
 
+/** Default sort for the grouped view: R&D stage order (requirements first). */
 export const DEFAULT_DOCUMENT_SORT: DocumentSort = {
-  field: "updated_at",
-  direction: "desc",
+  field: "type",
+  direction: "asc",
 };
 
 function SortIcon({ sort, field }: { sort: DocumentSort; field: DocumentSortField }) {

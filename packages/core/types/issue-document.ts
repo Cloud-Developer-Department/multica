@@ -70,6 +70,24 @@ export interface IssueDocumentListResponse {
   total: number;
 }
 
+/**
+ * One issue bucket in the grouped list (GET /api/issue-documents?group=issue,
+ * CLO-471). `items` are the documents that matched the active filters,
+ * ordered by the requested sort; `total` is their count.
+ */
+export interface IssueDocumentGroup {
+  issue_id: string;
+  issue_identifier: string;
+  issue_title: string;
+  items: IssueDocumentSummary[];
+  total: number;
+}
+
+export interface IssueDocumentGroupListResponse {
+  groups: IssueDocumentGroup[];
+  total: number;
+}
+
 export interface ListIssueDocumentsParams {
   type?: IssueDocumentType;
   status?: IssueDocumentStatus;
@@ -79,6 +97,15 @@ export interface ListIssueDocumentsParams {
   order?: "asc" | "desc";
   limit?: number;
   offset?: number;
+}
+
+export interface ListIssueDocumentGroupsParams {
+  type?: IssueDocumentType;
+  status?: IssueDocumentStatus;
+  issue_id?: string;
+  q?: string;
+  sort?: "updated_at" | "title" | "type" | "status" | "version";
+  order?: "asc" | "desc";
 }
 
 export interface IssueDocumentVersionsResponse {

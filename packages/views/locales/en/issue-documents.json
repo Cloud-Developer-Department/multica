@@ -47,7 +47,16 @@
   "filters": {
     "all_types": "All types",
     "all_statuses": "All statuses",
-    "search": "Search title or issue..."
+    "search": "Search title or issue...",
+    "sort_by": "Sort documents by",
+    "sort_direction": "Toggle sort direction",
+    "sort": {
+      "type": "Type",
+      "updated_at": "Updated",
+      "title": "Title",
+      "status": "Status",
+      "version": "Version"
+    }
   },
   "detail": {
     "versions": "Versions",

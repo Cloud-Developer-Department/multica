@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/multica-ai/multica/server/internal/logger"
 	"github.com/multica-ai/multica/server/internal/service"
@@ -89,6 +90,40 @@ var validIssueDocumentContentTypes = map[string]bool{
 	"json":     true,
 	"text":     true,
 	"file":     true,
+}
+
+// issueDocumentGroupSortColumns maps the within-group `sort` query values to
+// their SQL expressions for the grouped list (group=issue). It mirrors
+// issueDocumentSortColumns, but `type` orders by the document's stage in the
+// R&D flow (requirements → ... → deployment → other) instead of alphabetically,
+// so a group reads as the issue's flow documents in order (CLO-471).
+var issueDocumentGroupSortColumns = map[string]string{
+	"updated_at": "d.updated_at",
+	"title":      "LOWER(d.title)",
+	"type": `CASE d.type
+		   WHEN 'requirements' THEN 1
+		   WHEN 'architecture' THEN 2
+		   WHEN 'development' THEN 3
+		   WHEN 'testing' THEN 4
+		   WHEN 'code_review' THEN 5
+		   WHEN 'security' THEN 6
+		   WHEN 'documentation' THEN 7
+		   WHEN 'deployment' THEN 8
+		   ELSE 9 END`,
+	"status":  "d.status",
+	"version": "d.version",
+}
+
+// IssueDocumentGroupResponse is one issue bucket in the grouped list
+// (GET /api/issue-documents?group=issue, CLO-471). It carries the issue's
+// identifier/title as the group header and the documents that matched the
+// active filters, ordered by the requested sort.
+type IssueDocumentGroupResponse struct {
+	IssueID         string                   `json:"issue_id"`
+	IssueIdentifier string                   `json:"issue_identifier"`
+	IssueTitle      string                   `json:"issue_title"`
+	Items           []IssueDocumentResponse  `json:"items"`
+	Total           int                      `json:"total"`
 }
 
 func issueDocumentRowToResponse(row db.ListIssueDocumentsRow, issuePrefix string) IssueDocumentResponse {
@@ -177,18 +212,145 @@ var issueDocumentSortColumns = map[string]string{
 	"version":    "d.version",
 }
 
-// ListIssueDocuments returns the paginated issue-flow document list for the
-// current workspace, filtered by type / status / issue_id and keyword `q`.
+// issueDocumentListFilter is the validated set of query filters shared by the
+// flat and grouped list paths.
+type issueDocumentListFilter struct {
+	Type    pgtype.Text
+	Status  pgtype.Text
+	IssueID pgtype.UUID
+	Q       pgtype.Text
+}
+
+// parseIssueDocumentListFilter reads and validates the type / status / issue_id
+// / q query params used by both list modes. The keyword `q` is LIKE-escaped so
+// `%`/`_` match literally instead of acting as wildcards (CLO-284 S4, mirrors
+// ListIssues).
+func parseIssueDocumentListFilter(w http.ResponseWriter, r *http.Request) (issueDocumentListFilter, bool) {
+	var f issueDocumentListFilter
+	if raw := strings.TrimSpace(r.URL.Query().Get("type")); raw != "" {
+		if !validIssueDocumentTypes[raw] {
+			writeError(w, http.StatusBadRequest, "invalid document type")
+			return f, false
+		}
+		f.Type = strToText(raw)
+	}
+	if raw := strings.TrimSpace(r.URL.Query().Get("status")); raw != "" {
+		if !validIssueDocumentStatuses[raw] {
+			writeError(w, http.StatusBadRequest, "invalid document status")
+			return f, false
+		}
+		f.Status = strToText(raw)
+	}
+	if raw := strings.TrimSpace(r.URL.Query().Get("issue_id")); raw != "" {
+		u, err := util.ParseUUID(raw)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid issue_id")
+			return f, false
+		}
+		f.IssueID = u
+	}
+	if raw := strings.TrimSpace(r.URL.Query().Get("q")); raw != "" {
+		f.Q = strToText(escapeLike(raw))
+	}
+	return f, true
+}
+
+// listIssueDocumentSelectBody is shared by the flat, grouped and count queries.
+// The author joins power the q search over author names; the issue + workspace
+// joins enrich each row with the identifier/title used by the list and grouped
+// headers.
+const listIssueDocumentSelectBody = `FROM issue_document d
+JOIN issue i ON i.id = d.issue_id
+JOIN workspace w ON w.id = d.workspace_id
+LEFT JOIN member m ON m.id = d.author_id AND d.author_type = 'member'
+LEFT JOIN "user" u ON u.id = m.user_id
+LEFT JOIN agent a ON a.id = d.author_id AND d.author_type = 'agent'
+WHERE %s`
+
+// listIssueDocumentColumns is the SELECT projection shared by the flat and
+// grouped queries. d.id is the final tiebreaker so two rows sharing a sort key
+// keep a stable order across requests (same reasoning as ListIssues).
+const listIssueDocumentColumns = `SELECT d.id, d.workspace_id, d.issue_id, d.type, d.title, d.content_type,
+       d.file_attachment_id, d.version, d.status, d.author_type, d.author_id,
+       d.created_at, d.updated_at,
+       i.number AS issue_number, i.title AS issue_title,
+       u.name AS member_author_name, a.name AS agent_author_name`
+
+// buildIssueDocumentWhere assembles the WHERE clause + args for a workspace
+// with the given filters. The args start at $1 (workspace id) so both callers
+// can append their own ORDER BY / LIMIT / OFFSET placeholders afterwards.
+func buildIssueDocumentWhere(workspaceID pgtype.UUID, f issueDocumentListFilter) (string, []any) {
+	where := []string{"d.workspace_id = $1"}
+	args := []any{workspaceID}
+	addArg := func(v any) string {
+		args = append(args, v)
+		return "$" + strconv.Itoa(len(args))
+	}
+	if f.Type.Valid {
+		where = append(where, "d.type = "+addArg(f.Type))
+	}
+	if f.Status.Valid {
+		where = append(where, "d.status = "+addArg(f.Status))
+	}
+	if f.IssueID.Valid {
+		where = append(where, "d.issue_id = "+addArg(f.IssueID))
+	}
+	if f.Q.Valid {
+		// `w.issue_prefix` powers the identifier match (CLO-283 R4): typing
+		// "CLO-279" must hit the document whose issue identifier is CLO-279.
+		qRef := addArg(f.Q)
+		where = append(where, fmt.Sprintf(`(
+    LOWER(d.title) LIKE '%%' || LOWER(%s) || '%%'
+ OR LOWER(i.title) LIKE '%%' || LOWER(%s) || '%%'
+ OR CAST(i.number AS TEXT) LIKE LOWER(%s) || '%%'
+ OR LOWER(w.issue_prefix || '-' || CAST(i.number AS TEXT)) LIKE '%%' || LOWER(%s) || '%%'
+ OR LOWER(COALESCE(u.name, a.name)) LIKE '%%' || LOWER(%s) || '%%'
+)`, qRef, qRef, qRef, qRef, qRef))
+	}
+	return strings.Join(where, " AND "), args
+}
+
+// scanListIssueDocumentRow scans one result row into a db.ListIssueDocumentsRow.
+func scanListIssueDocumentRow(rows pgx.Rows) (db.ListIssueDocumentsRow, error) {
+	var row db.ListIssueDocumentsRow
+	err := rows.Scan(
+		&row.ID, &row.WorkspaceID, &row.IssueID, &row.Type, &row.Title,
+		&row.ContentType, &row.FileAttachmentID, &row.Version, &row.Status,
+		&row.AuthorType, &row.AuthorID, &row.CreatedAt, &row.UpdatedAt,
+		&row.IssueNumber, &row.IssueTitle, &row.MemberAuthorName, &row.AgentAuthorName,
+	)
+	return row, err
+}
+
+// ListIssueDocuments returns the issue-flow documents for the current
+// workspace. By default it returns a flat, paginated list filtered by type /
+// status / issue_id / keyword `q`.
 //
-// Sorting is server-side (`sort` / `order` query params, whitelisted above):
-// the SQL orders before LIMIT/OFFSET, so a non-default sort stays stable
-// across pages instead of the client re-sorting just the loaded window
-// (CLO-283 R1). The query is built dynamically like ListIssues because the
-// sort column is caller-chosen.
+// With `group=issue` it returns the same documents grouped under their issue
+// (CLO-471): each group carries the issue identifier/title as its header and
+// the matching documents as items. Filters apply before grouping; the `sort` /
+// `order` params order documents *within* each group, and `type` uses the R&D
+// stage order so a group reads as the issue's flow documents. Groups themselves
+// are ordered by issue number so the page is deterministic without a global
+// document sort (grouping makes a cross-group flat sort meaningless).
+//
+// Sorting is always server-side (`sort` / `order` whitelisted below): the SQL
+// orders before any LIMIT/OFFSET, so a non-default sort stays stable across
+// pages instead of the client re-sorting just the loaded window (CLO-283 R1).
 func (h *Handler) ListIssueDocuments(w http.ResponseWriter, r *http.Request) {
 	workspaceID := h.resolveWorkspaceID(r)
 	wsUUID, ok := parseUUIDOrBadRequest(w, workspaceID, "workspace id")
 	if !ok {
+		return
+	}
+
+	f, ok := parseIssueDocumentListFilter(w, r)
+	if !ok {
+		return
+	}
+
+	if strings.TrimSpace(r.URL.Query().Get("group")) == "issue" {
+		h.listIssueDocumentGroups(w, r, wsUUID, f)
 		return
 	}
 
@@ -238,92 +400,22 @@ func (h *Handler) ListIssueDocuments(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	var typeFilter pgtype.Text
-	if raw := strings.TrimSpace(r.URL.Query().Get("type")); raw != "" {
-		if !validIssueDocumentTypes[raw] {
-			writeError(w, http.StatusBadRequest, "invalid document type")
-			return
-		}
-		typeFilter = strToText(raw)
-	}
-	var statusFilter pgtype.Text
-	if raw := strings.TrimSpace(r.URL.Query().Get("status")); raw != "" {
-		if !validIssueDocumentStatuses[raw] {
-			writeError(w, http.StatusBadRequest, "invalid document status")
-			return
-		}
-		statusFilter = strToText(raw)
-	}
-	var issueIDFilter pgtype.UUID
-	if raw := strings.TrimSpace(r.URL.Query().Get("issue_id")); raw != "" {
-		u, err := util.ParseUUID(raw)
-		if err != nil {
-			writeError(w, http.StatusBadRequest, "invalid issue_id")
-			return
-		}
-		issueIDFilter = u
-	}
-	var qFilter pgtype.Text
-	if raw := strings.TrimSpace(r.URL.Query().Get("q")); raw != "" {
-		// Escape LIKE wildcards so `%`/`_` in the query match literally instead
-		// of acting as wildcards (CLO-284 S4, mirrors ListIssues). The value is
-		// parameterized so this is about match precision, not injection.
-		qFilter = strToText(escapeLike(raw))
-	}
-
-	// Build WHERE + ORDER BY dynamically. `w.issue_prefix` powers the
-	// identifier match in the q search (CLO-283 R4): typing "CLO-279" must hit
-	// the document whose issue identifier is CLO-279.
-	where := []string{"d.workspace_id = $1"}
-	args := []any{wsUUID}
+	whereSql, args := buildIssueDocumentWhere(wsUUID, f)
 	addArg := func(v any) string {
 		args = append(args, v)
 		return "$" + strconv.Itoa(len(args))
 	}
-	if typeFilter.Valid {
-		where = append(where, "d.type = "+addArg(typeFilter))
-	}
-	if statusFilter.Valid {
-		where = append(where, "d.status = "+addArg(statusFilter))
-	}
-	if issueIDFilter.Valid {
-		where = append(where, "d.issue_id = "+addArg(issueIDFilter))
-	}
-	if qFilter.Valid {
-		qRef := addArg(qFilter)
-		where = append(where, fmt.Sprintf(`(
-    LOWER(d.title) LIKE '%%' || LOWER(%s) || '%%'
- OR LOWER(i.title) LIKE '%%' || LOWER(%s) || '%%'
- OR CAST(i.number AS TEXT) LIKE LOWER(%s) || '%%'
- OR LOWER(w.issue_prefix || '-' || CAST(i.number AS TEXT)) LIKE '%%' || LOWER(%s) || '%%'
- OR LOWER(COALESCE(u.name, a.name)) LIKE '%%' || LOWER(%s) || '%%'
-)`, qRef, qRef, qRef, qRef, qRef))
-	}
-	whereSql := strings.Join(where, " AND ")
+	offsetRef := addArg(int64(offset))
+	limitRef := addArg(int64(limit))
 
 	// d.id is the final tiebreaker so two rows sharing the sort key keep a
 	// stable order across requests (same reasoning as ListIssues).
 	orderBy := sortExpr + " " + sortDir + ", d.id DESC"
 
-	offsetRef := addArg(int64(offset))
-	limitRef := addArg(int64(limit))
-
-	const selectBody = `FROM issue_document d
-JOIN issue i ON i.id = d.issue_id
-JOIN workspace w ON w.id = d.workspace_id
-LEFT JOIN member m ON m.id = d.author_id AND d.author_type = 'member'
-LEFT JOIN "user" u ON u.id = m.user_id
-LEFT JOIN agent a ON a.id = d.author_id AND d.author_type = 'agent'
-WHERE %s`
-
-	query := fmt.Sprintf(`SELECT d.id, d.workspace_id, d.issue_id, d.type, d.title, d.content_type,
-       d.file_attachment_id, d.version, d.status, d.author_type, d.author_id,
-       d.created_at, d.updated_at,
-       i.number AS issue_number, i.title AS issue_title,
-       u.name AS member_author_name, a.name AS agent_author_name
-`+selectBody+`
+	query := fmt.Sprintf(`%s
+`+listIssueDocumentSelectBody+`
 ORDER BY %s
-LIMIT %s OFFSET %s`, whereSql, orderBy, limitRef, offsetRef)
+LIMIT %s OFFSET %s`, listIssueDocumentColumns, whereSql, orderBy, limitRef, offsetRef)
 
 	rows, err := h.DB.Query(r.Context(), query, args...)
 	if err != nil {
@@ -335,13 +427,8 @@ LIMIT %s OFFSET %s`, whereSql, orderBy, limitRef, offsetRef)
 
 	var items []db.ListIssueDocumentsRow
 	for rows.Next() {
-		var row db.ListIssueDocumentsRow
-		if err := rows.Scan(
-			&row.ID, &row.WorkspaceID, &row.IssueID, &row.Type, &row.Title,
-			&row.ContentType, &row.FileAttachmentID, &row.Version, &row.Status,
-			&row.AuthorType, &row.AuthorID, &row.CreatedAt, &row.UpdatedAt,
-			&row.IssueNumber, &row.IssueTitle, &row.MemberAuthorName, &row.AgentAuthorName,
-		); err != nil {
+		row, err := scanListIssueDocumentRow(rows)
+		if err != nil {
 			slog.Warn("ListIssueDocuments scan failed", append(logger.RequestAttrs(r), "error", err)...)
 			writeError(w, http.StatusInternalServerError, "failed to list issue documents")
 			return
@@ -355,7 +442,7 @@ LIMIT %s OFFSET %s`, whereSql, orderBy, limitRef, offsetRef)
 	}
 
 	// Total for pagination; same WHERE minus the OFFSET/LIMIT args appended last.
-	countQuery := fmt.Sprintf(`SELECT COUNT(*) `+selectBody, whereSql)
+	countQuery := fmt.Sprintf(`SELECT COUNT(*) `+listIssueDocumentSelectBody, whereSql)
 	var total int64
 	if err := h.DB.QueryRow(r.Context(), countQuery, args[:len(args)-2]...).Scan(&total); err != nil {
 		total = int64(len(items))
@@ -367,6 +454,92 @@ LIMIT %s OFFSET %s`, whereSql, orderBy, limitRef, offsetRef)
 		resp[i] = issueDocumentRowToResponse(row, issuePrefix)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": resp, "total": total})
+}
+
+// listIssueDocumentGroups is the grouped-by-issue mode of the Issue Documents
+// list (CLO-471). Filters apply exactly as in the flat list; matching documents
+// are bucketed by issue, ordered by issue number, and within each group by the
+// requested sort (default updated_at DESC). No cross-group flat sort exists in
+// this mode — the group header is the natural ordering signal.
+func (h *Handler) listIssueDocumentGroups(w http.ResponseWriter, r *http.Request, wsUUID pgtype.UUID, f issueDocumentListFilter) {
+	// Within-group sort. `type` uses the R&D stage order (see
+	// issueDocumentGroupSortColumns) so a group lists the issue's flow
+	// documents in pipeline order by default.
+	sortExpr := issueDocumentGroupSortColumns["type"]
+	sortDir := "ASC"
+	if raw := strings.TrimSpace(r.URL.Query().Get("sort")); raw != "" {
+		expr, ok := issueDocumentGroupSortColumns[raw]
+		if !ok {
+			writeError(w, http.StatusBadRequest, "invalid sort value")
+			return
+		}
+		sortExpr = expr
+	}
+	if raw := strings.TrimSpace(r.URL.Query().Get("order")); raw != "" {
+		switch strings.ToLower(raw) {
+		case "asc":
+			sortDir = "ASC"
+		case "desc":
+			sortDir = "DESC"
+		default:
+			writeError(w, http.StatusBadRequest, "invalid order value")
+			return
+		}
+	}
+
+	whereSql, args := buildIssueDocumentWhere(wsUUID, f)
+
+	// Groups ordered by issue number; documents within a group by the requested
+	// sort. d.id is the final tiebreaker so equal rows stay stable.
+	query := fmt.Sprintf(`%s
+`+listIssueDocumentSelectBody+`
+ORDER BY i.number ASC, %s %s, d.id DESC`, listIssueDocumentColumns, whereSql, sortExpr, sortDir)
+
+	rows, err := h.DB.Query(r.Context(), query, args...)
+	if err != nil {
+		slog.Warn("listIssueDocumentGroups query failed", append(logger.RequestAttrs(r), "error", err)...)
+		writeError(w, http.StatusInternalServerError, "failed to list issue documents")
+		return
+	}
+	defer rows.Close()
+
+	issuePrefix := h.getIssuePrefix(r.Context(), wsUUID)
+	var groups []*IssueDocumentGroupResponse
+	byIssue := map[string]*IssueDocumentGroupResponse{}
+	total := 0
+	for rows.Next() {
+		row, err := scanListIssueDocumentRow(rows)
+		if err != nil {
+			slog.Warn("listIssueDocumentGroups scan failed", append(logger.RequestAttrs(r), "error", err)...)
+			writeError(w, http.StatusInternalServerError, "failed to list issue documents")
+			return
+		}
+		issueID := uuidToString(row.IssueID)
+		group := byIssue[issueID]
+		if group == nil {
+			group = &IssueDocumentGroupResponse{
+				IssueID:         issueID,
+				IssueIdentifier: issuePrefix + "-" + strconv.Itoa(int(row.IssueNumber)),
+				IssueTitle:      row.IssueTitle,
+			}
+			byIssue[issueID] = group
+			groups = append(groups, group)
+		}
+		group.Items = append(group.Items, issueDocumentRowToResponse(row, issuePrefix))
+		group.Total = len(group.Items)
+		total++
+	}
+	if err := rows.Err(); err != nil {
+		slog.Warn("listIssueDocumentGroups rows failed", append(logger.RequestAttrs(r), "error", err)...)
+		writeError(w, http.StatusInternalServerError, "failed to list issue documents")
+		return
+	}
+
+	resp := make([]IssueDocumentGroupResponse, len(groups))
+	for i, g := range groups {
+		resp[i] = *g
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"groups": resp, "total": total})
 }
 
 // GetIssueDocument returns a single document's detail (metadata + body).

@@ -1,21 +1,19 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useInfiniteQuery } from "@tanstack/react-query";
-import { Button } from "@multica/ui/components/ui/button";
+import { useQuery } from "@tanstack/react-query";
 import { useWorkspaceId } from "@multica/core/hooks";
-import { issueDocumentInfiniteListOptions } from "@multica/core/issue-documents/queries";
+import { issueDocumentGroupListOptions } from "@multica/core/issue-documents/queries";
 import type { IssueDocumentSummary } from "@multica/core/types";
-import { useT } from "../i18n";
 import {
   DocumentDetailDrawer,
 } from "./components/document-detail-drawer";
 import {
-  DocumentList,
   DEFAULT_DOCUMENT_SORT,
   type DocumentSort,
   type DocumentSortField,
 } from "./components/document-list";
+import { DocumentGroupList } from "./components/document-groups";
 import {
   DocumentListEmpty,
   DocumentListError,
@@ -39,7 +37,6 @@ function useDebouncedValue(value: string, delay = 300): string {
 }
 
 export function IssueDocumentsPage() {
-  const { t } = useT("issue-documents");
   const wsId = useWorkspaceId();
 
   const [typeFilter, setTypeFilter] = useState<DocumentTypeFilter>("all");
@@ -53,31 +50,37 @@ export function IssueDocumentsPage() {
   const hasActiveFilters =
     typeFilter !== "all" || statusFilter !== "all" || debouncedSearch.trim() !== "";
 
-  const query = useInfiniteQuery(
-    issueDocumentInfiniteListOptions(wsId, {
+  // The page is grouped by issue (CLO-471): documents are returned bucketed
+  // under their issue, ordered by issue number with documents within a group
+  // sorted server-side by `sort`/`order`. Filtering (type/status/q) applies
+  // before grouping. The grouped response is a single page — the number of
+  // issues that produced documents bounds the group count.
+  const query = useQuery(
+    issueDocumentGroupListOptions(wsId, {
       type: typeFilter === "all" ? undefined : typeFilter,
       status: statusFilter === "all" ? undefined : statusFilter,
       q: debouncedSearch.trim() || undefined,
-      // Sorting is server-side (CLO-283 R1): the backend orders before
-      // LIMIT/OFFSET, so a non-default sort stays stable across pages. The
-      // sort is part of the query key, so changing it refetches from page 0.
       sort: sort.field,
       order: sort.direction,
     }),
   );
 
-  const items = useMemo(
-    () => (query.data?.pages ?? []).flatMap((page) => page.items),
-    [query.data],
-  );
-  const total = query.data?.pages[0]?.total ?? 0;
+  const groups = useMemo(() => query.data?.groups ?? [], [query.data]);
+  const total = query.data?.total ?? 0;
 
-  const handleSort = (field: DocumentSortField) => {
+  const handleSortFieldChange = (field: DocumentSortField) => {
     setSort((prev) =>
       prev.field === field
-        ? { field, direction: prev.direction === "asc" ? "desc" : "asc" }
-        : { field, direction: "desc" },
+        ? prev
+        : { field, direction: DEFAULT_DIRECTIONS[field] },
     );
+  };
+
+  const handleSortDirectionChange = () => {
+    setSort((prev) => ({
+      field: prev.field,
+      direction: prev.direction === "asc" ? "desc" : "asc",
+    }));
   };
 
   if (query.isError) {
@@ -88,9 +91,12 @@ export function IssueDocumentsPage() {
           typeFilter={typeFilter}
           statusFilter={statusFilter}
           search={search}
+          sort={sort}
           onTypeFilterChange={setTypeFilter}
           onStatusFilterChange={setStatusFilter}
           onSearchChange={setSearch}
+          onSortFieldChange={handleSortFieldChange}
+          onSortDirectionChange={handleSortDirectionChange}
         />
         <DocumentListError onRetry={() => query.refetch()} />
       </div>
@@ -104,44 +110,37 @@ export function IssueDocumentsPage() {
         typeFilter={typeFilter}
         statusFilter={statusFilter}
         search={search}
+        sort={sort}
         onTypeFilterChange={setTypeFilter}
         onStatusFilterChange={setStatusFilter}
         onSearchChange={setSearch}
+        onSortFieldChange={handleSortFieldChange}
+        onSortDirectionChange={handleSortDirectionChange}
       />
 
       {query.isLoading ? (
         <DocumentListSkeleton />
-      ) : items.length === 0 ? (
+      ) : groups.length === 0 ? (
         hasActiveFilters ? (
           <DocumentListNoMatches />
         ) : (
           <DocumentListEmpty />
         )
       ) : (
-        <>
-          <DocumentList
-            items={items}
-            sort={sort}
-            onSort={handleSort}
-            onSelect={setSelected}
-          />
-          {query.hasNextPage ? (
-            <div className="flex shrink-0 justify-center border-t p-3">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={query.isFetchingNextPage}
-                onClick={() => query.fetchNextPage()}
-              >
-                {t(($) => $.page.load_more)}
-              </Button>
-            </div>
-          ) : null}
-        </>
+        <DocumentGroupList groups={groups} onSelect={setSelected} />
       )}
 
       <DocumentDetailDrawer document={selected} onClose={() => setSelected(null)} />
     </div>
   );
 }
+
+// Natural default direction per sort field: stage/type and title read best
+// ascending; timestamps and version read best descending.
+const DEFAULT_DIRECTIONS: Record<DocumentSortField, DocumentSort["direction"]> = {
+  type: "asc",
+  title: "asc",
+  status: "asc",
+  updated_at: "desc",
+  version: "desc",
+};

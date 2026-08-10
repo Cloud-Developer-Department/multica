@@ -91,7 +91,10 @@ export type {
   IssueDocumentContentType,
   IssueDocumentAuthorType,
   IssueDocumentListResponse,
+  IssueDocumentGroup,
+  IssueDocumentGroupListResponse,
   ListIssueDocumentsParams,
+  ListIssueDocumentGroupsParams,
   IssueDocumentVersionsResponse,
   CreateIssueDocumentRequest,
 } from "./issue-document";

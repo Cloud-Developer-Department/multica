@@ -34,6 +34,7 @@ import type {
   ListIssuesResponse,
   ListLabelsResponse,
   IssueDocumentDetail,
+  IssueDocumentGroupListResponse,
   IssueDocumentListResponse,
   IssueDocumentVersionsResponse,
   ListWebhookDeliveriesResponse,
@@ -180,6 +181,19 @@ export const IssueDocumentListResponseSchema = z.object({
   total: z.number().default(0),
 }).loose();
 
+const IssueDocumentGroupSchema = z.object({
+  issue_id: z.string(),
+  issue_identifier: z.string(),
+  issue_title: z.string(),
+  items: z.array(IssueDocumentSummarySchema).default([]),
+  total: z.number().default(0),
+}).loose();
+
+export const IssueDocumentGroupListResponseSchema = z.object({
+  groups: z.array(IssueDocumentGroupSchema).default([]),
+  total: z.number().default(0),
+}).loose();
+
 export const IssueDocumentDetailResponseSchema = IssueDocumentDetailSchema;
 
 export const IssueDocumentVersionsResponseSchema = z.object({
@@ -190,6 +204,11 @@ export const IssueDocumentVersionsResponseSchema = z.object({
 
 export const EMPTY_ISSUE_DOCUMENT_LIST_RESPONSE: IssueDocumentListResponse = {
   items: [],
+  total: 0,
+};
+
+export const EMPTY_ISSUE_DOCUMENT_GROUP_LIST_RESPONSE: IssueDocumentGroupListResponse = {
+  groups: [],
   total: 0,
 };
 

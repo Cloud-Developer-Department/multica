@@ -115,8 +115,10 @@ import type {
   ResourceLabelsResponse,
   IssueDocumentDetail,
   IssueDocumentListResponse,
+  IssueDocumentGroupListResponse,
   IssueDocumentVersionsResponse,
   ListIssueDocumentsParams,
+  ListIssueDocumentGroupsParams,
   CreateIssueDocumentRequest,
   PinnedItem,
   CreatePinRequest,
@@ -289,9 +291,11 @@ import {
   EMPTY_LIST_PROPERTIES_RESPONSE,
   EMPTY_ISSUE_PROPERTIES_RESPONSE,
   IssueDocumentListResponseSchema,
+  IssueDocumentGroupListResponseSchema,
   IssueDocumentDetailResponseSchema,
   IssueDocumentVersionsResponseSchema,
   EMPTY_ISSUE_DOCUMENT_LIST_RESPONSE,
+  EMPTY_ISSUE_DOCUMENT_GROUP_LIST_RESPONSE,
   EMPTY_ISSUE_DOCUMENT_DETAIL,
   EMPTY_ISSUE_DOCUMENT_VERSIONS_RESPONSE,
   EMPTY_ISSUE_PULL_REQUESTS_RESPONSE,
@@ -803,6 +807,27 @@ export class ApiClient {
     const raw = await this.fetch<unknown>(`/api/issue-documents?${search}`);
     return parseWithFallback(raw, IssueDocumentListResponseSchema, EMPTY_ISSUE_DOCUMENT_LIST_RESPONSE, {
       endpoint: "GET /api/issue-documents",
+    });
+  }
+
+  /**
+   * Grouped-by-issue list (CLO-471): GET /api/issue-documents?group=issue.
+   * Returns each issue as a bucket of its matching documents, ordered by issue
+   * number with documents sorted within a group by `sort`/`order`. Filtering
+   * (type/status/q) applies before grouping.
+   */
+  async listIssueDocumentGroups(params?: ListIssueDocumentGroupsParams): Promise<IssueDocumentGroupListResponse> {
+    const search = new URLSearchParams();
+    if (params?.type) search.set("type", params.type);
+    if (params?.status) search.set("status", params.status);
+    if (params?.issue_id) search.set("issue_id", params.issue_id);
+    if (params?.q?.trim()) search.set("q", params.q.trim());
+    if (params?.sort) search.set("sort", params.sort);
+    if (params?.order) search.set("order", params.order);
+    search.set("group", "issue");
+    const raw = await this.fetch<unknown>(`/api/issue-documents?${search}`);
+    return parseWithFallback(raw, IssueDocumentGroupListResponseSchema, EMPTY_ISSUE_DOCUMENT_GROUP_LIST_RESPONSE, {
+      endpoint: "GET /api/issue-documents?group=issue",
     });
   }
 

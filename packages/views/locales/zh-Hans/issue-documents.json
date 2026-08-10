@@ -47,7 +47,16 @@
   "filters": {
     "all_types": "全部类型",
     "all_statuses": "全部状态",
-    "search": "搜索标题或 issue..."
+    "search": "搜索标题或 issue...",
+    "sort_by": "文档排序依据",
+    "sort_direction": "切换排序方向",
+    "sort": {
+      "type": "类型",
+      "updated_at": "更新时间",
+      "title": "标题",
+      "status": "状态",
+      "version": "版本"
+    }
   },
   "detail": {
     "versions": "版本历史",

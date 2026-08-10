@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   EMPTY_ISSUE_DOCUMENT_DETAIL,
+  EMPTY_ISSUE_DOCUMENT_GROUP_LIST_RESPONSE,
   EMPTY_ISSUE_DOCUMENT_LIST_RESPONSE,
   EMPTY_ISSUE_DOCUMENT_VERSIONS_RESPONSE,
+  IssueDocumentGroupListResponseSchema,
   IssueDocumentListResponseSchema,
   IssueDocumentDetailResponseSchema,
   IssueDocumentVersionsResponseSchema,
@@ -70,6 +72,41 @@ describe("issue document schemas", () => {
       { endpoint: "test" },
     );
     expect(result.content).toBe("# heading");
+  });
+
+  it("parses a grouped-by-issue response", () => {
+    const result = parseWithFallback(
+      {
+        groups: [
+          {
+            issue_id: "22222222-2222-2222-2222-222222222222",
+            issue_identifier: "MUL-1",
+            issue_title: "Test issue",
+            items: [baseDocument],
+            total: 1,
+          },
+        ],
+        total: 1,
+      },
+      IssueDocumentGroupListResponseSchema,
+      EMPTY_ISSUE_DOCUMENT_GROUP_LIST_RESPONSE,
+      { endpoint: "test" },
+    );
+    expect(result.total).toBe(1);
+    expect(result.groups).toHaveLength(1);
+    expect(result.groups[0]?.issue_identifier).toBe("MUL-1");
+    expect(result.groups[0]?.items[0]?.title).toBe("requirement.md");
+    expect(result.groups[0]?.total).toBe(1);
+  });
+
+  it("degrades a malformed grouped response to the empty fallback", () => {
+    const result = parseWithFallback(
+      { groups: "not-an-array" },
+      IssueDocumentGroupListResponseSchema,
+      EMPTY_ISSUE_DOCUMENT_GROUP_LIST_RESPONSE,
+      { endpoint: "test" },
+    );
+    expect(result).toEqual(EMPTY_ISSUE_DOCUMENT_GROUP_LIST_RESPONSE);
   });
 
   it("parses a versions response", () => {

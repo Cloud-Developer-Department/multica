@@ -10,8 +10,8 @@ afterEach(() => {
 });
 
 describe("issue-documents server-side sort", () => {
-  it("defaults to updated_at desc", () => {
-    expect(DEFAULT_DOCUMENT_SORT).toEqual({ field: "updated_at", direction: "desc" });
+  it("defaults to type (stage order) asc for the grouped view", () => {
+    expect(DEFAULT_DOCUMENT_SORT).toEqual({ field: "type", direction: "asc" });
   });
 
   it("sends sort / order to the list endpoint", async () => {

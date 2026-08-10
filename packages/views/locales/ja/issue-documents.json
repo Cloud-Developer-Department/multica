@@ -47,7 +47,16 @@
   "filters": {
     "all_types": "すべての種類",
     "all_statuses": "すべてのステータス",
-    "search": "タイトルまたはイシューを検索..."
+    "search": "タイトルまたはイシューを検索...",
+    "sort_by": "文書の並び替え",
+    "sort_direction": "並び順を切り替え",
+    "sort": {
+      "type": "種類",
+      "updated_at": "更新日時",
+      "title": "タイトル",
+      "status": "ステータス",
+      "version": "バージョン"
+    }
   },
   "detail": {
     "versions": "バージョン",

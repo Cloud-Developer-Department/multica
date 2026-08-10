@@ -12,6 +12,7 @@ import {
 import type { IssueDocumentStatus, IssueDocumentType } from "@multica/core/types";
 import { useT } from "../../i18n";
 import { CollectionPageHeader } from "../../layout/collection-page";
+import type { DocumentSort, DocumentSortField } from "./document-list";
 
 export const ISSUE_DOCUMENT_TYPES: IssueDocumentType[] = [
   "requirements",
@@ -33,6 +34,14 @@ export const ISSUE_DOCUMENT_STATUSES: IssueDocumentStatus[] = [
   "superseded",
 ];
 
+export const ISSUE_DOCUMENT_SORT_FIELDS: DocumentSortField[] = [
+  "type",
+  "updated_at",
+  "title",
+  "status",
+  "version",
+];
+
 export type DocumentTypeFilter = IssueDocumentType | "all";
 export type DocumentStatusFilter = IssueDocumentStatus | "all";
 
@@ -41,9 +50,12 @@ interface DocumentToolbarProps {
   typeFilter: DocumentTypeFilter;
   statusFilter: DocumentStatusFilter;
   search: string;
+  sort: DocumentSort;
   onTypeFilterChange: (value: DocumentTypeFilter) => void;
   onStatusFilterChange: (value: DocumentStatusFilter) => void;
   onSearchChange: (value: string) => void;
+  onSortFieldChange: (field: DocumentSortField) => void;
+  onSortDirectionChange: () => void;
 }
 
 /** Page header + filter/search toolbar for the Issue Documents tab. */
@@ -52,9 +64,12 @@ export function DocumentToolbar({
   typeFilter,
   statusFilter,
   search,
+  sort,
   onTypeFilterChange,
   onStatusFilterChange,
   onSearchChange,
+  onSortFieldChange,
+  onSortDirectionChange,
 }: DocumentToolbarProps) {
   const { t } = useT("issue-documents");
 
@@ -72,6 +87,10 @@ export function DocumentToolbar({
       label: t(($) => $.statuses[status]),
     })),
   ];
+  const sortItems = ISSUE_DOCUMENT_SORT_FIELDS.map((field) => ({
+    value: field,
+    label: t(($) => $.filters.sort[field]),
+  }));
 
   return (
     <>
@@ -116,6 +135,36 @@ export function DocumentToolbar({
             ))}
           </SelectContent>
         </Select>
+        <Select
+          items={sortItems}
+          value={sort.field}
+          onValueChange={(v) => onSortFieldChange((v as DocumentSortField) ?? "type")}
+        >
+          <SelectTrigger
+            className="h-8 w-40"
+            aria-label={t(($) => $.filters.sort_by)}
+            title={t(($) => $.filters.sort_by)}
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {sortItems.map((item) => (
+              <SelectItem key={item.value} value={item.value}>
+                {item.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <button
+          type="button"
+          onClick={onSortDirectionChange}
+          className="inline-flex h-8 items-center gap-1 rounded-md border border-border px-2.5 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          aria-label={t(($) => $.filters.sort_direction)}
+          title={t(($) => $.filters.sort_direction)}
+        >
+          {sort.direction === "asc" ? "↑" : "↓"}
+          {t(($) => $.filters.sort[sort.field])}
+        </button>
         <div className="relative min-w-0 flex-1 md:max-w-xs">
           <Search
             aria-hidden="true"

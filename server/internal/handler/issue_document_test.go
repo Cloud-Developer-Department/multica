@@ -221,6 +221,131 @@ func TestIssueDocumentFilters(t *testing.T) {
 	}
 }
 
+// TestIssueDocumentGroupedByIssue verifies the grouped-by-issue list mode
+// (group=issue, CLO-471): documents are bucketed under their issue, group
+// headers carry the issue identifier/title, filters apply before grouping, and
+// documents within a group are ordered by the requested sort (default: R&D
+// stage order via `type`).
+func TestIssueDocumentGroupedByIssue(t *testing.T) {
+	issueA := newIssueDocumentFixture(t)
+	issueB := newIssueDocumentFixture(t)
+
+	submit := func(issueID, docType, title string) {
+		t.Helper()
+		w := httptest.NewRecorder()
+		req := newRequest("POST", "/api/issue-documents", map[string]any{
+			"issue_id": issueID,
+			"type":     docType,
+			"title":    title,
+			"content":  "# " + title,
+		})
+		testHandler.CreateIssueDocument(w, req)
+		if w.Code != http.StatusCreated {
+			t.Fatalf("CreateIssueDocument(%s/%s): expected 201, got %d: %s", issueID, title, w.Code, w.Body.String())
+		}
+	}
+
+	submit(issueA, "requirements", "aaa_requirements.md")
+	submit(issueA, "deployment", "deployment.md")
+	submit(issueA, "architecture", "architecture.md")
+	submit(issueB, "testing", "test_report.md")
+
+	// Order of issue creation matches the auto-incrementing issue number, so
+	// issueA has the lower number and must appear as the first group.
+	var prefix string
+	if err := testPool.QueryRow(context.Background(), `SELECT issue_prefix FROM workspace WHERE id = $1`, testWorkspaceID).Scan(&prefix); err != nil {
+		t.Fatalf("load workspace issue_prefix: %v", err)
+	}
+	loadNumber := func(issueID string) int {
+		t.Helper()
+		var n int
+		if err := testPool.QueryRow(context.Background(), `SELECT number FROM issue WHERE id = $1`, issueID).Scan(&n); err != nil {
+			t.Fatalf("load issue number: %v", err)
+		}
+		return n
+	}
+	numA, numB := loadNumber(issueA), loadNumber(issueB)
+
+	w := httptest.NewRecorder()
+	req := newRequest("GET", "/api/issue-documents?group=issue", nil)
+	testHandler.ListIssueDocuments(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("grouped list: expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var body struct {
+		Groups []IssueDocumentGroupResponse `json:"groups"`
+		Total  int                          `json:"total"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&body); err != nil {
+		t.Fatalf("decode grouped list: %v", err)
+	}
+	if body.Total != 4 || len(body.Groups) != 2 {
+		t.Fatalf("expected 4 documents in 2 groups, got total=%d groups=%d", body.Total, len(body.Groups))
+	}
+	first := body.Groups[0]
+	if first.IssueIdentifier != fmt.Sprintf("%s-%d", prefix, numA) {
+		t.Fatalf("first group identifier: expected %s-%d, got %s", prefix, numA, first.IssueIdentifier)
+	}
+	if first.Total != 3 || len(first.Items) != 3 {
+		t.Fatalf("issue A group: expected 3 documents, got total=%d items=%d", first.Total, len(first.Items))
+	}
+	// Default within-group sort is the R&D stage order: requirements first.
+	if first.Items[0].Type != "requirements" {
+		t.Fatalf("issue A first item: expected requirements (stage order), got %s", first.Items[0].Type)
+	}
+	if first.Items[0].Title != "aaa_requirements.md" {
+		t.Fatalf("issue A first item title: expected aaa_requirements.md, got %s", first.Items[0].Title)
+	}
+	second := body.Groups[1]
+	if second.IssueIdentifier != fmt.Sprintf("%s-%d", prefix, numB) || second.Total != 1 {
+		t.Fatalf("second group: expected %s-%d with 1 doc, got %s/%d", prefix, numB, second.IssueIdentifier, second.Total)
+	}
+
+	// A type filter applies before grouping: only the deployment doc survives.
+	w = httptest.NewRecorder()
+	req = newRequest("GET", "/api/issue-documents?group=issue&type=deployment", nil)
+	testHandler.ListIssueDocuments(w, req)
+	if err := json.NewDecoder(w.Body).Decode(&body); err != nil {
+		t.Fatalf("decode filtered grouped list: %v", err)
+	}
+	if body.Total != 1 || len(body.Groups) != 1 || body.Groups[0].Items[0].Type != "deployment" {
+		t.Fatalf("grouped type filter: expected 1 deployment doc in 1 group, got total=%d groups=%d", body.Total, len(body.Groups))
+	}
+
+	// A q filter applies before grouping too.
+	w = httptest.NewRecorder()
+	req = newRequest("GET", "/api/issue-documents?group=issue&q=test_report", nil)
+	testHandler.ListIssueDocuments(w, req)
+	if err := json.NewDecoder(w.Body).Decode(&body); err != nil {
+		t.Fatalf("decode q-filtered grouped list: %v", err)
+	}
+	if body.Total != 1 || body.Groups[0].Items[0].Title != "test_report.md" {
+		t.Fatalf("grouped q filter: expected 1 hit, got total=%d", body.Total)
+	}
+
+	// Explicit within-group sort by title asc.
+	w = httptest.NewRecorder()
+	req = newRequest("GET", "/api/issue-documents?group=issue&sort=title&order=asc", nil)
+	testHandler.ListIssueDocuments(w, req)
+	if err := json.NewDecoder(w.Body).Decode(&body); err != nil {
+		t.Fatalf("decode sorted grouped list: %v", err)
+	}
+	if body.Groups[0].Items[0].Title != "aaa_requirements.md" {
+		t.Fatalf("title asc: expected aaa_requirements.md first, got %s", body.Groups[0].Items[0].Title)
+	}
+	if body.Groups[0].Items[len(body.Groups[0].Items)-1].Title != "deployment.md" {
+		t.Fatalf("title asc: expected deployment.md last, got %s", body.Groups[0].Items[len(body.Groups[0].Items)-1].Title)
+	}
+
+	// An invalid sort value is rejected in grouped mode too.
+	w = httptest.NewRecorder()
+	req = newRequest("GET", "/api/issue-documents?group=issue&sort=injected_column", nil)
+	testHandler.ListIssueDocuments(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("grouped invalid sort: expected 400, got %d", w.Code)
+	}
+}
+
 // TestGetIssueDocumentCrossWorkspace ensures a document in another workspace
 // is not visible (404).
 func TestGetIssueDocumentCrossWorkspace(t *testing.T) {
