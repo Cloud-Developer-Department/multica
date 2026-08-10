@@ -114,8 +114,8 @@ func (q *Queries) CountSquadMembers(ctx context.Context, squadID pgtype.UUID) (i
 }
 
 const createSquad = `-- name: CreateSquad :one
-INSERT INTO squad (workspace_id, name, description, leader_id, creator_id, avatar_url, upgrade_on_member_mention)
-VALUES ($1, $2, $3, $4, $5, $6, COALESCE($7, true))
+INSERT INTO squad (workspace_id, name, description, leader_id, creator_id, avatar_url, instructions, upgrade_on_member_mention)
+VALUES ($1, $2, $3, $4, $5, $6, $7, COALESCE($8, true))
 RETURNING id, workspace_id, name, description, leader_id, creator_id, created_at, updated_at, archived_at, archived_by, avatar_url, instructions, parent_squad_id, upgrade_on_member_mention
 `
 
@@ -126,6 +126,7 @@ type CreateSquadParams struct {
 	LeaderID               pgtype.UUID `json:"leader_id"`
 	CreatorID              pgtype.UUID `json:"creator_id"`
 	AvatarUrl              pgtype.Text `json:"avatar_url"`
+	Instructions           string      `json:"instructions"`
 	UpgradeOnMemberMention pgtype.Bool `json:"upgrade_on_member_mention"`
 }
 
@@ -137,6 +138,7 @@ func (q *Queries) CreateSquad(ctx context.Context, arg CreateSquadParams) (Squad
 		arg.LeaderID,
 		arg.CreatorID,
 		arg.AvatarUrl,
+		arg.Instructions,
 		arg.UpgradeOnMemberMention,
 	)
 	var i Squad

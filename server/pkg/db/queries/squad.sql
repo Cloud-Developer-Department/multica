@@ -1,6 +1,13 @@
 -- name: CreateSquad :one
-INSERT INTO squad (workspace_id, name, description, leader_id, creator_id, avatar_url, upgrade_on_member_mention)
-VALUES ($1, $2, $3, $4, $5, $6, COALESCE(sqlc.narg('upgrade_on_member_mention'), true))
+-- CLO-250 DEF-4 (architect ruling): instructions is part of the portable
+-- squad contract (SquadSpec) and the column already exists (088_squad_instructions),
+-- but the insert previously omitted it, so template-apply squads could never
+-- carry instructions; they only could be patched afterwards via UpdateSquad.
+-- model / permission_mode are agent-level concepts and must NOT be added here.
+-- upgrade_on_member_mention (LIU-13): COALESCE defaults to true so callers
+-- that omit it keep the member-mention auto-upgrade behavior.
+INSERT INTO squad (workspace_id, name, description, leader_id, creator_id, avatar_url, instructions, upgrade_on_member_mention)
+VALUES ($1, $2, $3, $4, $5, $6, $7, COALESCE(sqlc.narg('upgrade_on_member_mention'), true))
 RETURNING *;
 
 -- name: GetSquad :one
