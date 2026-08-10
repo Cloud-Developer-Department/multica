@@ -564,6 +564,29 @@ The `usage` command returns the aggregated token usage for an issue, summed acro
 
 The `runs` command shows all past and current executions for an issue, including running tasks. Table output uses short task UUID prefixes by default; pass `--full-id` to print canonical task UUIDs. The `run-messages` command accepts full task UUIDs directly; copied short task prefixes must be scoped with `--issue <issue-id>` so the CLI only checks that issue's runs. It shows the detailed message log (tool calls, thinking, text, errors) for a single run. Use `--since` for efficient polling of in-progress runs.
 
+### Issue Documents
+
+The **Issue Documents** tab (below **Usage** in the sidebar, at `/{slug}/issue-documents`) aggregates the intermediate documents an issue produces across its R&D flow — requirements, architecture, test reports, code-review and security-audit conclusions, deployment notes, and so on. It is a read-only view for developers; documents are registered through the CLI write channel below (or the `POST /api/issue-documents` endpoint used by flow agents).
+
+```bash
+# Submit a new version of a flow document for an issue.
+# Every submission bumps the (issue, type) version; the previous version is
+# marked 'superseded' and stays in version history.
+multica issue documents submit <issue-id> \
+  --type requirements --title requirement.md --content-file ./requirement.md
+
+# Inline content (markdown/json/text) also works via --content / --content-stdin
+multica issue documents submit <issue-id> \
+  --type architecture --title architecture.md --content "# Overview ..."
+
+# File documents reference an uploaded attachment id instead of inline content
+multica issue documents submit <issue-id> \
+  --type deployment --title deploy-notes.md \
+  --content-type file --file-attachment-id <attachment-id>
+```
+
+Flags: `--type` (required; one of `requirements`, `architecture`, `development`, `testing`, `code_review`, `security`, `documentation`, `deployment`, `other`), `--title` (required), `--content` / `--content-file` / `--content-stdin` (inline body for `markdown` (default) / `json` / `text` documents), `--content-type` (`markdown` | `json` | `text` | `file`), `--file-attachment-id` (required for `file` documents), `--status` (`draft` or `submitted`, default `submitted`; review states like `approved`/`rejected` are set by workspace owners/admins and `superseded` is server-managed). On Windows prefer `--content-file` for UTF-8 bodies. On the web/desktop UI, view the result in **Issue Documents** under **Usage**.
+
 ## Projects
 
 Projects group related issues (e.g. a sprint, an epic, a workstream). Every project

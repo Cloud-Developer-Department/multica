@@ -9,6 +9,7 @@
     "workspaces",
     "members-roles",
     "issues",
+    "issue-documents",
     "projects",
     "comments",
     "project-resources",

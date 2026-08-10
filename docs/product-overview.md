@@ -173,6 +173,7 @@ Issue 对应的概念在 Linear 叫 Issue、在 Jira 叫 Ticket、在 GitHub 叫
 - **List 列表视图**：表格形式，可按 status/priority/assignee/creator/project 过滤、按名称/优先级/截止日/手动位置排序；支持开放和已完成分页。
 - **Board 看板视图**：Kanban，按状态分列；支持拖拽（拖动会自动切到"手动排序"模式）。
 - **My Issues 我的议题**：专属视图，三个 scope：分配给我 / 我创建的 / 我的 agent 负责的。
+- **Issue Documents 流程文档**：位于「用量」下方的顶层标签页（`/{slug}/issue-documents`），按 issue 整合其软件研发流程各阶段产出的中间文档（需求文档、架构文档、测试报告、代码审查/安全审计结论、部署报告等）。列表支持文档类型/审核状态过滤、关键词搜索（标题/issue 标识符/作者）与多列排序（默认按更新时间降序）；点击行在右侧抽屉在线阅读正文（markdown/文本）或下载文件型文档，并查看同一 (issue, type) 的版本历史。页面为**只读**，文档由各阶段通过 CLI `multica issue documents submit` / `POST /api/issue-documents` 登记写入。
 
 #### 交互
 
@@ -208,7 +209,7 @@ Issue 是**所有工作流的载体**：
 
 #### 对应表
 
-`issue`, `comment`, `issue_label`, `issue_to_label`, `issue_dependency`, `issue_subscriber`, `issue_reaction`, `comment_reaction`, `attachment`, `activity_log`, `pinned_item`
+`issue`, `comment`, `issue_label`, `issue_to_label`, `issue_dependency`, `issue_subscriber`, `issue_reaction`, `comment_reaction`, `attachment`, `activity_log`, `pinned_item`, `issue_document`
 
 ---
 
@@ -699,6 +700,7 @@ multica issue list | get | create | update | assign | status
 multica issue comment list | add | delete
 multica issue runs <id>                 # 查看任务执行历史
 multica issue run-messages <task-id>    # 查看某次执行的消息
+multica issue documents submit <id> ... # 登记 issue 流程文档的新版本（Issue 流程文档标签页的数据来源）
 ```
 
 #### Agent / Skill / Autopilot / Project / Repo
@@ -858,6 +860,7 @@ Server 启动三个 goroutine：
 - `/runtimes` — Runtime 列表
 - `/skills` — Skill 库
 - `/inbox` — 收件箱
+- `/issue-documents` — Issue 流程文档（位于「用量」下方，按 issue 整合流程中间产物文档；见 §3.2）
 - `/settings` — 设置（包含多个 tab：profile / appearance / tokens / workspace / members / repos / daemon / updates）
 
 ### 桌面端特有（不是路由，是 WindowOverlay）
@@ -904,7 +907,7 @@ Web 有 URL 栏——错误状态（比如"你没有访问这个 workspace 的�
 
 ## 7. 附录：关键数据表速查
 
-共 **28 张表**，覆盖 10 个产品域。以下按域列出最重要的字段，供文案/产品查询"某个功能背后到底存了什么"。
+共 **29 张表**，覆盖 10 个产品域。以下按域列出最重要的字段，供文案/产品查询"某个功能背后到底存了什么"。
 
 ### 身份 / 认证
 
@@ -937,6 +940,7 @@ Web 有 URL 栏——错误状态（比如"你没有访问这个 workspace 的�
 - `issue_reaction` / `comment_reaction` — emoji 反应
 - `comment` — 评论（type: comment/status_change/progress_update/system, parent_id for threading）
 - `attachment` — 附件
+- `issue_document` — Issue 流程文档（type: requirements/architecture/development/testing/code_review/security/documentation/deployment/other；status: draft/submitted/approved/rejected/superseded；version 每 (issue_id, type) 递增，旧版置 superseded 保留历史）
 
 ### 任务执行
 

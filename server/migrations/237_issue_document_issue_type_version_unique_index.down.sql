@@ -1,0 +1,1 @@
+DROP INDEX CONCURRENTLY IF EXISTS idx_issue_document_issue_type_version;
