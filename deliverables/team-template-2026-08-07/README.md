@@ -16,7 +16,7 @@
 | `04-tests/` | Dev-Task C | **team-template handler 单测报告**（12 用例全绿），见 `team-template-handler-tests.md` |
 | `05-review/` | QA | **Test Report + 九轴审查 + 安全审计 + 审批结论**（qa-reviewer，SGD-21），见 `test_report.md` / `review_report.md` / `approval_status.json` |
 | `06-docs/` | QA | **接口文档 + 模板格式说明**（qa-reviewer，SGD-21），见 `team-template-api.md` / `team-template-format.md` |
-| `07-deployment/` | DevOps | **基线回归报告**（3 失败确证与 teamtmpl 无关）+ **容器化 race 回归环境标准**，见 `baseline-regression-report.md` / `race-regression-env.md` |
+| `07-deployment/` | DevOps | **基线回归报告**（3 失败确证与 teamtmpl 无关）+ **容器化 race 回归环境标准** + **阶段4 部署/HealthCheck/收口 PR 报告**，见 `baseline-regression-report.md` / `race-regression-env.md` / `deployment-report.md` |
 
 ## 关键结论
 
