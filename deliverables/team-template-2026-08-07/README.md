@@ -14,6 +14,9 @@
 | `03-code/` | Dev-Task D | **首个模板 JSON** `equipment-department-1-3-9`（10 agent + 3 squad + 1 skill），见 `equipment-department-template.md` |
 | `04-tests/` | Dev-Task A | **teamtmpl 单测报告**（17 用例全绿），见 `teamtmpl-tests.md` |
 | `04-tests/` | Dev-Task C | **team-template handler 单测报告**（12 用例全绿），见 `team-template-handler-tests.md` |
+| `05-review/` | QA | **九轴审查 + 安全审计**（qa-reviewer 交付中），见 `05-review/` |
+| `06-docs/` | QA | **接口/模板文档**（qa-reviewer 交付中），见 `06-docs/` |
+| `07-deployment/` | DevOps | **基线回归报告**（3 失败确证与 teamtmpl 无关）+ **容器化 race 回归环境标准**，见 `baseline-regression-report.md` / `race-regression-env.md` |
 
 ## 关键结论
 
