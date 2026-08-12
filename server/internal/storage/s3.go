@@ -209,6 +209,19 @@ func (s *S3Storage) storageClass() types.StorageClass {
 //
 //	"https://my-bucket.s3.us-east-1.amazonaws.com/uploads/x/y.png" → "uploads/x/y.png"
 func (s *S3Storage) KeyFromURL(rawURL string) string {
+	// Strip query string and fragment so presigned URLs (which carry
+	// ?X-Amz-* query params) are reduced to a plain object path before
+	// prefix matching. Without this, DownloadAttachment and
+	// GetAttachmentContent extract a key that includes the query string,
+	// which does not match the actual S3 object key — producing
+	// NoSuchKey on every access.
+	if idx := strings.IndexByte(rawURL, '?'); idx >= 0 {
+		rawURL = rawURL[:idx]
+	}
+	if idx := strings.IndexByte(rawURL, '#'); idx >= 0 {
+		rawURL = rawURL[:idx]
+	}
+
 	if s.endpointURL != "" {
 		for _, prefix := range []string{
 			customEndpointObjectPrefix(s.endpointURL, s.bucket, true),
