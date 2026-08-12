@@ -23,12 +23,14 @@ import (
 // extContentTypes overrides http.DetectContentType for extensions it gets wrong.
 // Go's sniffer returns text/xml for SVG, text/plain for CSS/JS, etc.
 var extContentTypes = map[string]string{
-	".svg":  "image/svg+xml",
-	".css":  "text/css",
-	".js":   "application/javascript",
-	".mjs":  "application/javascript",
-	".json": "application/json",
-	".wasm": "application/wasm",
+	".svg":      "image/svg+xml",
+	".css":      "text/css",
+	".js":       "application/javascript",
+	".mjs":      "application/javascript",
+	".json":     "application/json",
+	".wasm":     "application/wasm",
+	".md":       "text/markdown",
+	".markdown": "text/markdown",
 }
 
 const maxUploadSize = 100 << 20 // 100 MB
