@@ -1,0 +1,59 @@
+{
+  "page": {
+    "title": "フィードバックセンター",
+    "subtitle": "Multica の改善にご協力ください。バグ報告、機能提案、使い勝手のフィードバックを投稿し、他のユーザーと一緒に製品をより良くしていきましょう。",
+    "submit": "フィードバックを送信",
+    "search_placeholder": "フィードバックを検索…",
+    "sort_label": "並べ替え",
+    "sort_latest": "最新",
+    "sort_hot": "人気順",
+    "sort_comments": "コメント数順",
+    "load_more": "読み込み中…",
+    "comment_count_other": "コメント {{count}} 件",
+    "back": "フィードバックセンターに戻る",
+    "load_failed": "フィードバックの読み込みに失敗しました",
+    "reload": "再読み込み",
+    "not_found": "フィードバックが見つかりません",
+    "not_found_description": "このフィードバックは存在しないか、削除された可能性があります。",
+    "empty_title": "まだフィードバックはありません",
+    "empty_description": "最初に Multica の改善方法を教えてください。",
+    "empty_action": "最初のフィードバックを送信",
+    "empty_search_title": "フィードバックが見つかりませんでした",
+    "empty_search_description": "キーワードまたはフィルターを変更してみてください。",
+    "submit_failed": "フィードバックの送信に失敗しました。しばらくしてからお試しください。",
+    "comment_failed": "コメントの送信に失敗しました。しばらくしてからお試しください。"
+  },
+  "types": {
+    "all": "すべて",
+    "bug": "バグ報告",
+    "feature": "機能提案",
+    "improvement": "改善提案",
+    "other": "その他"
+  },
+  "vote": {
+    "support": "サポート",
+    "supported": "サポート済み",
+    "toggle_failed": "操作に失敗しました。しばらくしてからお試しください。"
+  },
+  "comments": {
+    "title": "コメント",
+    "placeholder": "コメントを投稿…",
+    "send": "送信",
+    "sending": "送信中…",
+    "empty": "まだコメントはありません。最初のコメントを投稿しましょう。"
+  },
+  "submit_dialog": {
+    "title": "フィードバックを送信",
+    "type_label": "種類",
+    "title_label": "タイトル",
+    "title_placeholder": "フィードバックを一言でまとめてください",
+    "description_label": "詳細な説明",
+    "description_placeholder": "問題や提案を詳しく説明してください…",
+    "cancel": "キャンセル",
+    "submit": "送信",
+    "submitting": "送信中…",
+    "title_required": "タイトルを入力してください",
+    "description_required": "詳細な説明を入力してください",
+    "toast_sent": "フィードバックありがとうございます！"
+  }
+}
