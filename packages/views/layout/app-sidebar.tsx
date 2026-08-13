@@ -124,7 +124,8 @@ type NavKey =
   | "issueDocuments"
   | "runtimes"
   | "skills"
-  | "settings";
+  | "settings"
+  | "feedback";
 
 // Static schema (key only) — labels resolved at render via useT("layout"),
 // icons derived from the destination path via routeIconForPath.
@@ -141,7 +142,8 @@ type NavLabelKey =
   | "issue_documents"
   | "runtimes"
   | "skills"
-  | "settings";
+  | "settings"
+  | "feedback";
 
 // Nav icons are NOT declared here: they are derived from each item's
 // destination path at render time, so the sidebar and the desktop tab bar
@@ -168,6 +170,7 @@ const aiTeamNav: { key: NavKey; labelKey: NavLabelKey }[] = [
 const utilityNav: { key: NavKey; labelKey: NavLabelKey }[] = [
   { key: "usage", labelKey: "usage" },
   { key: "issueDocuments", labelKey: "issue_documents" },
+  { key: "feedback", labelKey: "feedback" },
   { key: "settings", labelKey: "settings" },
 ];
 

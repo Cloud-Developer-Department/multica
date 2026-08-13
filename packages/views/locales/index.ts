@@ -25,6 +25,7 @@ import enIssueDocuments from "./en/issue-documents.json";
 import enUi from "./en/ui.json";
 import enSquads from "./en/squads.json";
 import enBilling from "./en/billing.json";
+import enFeedback from "./en/feedback.json";
 import zhHansCommon from "./zh-Hans/common.json";
 import zhHansAuth from "./zh-Hans/auth.json";
 import zhHansSettings from "./zh-Hans/settings.json";
@@ -51,6 +52,7 @@ import zhHansIssueDocuments from "./zh-Hans/issue-documents.json";
 import zhHansUi from "./zh-Hans/ui.json";
 import zhHansSquads from "./zh-Hans/squads.json";
 import zhHansBilling from "./zh-Hans/billing.json";
+import zhHansFeedback from "./zh-Hans/feedback.json";
 import koCommon from "./ko/common.json";
 import koAuth from "./ko/auth.json";
 import koSettings from "./ko/settings.json";
@@ -77,6 +79,7 @@ import koIssueDocuments from "./ko/issue-documents.json";
 import koUi from "./ko/ui.json";
 import koSquads from "./ko/squads.json";
 import koBilling from "./ko/billing.json";
+import koFeedback from "./ko/feedback.json";
 import jaCommon from "./ja/common.json";
 import jaAuth from "./ja/auth.json";
 import jaSettings from "./ja/settings.json";
@@ -103,6 +106,7 @@ import jaIssueDocuments from "./ja/issue-documents.json";
 import jaUi from "./ja/ui.json";
 import jaSquads from "./ja/squads.json";
 import jaBilling from "./ja/billing.json";
+import jaFeedback from "./ja/feedback.json";
 import frCommon from "./fr/common.json";
 import frAuth from "./fr/auth.json";
 import frSettings from "./fr/settings.json";
@@ -160,6 +164,7 @@ export const RESOURCES: Record<SupportedLocale, LocaleResources> = {
     ui: enUi,
     squads: enSquads,
     billing: enBilling,
+    feedback: enFeedback,
   },
   "zh-Hans": {
     common: zhHansCommon,
@@ -188,6 +193,7 @@ export const RESOURCES: Record<SupportedLocale, LocaleResources> = {
     ui: zhHansUi,
     squads: zhHansSquads,
     billing: zhHansBilling,
+    feedback: zhHansFeedback,
   },
   ko: {
     common: koCommon,
@@ -216,6 +222,7 @@ export const RESOURCES: Record<SupportedLocale, LocaleResources> = {
     ui: koUi,
     squads: koSquads,
     billing: koBilling,
+    feedback: koFeedback,
   },
   ja: {
     common: jaCommon,
@@ -244,6 +251,7 @@ export const RESOURCES: Record<SupportedLocale, LocaleResources> = {
     ui: jaUi,
     squads: jaSquads,
     billing: jaBilling,
+    feedback: jaFeedback,
   },
   fr: {
     common: frCommon,
