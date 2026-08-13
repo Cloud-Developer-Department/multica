@@ -89,6 +89,14 @@ describe("resolveTabPresentation — direct resources", () => {
       visual: { kind: "icon", icon: "Server" },
       title: { kind: "text", text: "cloud-1" },
     });
+    expect(present("/acme/feedback")).toEqual({
+      visual: { kind: "icon", icon: "MessageCircle" },
+      title: { kind: "nav", navKey: "feedback" },
+    });
+    expect(present("/acme/feedback/fb1")).toEqual({
+      visual: { kind: "icon", icon: "MessageCircle" },
+      title: { kind: "nav", navKey: "feedback" },
+    });
   });
 
   it("attachment shows the filename and a matching file icon, falling back only when missing", () => {
