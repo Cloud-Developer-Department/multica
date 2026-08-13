@@ -1,0 +1,59 @@
+{
+  "page": {
+    "title": "피드백 센터",
+    "subtitle": "Multica 개선을 도와주세요. 버그 신고, 기능 제안, 사용 경험 피드백을 등록하고 다른 사용자와 함께 제품을 개선해 보세요.",
+    "submit": "피드백 제출",
+    "search_placeholder": "피드백 검색…",
+    "sort_label": "정렬",
+    "sort_latest": "최신순",
+    "sort_hot": "인기순",
+    "sort_comments": "댓글 많은 순",
+    "load_more": "불러오는 중…",
+    "comment_count_other": "댓글 {{count}}개",
+    "back": "피드백 센터로 돌아가기",
+    "load_failed": "피드백을 불러오지 못했습니다",
+    "reload": "다시 로드",
+    "not_found": "피드백을 찾을 수 없습니다",
+    "not_found_description": "이 피드백은 존재하지 않거나 삭제되었을 수 있습니다.",
+    "empty_title": "아직 피드백이 없습니다",
+    "empty_description": "Multica를 개선할 첫 번째 의견을 남겨주세요.",
+    "empty_action": "첫 번째 피드백 제출",
+    "empty_search_title": "관련 피드백을 찾을 수 없습니다",
+    "empty_search_description": "다른 키워드나 필터를 시도해 보세요.",
+    "submit_failed": "피드백 제출에 실패했습니다. 잠시 후 다시 시도해 주세요.",
+    "comment_failed": "댓글 전송에 실패했습니다. 잠시 후 다시 시도해 주세요."
+  },
+  "types": {
+    "all": "전체",
+    "bug": "버그 신고",
+    "feature": "기능 제안",
+    "improvement": "개선 제안",
+    "other": "기타"
+  },
+  "vote": {
+    "support": "지원",
+    "supported": "지원함",
+    "toggle_failed": "작업에 실패했습니다. 잠시 후 다시 시도해 주세요."
+  },
+  "comments": {
+    "title": "댓글",
+    "placeholder": "댓글 작성…",
+    "send": "전송",
+    "sending": "전송 중…",
+    "empty": "아직 댓글이 없습니다. 첫 번째 댓글을 남겨보세요."
+  },
+  "submit_dialog": {
+    "title": "피드백 제출",
+    "type_label": "유형",
+    "title_label": "제목",
+    "title_placeholder": "피드백을 한 줄로 요약해 주세요",
+    "description_label": "상세 설명",
+    "description_placeholder": "문제 또는 제안을 자세히 설명해 주세요…",
+    "cancel": "취소",
+    "submit": "제출",
+    "submitting": "제출 중…",
+    "title_required": "제목을 입력해 주세요",
+    "description_required": "상세 설명을 입력해 주세요",
+    "toast_sent": "피드백 감사합니다!"
+  }
+}
