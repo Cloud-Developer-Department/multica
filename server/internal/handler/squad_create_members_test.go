@@ -141,8 +141,8 @@ func TestCreateSquad_WithMembers_DuplicateIsConflict(t *testing.T) {
 	agentMember := createHandlerTestAgent(t, "F1 Dup Agent", nil)
 
 	w := createSquadWithMembers(t, "F1 Dup Squad", leaderID, []map[string]any{
-		{"member_type": "agent", "member_id": agentMember},
-		{"member_type": "agent", "member_id": agentMember},
+		{"member_type": "agent", "member_id": agentMember, "role": "dev"},
+		{"member_type": "agent", "member_id": agentMember, "role": "dev"},
 	})
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 for duplicate member, got %d: %s", w.Code, w.Body.String())

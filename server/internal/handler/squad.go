@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -152,6 +153,25 @@ func (h *Handler) memberCanWireAgent(ctx context.Context, member db.Member, agen
 	}
 	uid := uuidToString(member.UserID)
 	return h.canInvokeAgent(ctx, agent, "member", uid, uid, workspaceID)
+}
+
+// squadMemberRoleLeader is the role the squad leader carries in squad_member
+// (kept in sync with resourcetmpl.RoleLeader used by template validation).
+const squadMemberRoleLeader = "leader"
+
+// normalizeSquadMemberRole validates a squad-member role. Roles are
+// free-form labels in the product (frontend AddMemberDialog / create-squad
+// accept arbitrary text such as "Reviewer" or "Frontend Lead"); the only
+// hard constraints here are CLO-418: the role must be present and
+// non-whitespace, and no longer than a sane bound so a typo can never
+// produce an empty role that later breaks template export/validation. The
+// canonical "leader" role is reserved for the squad leader.
+func normalizeSquadMemberRole(role string) (string, bool) {
+	r := strings.TrimSpace(role)
+	if r == "" || len(r) > 200 {
+		return "", false
+	}
+	return r, true
 }
 
 // loadSquadInWorkspace loads a squad scoped to the current workspace.
@@ -309,9 +329,10 @@ func (h *Handler) CreateSquad(w http.ResponseWriter, r *http.Request) {
 		LeaderID               string   `json:"leader_id"`
 		AvatarURL              *string  `json:"avatar_url"`
 		IncludedSquadIDs       []string `json:"included_squad_ids"`
-		// F1 (LIU-9 子任务A): optional members added atomically with the create.
+		// Members (CLO-419): optional members added atomically with the create.
 		// Each entry is validated before anything is written; any invalid entry
-		// fails the whole request and the response carries failed_members (B07).
+		// fails the whole request and the response carries failed_members (the
+		// front-end create-squad dialog submits the whole selection in one shot).
 		Members []struct {
 			MemberType string `json:"member_type"`
 			MemberID   string `json:"member_id"`
@@ -358,10 +379,10 @@ func (h *Handler) CreateSquad(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// F1 (LIU-9 子任务A): validate every requested member BEFORE any write.
-	// All-or-nothing semantics (AC-1.3): any invalid member fails the whole
-	// create and the 400 response carries the failed_members list so the
-	// front-end can highlight exactly which entries were rejected (B07).
+	// Validate every requested member BEFORE any write. All-or-nothing
+	// semantics: any invalid member fails the whole create and the 400
+	// response carries the failed_members list so the front-end can highlight
+	// exactly which selections were rejected (CLO-419).
 	type validatedMember struct {
 		memberType string
 		memberID   pgtype.UUID
@@ -389,8 +410,8 @@ func (h *Handler) CreateSquad(w http.ResponseWriter, r *http.Request) {
 			fail("invalid member_id")
 			continue
 		}
-		// AC-1.5: duplicates (including re-listing the leader) are conflicts,
-		// never silently merged.
+		// Duplicates (including re-listing the leader) are conflicts, never
+		// silently merged.
 		key := m.MemberType + ":" + uuidToString(memberUUID)
 		if _, dup := seenMembers[key]; dup {
 			fail("duplicate member")
@@ -398,6 +419,13 @@ func (h *Handler) CreateSquad(w http.ResponseWriter, r *http.Request) {
 		}
 		if m.MemberType == "agent" && uuidToString(memberUUID) == uuidToString(leaderUUID) {
 			fail("leader is already a member")
+			continue
+		}
+		// Role is required for every member (CLO-418): an empty role would
+		// otherwise be persisted and later break template export/validation.
+		role, ok := normalizeSquadMemberRole(m.Role)
+		if !ok {
+			fail("role is required")
 			continue
 		}
 		if m.MemberType == "agent" {
@@ -424,7 +452,7 @@ func (h *Handler) CreateSquad(w http.ResponseWriter, r *http.Request) {
 		members = append(members, validatedMember{
 			memberType: m.MemberType,
 			memberID:   memberUUID,
-			role:       m.Role,
+			role:       role,
 		})
 	}
 	if len(failedMembers) > 0 {
@@ -450,8 +478,10 @@ func (h *Handler) CreateSquad(w http.ResponseWriter, r *http.Request) {
 		avatarURL = pgtype.Text{String: *req.AvatarURL, Valid: true}
 	}
 
-	// Create the parent squad and attach every included child in a single
-	// transaction so a failure mid-way cannot leave a half-nested squad.
+	// Create the squad, auto-add the leader and every validated member in a
+	// single transaction so a failure mid-way cannot leave a half-built squad
+	// (CLO-419 atomicity); the same transaction attaches any included child
+	// squads (LIU-8 nesting).
 	tx, err := h.TxStarter.Begin(r.Context())
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to start squad create transaction")
@@ -489,10 +519,9 @@ func (h *Handler) CreateSquad(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// F1: add every validated member in the same transaction (F2: each may
-	// carry an optional role). Duplicates were rejected above, so a unique
-	// violation here would indicate a race — fail the whole create, never
-	// produce a half-built squad (AC-1.3/1.5).
+	// Add every validated member in the same transaction. Duplicates were
+	// rejected above, so a unique violation here would indicate a race — fail
+	// the whole create, never produce a half-built squad (CLO-419).
 	for _, m := range members {
 		if _, err := qtx.AddSquadMember(r.Context(), db.AddSquadMemberParams{
 			SquadID:    squad.ID,
@@ -1030,6 +1059,14 @@ func (h *Handler) AddSquadMember(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "member_id is required")
 		return
 	}
+	// CLO-418: role is required for every member. An empty role would be
+	// persisted and later break template export/validation ("member role is
+	// required").
+	role, ok := normalizeSquadMemberRole(req.Role)
+	if !ok {
+		writeError(w, http.StatusBadRequest, "role is required")
+		return
+	}
 
 	memberUUID, ok := parseUUIDOrBadRequest(w, req.MemberID, "member_id")
 	if !ok {
@@ -1065,7 +1102,7 @@ func (h *Handler) AddSquadMember(w http.ResponseWriter, r *http.Request) {
 		SquadID:    squad.ID,
 		MemberType: req.MemberType,
 		MemberID:   memberUUID,
-		Role:       req.Role,
+		Role:       role,
 	})
 	if err != nil {
 		if isUniqueViolation(err) {
@@ -1163,6 +1200,11 @@ func (h *Handler) UpdateSquadMemberRole(w http.ResponseWriter, r *http.Request) 
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
+	role, ok := normalizeSquadMemberRole(req.Role)
+	if !ok {
+		writeError(w, http.StatusBadRequest, "role is required")
+		return
+	}
 
 	memberUUID, ok := parseUUIDOrBadRequest(w, req.MemberID, "member_id")
 	if !ok {
@@ -1173,7 +1215,7 @@ func (h *Handler) UpdateSquadMemberRole(w http.ResponseWriter, r *http.Request) 
 		SquadID:    squad.ID,
 		MemberType: req.MemberType,
 		MemberID:   memberUUID,
-		Role:       req.Role,
+		Role:       role,
 	})
 	if err != nil {
 		writeError(w, http.StatusNotFound, "squad member not found")
