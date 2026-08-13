@@ -11,46 +11,390 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const countRecentFeedbackByUser = `-- name: CountRecentFeedbackByUser :one
-SELECT count(*) FROM feedback
-WHERE user_id = $1 AND created_at > now() - interval '1 hour'
+const countFeedbackComments = `-- name: CountFeedbackComments :one
+SELECT count(*) FROM feedback_comment WHERE feedback_id = $1
 `
 
-func (q *Queries) CountRecentFeedbackByUser(ctx context.Context, userID pgtype.UUID) (int64, error) {
-	row := q.db.QueryRow(ctx, countRecentFeedbackByUser, userID)
+func (q *Queries) CountFeedbackComments(ctx context.Context, feedbackID pgtype.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countFeedbackComments, feedbackID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countFeedbackVotes = `-- name: CountFeedbackVotes :one
+SELECT count(*) FROM feedback_vote WHERE feedback_id = $1
+`
+
+func (q *Queries) CountFeedbackVotes(ctx context.Context, feedbackID pgtype.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countFeedbackVotes, feedbackID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countFeedbacks = `-- name: CountFeedbacks :one
+SELECT count(*) FROM feedback f
+WHERE f.workspace_id = $1
+  AND ($2::text IS NULL OR f.type = $2)
+  AND ($3::text IS NULL
+       OR f.title ILIKE '%' || $3 || '%'
+       OR f.description ILIKE '%' || $3 || '%')
+`
+
+type CountFeedbacksParams struct {
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	Type        pgtype.Text `json:"type"`
+	Keyword     pgtype.Text `json:"keyword"`
+}
+
+// Total row count for the same filter set as ListFeedbacks (pagination total).
+func (q *Queries) CountFeedbacks(ctx context.Context, arg CountFeedbacksParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countFeedbacks, arg.WorkspaceID, arg.Type, arg.Keyword)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countRecentFeedbackByUser = `-- name: CountRecentFeedbackByUser :one
+SELECT count(*) FROM feedback
+WHERE creator_id = $1 AND created_at > now() - interval '1 hour'
+`
+
+func (q *Queries) CountRecentFeedbackByUser(ctx context.Context, creatorID pgtype.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countRecentFeedbackByUser, creatorID)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
 }
 
 const createFeedback = `-- name: CreateFeedback :one
-INSERT INTO feedback (user_id, workspace_id, message, metadata)
-VALUES ($1, $4, $2, $3)
-RETURNING id, user_id, workspace_id, message, metadata, created_at
+INSERT INTO feedback (creator_id, workspace_id, title, type, description, metadata)
+VALUES ($1, $6, $2, $3, $4, $5)
+RETURNING id, creator_id, workspace_id, description, metadata, created_at, title, type, updated_at
 `
 
 type CreateFeedbackParams struct {
-	UserID      pgtype.UUID `json:"user_id"`
-	Message     string      `json:"message"`
+	CreatorID   pgtype.UUID `json:"creator_id"`
+	Title       string      `json:"title"`
+	Type        string      `json:"type"`
+	Description string      `json:"description"`
 	Metadata    []byte      `json:"metadata"`
 	WorkspaceID pgtype.UUID `json:"workspace_id"`
 }
 
+// Single feedback row insert. Used by both the legacy message-only submission
+// (desktop error reporting) and the Feedback Center submission; both map their
+// inputs onto creator_id/title/type/description in the handler layer.
 func (q *Queries) CreateFeedback(ctx context.Context, arg CreateFeedbackParams) (Feedback, error) {
 	row := q.db.QueryRow(ctx, createFeedback,
-		arg.UserID,
-		arg.Message,
+		arg.CreatorID,
+		arg.Title,
+		arg.Type,
+		arg.Description,
 		arg.Metadata,
 		arg.WorkspaceID,
 	)
 	var i Feedback
 	err := row.Scan(
 		&i.ID,
-		&i.UserID,
+		&i.CreatorID,
 		&i.WorkspaceID,
-		&i.Message,
+		&i.Description,
 		&i.Metadata,
 		&i.CreatedAt,
+		&i.Title,
+		&i.Type,
+		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const createFeedbackComment = `-- name: CreateFeedbackComment :one
+INSERT INTO feedback_comment (feedback_id, user_id, content)
+VALUES ($1, $2, $3)
+RETURNING id, feedback_id, user_id, content, created_at, updated_at
+`
+
+type CreateFeedbackCommentParams struct {
+	FeedbackID pgtype.UUID `json:"feedback_id"`
+	UserID     pgtype.UUID `json:"user_id"`
+	Content    string      `json:"content"`
+}
+
+func (q *Queries) CreateFeedbackComment(ctx context.Context, arg CreateFeedbackCommentParams) (FeedbackComment, error) {
+	row := q.db.QueryRow(ctx, createFeedbackComment, arg.FeedbackID, arg.UserID, arg.Content)
+	var i FeedbackComment
+	err := row.Scan(
+		&i.ID,
+		&i.FeedbackID,
+		&i.UserID,
+		&i.Content,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const createFeedbackVote = `-- name: CreateFeedbackVote :exec
+INSERT INTO feedback_vote (feedback_id, user_id)
+VALUES ($1, $2)
+ON CONFLICT (feedback_id, user_id) DO NOTHING
+`
+
+type CreateFeedbackVoteParams struct {
+	FeedbackID pgtype.UUID `json:"feedback_id"`
+	UserID     pgtype.UUID `json:"user_id"`
+}
+
+// Idempotent: ON CONFLICT DO NOTHING means a duplicate vote is a no-op, backed
+// by the UNIQUE(feedback_id, user_id) constraint in migration 286.
+func (q *Queries) CreateFeedbackVote(ctx context.Context, arg CreateFeedbackVoteParams) error {
+	_, err := q.db.Exec(ctx, createFeedbackVote, arg.FeedbackID, arg.UserID)
+	return err
+}
+
+const deleteFeedbackVote = `-- name: DeleteFeedbackVote :exec
+DELETE FROM feedback_vote WHERE feedback_id = $1 AND user_id = $2
+`
+
+type DeleteFeedbackVoteParams struct {
+	FeedbackID pgtype.UUID `json:"feedback_id"`
+	UserID     pgtype.UUID `json:"user_id"`
+}
+
+// Idempotent: deleting a vote that does not exist is a no-op.
+func (q *Queries) DeleteFeedbackVote(ctx context.Context, arg DeleteFeedbackVoteParams) error {
+	_, err := q.db.Exec(ctx, deleteFeedbackVote, arg.FeedbackID, arg.UserID)
+	return err
+}
+
+const getFeedback = `-- name: GetFeedback :one
+SELECT f.id, f.workspace_id, f.creator_id, f.title, f.description, f.type,
+       f.created_at, f.updated_at,
+       u.name AS creator_name,
+       u.avatar_url AS creator_avatar_url,
+       (SELECT count(*) FROM feedback_vote v WHERE v.feedback_id = f.id) AS vote_count,
+       (SELECT count(*) FROM feedback_comment c WHERE c.feedback_id = f.id) AS comment_count,
+       EXISTS (SELECT 1 FROM feedback_vote vv WHERE vv.feedback_id = f.id AND vv.user_id = $2) AS my_vote
+FROM feedback f
+JOIN "user" u ON u.id = f.creator_id
+WHERE f.id = $1 AND f.workspace_id = $3
+`
+
+type GetFeedbackParams struct {
+	ID          pgtype.UUID `json:"id"`
+	UserID      pgtype.UUID `json:"user_id"`
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+}
+
+type GetFeedbackRow struct {
+	ID               pgtype.UUID        `json:"id"`
+	WorkspaceID      pgtype.UUID        `json:"workspace_id"`
+	CreatorID        pgtype.UUID        `json:"creator_id"`
+	Title            string             `json:"title"`
+	Description      string             `json:"description"`
+	Type             string             `json:"type"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+	CreatorName      string             `json:"creator_name"`
+	CreatorAvatarUrl pgtype.Text        `json:"creator_avatar_url"`
+	VoteCount        int64              `json:"vote_count"`
+	CommentCount     int64              `json:"comment_count"`
+	MyVote           bool               `json:"my_vote"`
+}
+
+// Feedback detail with aggregate counts and the viewer's vote flag, scoped to
+// the current workspace.
+func (q *Queries) GetFeedback(ctx context.Context, arg GetFeedbackParams) (GetFeedbackRow, error) {
+	row := q.db.QueryRow(ctx, getFeedback, arg.ID, arg.UserID, arg.WorkspaceID)
+	var i GetFeedbackRow
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.CreatorID,
+		&i.Title,
+		&i.Description,
+		&i.Type,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.CreatorName,
+		&i.CreatorAvatarUrl,
+		&i.VoteCount,
+		&i.CommentCount,
+		&i.MyVote,
+	)
+	return i, err
+}
+
+const getFeedbackInWorkspace = `-- name: GetFeedbackInWorkspace :one
+SELECT id, workspace_id FROM feedback
+WHERE id = $1 AND workspace_id = $2
+`
+
+type GetFeedbackInWorkspaceParams struct {
+	ID          pgtype.UUID `json:"id"`
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+}
+
+type GetFeedbackInWorkspaceRow struct {
+	ID          pgtype.UUID `json:"id"`
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+}
+
+// Existence / ownership check used by the vote and comment endpoints.
+func (q *Queries) GetFeedbackInWorkspace(ctx context.Context, arg GetFeedbackInWorkspaceParams) (GetFeedbackInWorkspaceRow, error) {
+	row := q.db.QueryRow(ctx, getFeedbackInWorkspace, arg.ID, arg.WorkspaceID)
+	var i GetFeedbackInWorkspaceRow
+	err := row.Scan(&i.ID, &i.WorkspaceID)
+	return i, err
+}
+
+const listFeedbackComments = `-- name: ListFeedbackComments :many
+SELECT c.id, c.feedback_id, c.user_id, c.content, c.created_at, c.updated_at,
+       u.name AS user_name,
+       u.avatar_url AS user_avatar_url
+FROM feedback_comment c
+JOIN "user" u ON u.id = c.user_id
+WHERE c.feedback_id = $1
+ORDER BY c.created_at ASC, c.id ASC
+`
+
+type ListFeedbackCommentsRow struct {
+	ID            pgtype.UUID        `json:"id"`
+	FeedbackID    pgtype.UUID        `json:"feedback_id"`
+	UserID        pgtype.UUID        `json:"user_id"`
+	Content       string             `json:"content"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
+	UserName      string             `json:"user_name"`
+	UserAvatarUrl pgtype.Text        `json:"user_avatar_url"`
+}
+
+// Feedback comments in chronological order with author display info.
+func (q *Queries) ListFeedbackComments(ctx context.Context, feedbackID pgtype.UUID) ([]ListFeedbackCommentsRow, error) {
+	rows, err := q.db.Query(ctx, listFeedbackComments, feedbackID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListFeedbackCommentsRow{}
+	for rows.Next() {
+		var i ListFeedbackCommentsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.FeedbackID,
+			&i.UserID,
+			&i.Content,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.UserName,
+			&i.UserAvatarUrl,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listFeedbacks = `-- name: ListFeedbacks :many
+SELECT f.id, f.workspace_id, f.creator_id, f.title, f.description, f.type,
+       f.created_at, f.updated_at,
+       u.name AS creator_name,
+       u.avatar_url AS creator_avatar_url,
+       COUNT(DISTINCT v.id) AS vote_count,
+       COUNT(DISTINCT c.id) AS comment_count,
+       EXISTS (SELECT 1 FROM feedback_vote vv WHERE vv.feedback_id = f.id AND vv.user_id = $2) AS my_vote
+FROM feedback f
+JOIN "user" u ON u.id = f.creator_id
+LEFT JOIN feedback_vote v ON v.feedback_id = f.id
+LEFT JOIN feedback_comment c ON c.feedback_id = f.id
+WHERE f.workspace_id = $1
+  AND ($5::text IS NULL OR f.type = $5)
+  AND ($6::text IS NULL
+       OR f.title ILIKE '%' || $6 || '%'
+       OR f.description ILIKE '%' || $6 || '%')
+GROUP BY f.id, u.name, u.avatar_url
+ORDER BY
+  CASE WHEN $7::text = 'hot' THEN COUNT(DISTINCT v.id) END DESC NULLS LAST,
+  CASE WHEN $7::text = 'comments' THEN COUNT(DISTINCT c.id) END DESC NULLS LAST,
+  f.created_at DESC
+LIMIT $3 OFFSET $4
+`
+
+type ListFeedbacksParams struct {
+	WorkspaceID pgtype.UUID `json:"workspace_id"`
+	UserID      pgtype.UUID `json:"user_id"`
+	Limit       int32       `json:"limit"`
+	Offset      int32       `json:"offset"`
+	Type        pgtype.Text `json:"type"`
+	Keyword     pgtype.Text `json:"keyword"`
+	Sort        pgtype.Text `json:"sort"`
+}
+
+type ListFeedbacksRow struct {
+	ID               pgtype.UUID        `json:"id"`
+	WorkspaceID      pgtype.UUID        `json:"workspace_id"`
+	CreatorID        pgtype.UUID        `json:"creator_id"`
+	Title            string             `json:"title"`
+	Description      string             `json:"description"`
+	Type             string             `json:"type"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
+	CreatorName      string             `json:"creator_name"`
+	CreatorAvatarUrl pgtype.Text        `json:"creator_avatar_url"`
+	VoteCount        int64              `json:"vote_count"`
+	CommentCount     int64              `json:"comment_count"`
+	MyVote           bool               `json:"my_vote"`
+}
+
+// Feedback Center list with optional type/keyword filters, aggregate vote and
+// comment counts, and the viewer's own vote flag (my_vote). Sort is driven by
+// the 'sort' param ('latest' | 'hot' | 'comments'); the two CASE columns are
+// NULL for every row when their sort mode is inactive, so ordering falls
+// through to created_at DESC as the stable secondary key.
+func (q *Queries) ListFeedbacks(ctx context.Context, arg ListFeedbacksParams) ([]ListFeedbacksRow, error) {
+	rows, err := q.db.Query(ctx, listFeedbacks,
+		arg.WorkspaceID,
+		arg.UserID,
+		arg.Limit,
+		arg.Offset,
+		arg.Type,
+		arg.Keyword,
+		arg.Sort,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListFeedbacksRow{}
+	for rows.Next() {
+		var i ListFeedbacksRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.CreatorID,
+			&i.Title,
+			&i.Description,
+			&i.Type,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.CreatorName,
+			&i.CreatorAvatarUrl,
+			&i.VoteCount,
+			&i.CommentCount,
+			&i.MyVote,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
