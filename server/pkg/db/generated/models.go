@@ -510,11 +510,30 @@ type DaemonToken struct {
 
 type Feedback struct {
 	ID          pgtype.UUID        `json:"id"`
-	UserID      pgtype.UUID        `json:"user_id"`
+	CreatorID   pgtype.UUID        `json:"creator_id"`
 	WorkspaceID pgtype.UUID        `json:"workspace_id"`
-	Message     string             `json:"message"`
+	Description string             `json:"description"`
 	Metadata    []byte             `json:"metadata"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	Title       string             `json:"title"`
+	Type        string             `json:"type"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+}
+
+type FeedbackComment struct {
+	ID         pgtype.UUID        `json:"id"`
+	FeedbackID pgtype.UUID        `json:"feedback_id"`
+	UserID     pgtype.UUID        `json:"user_id"`
+	Content    string             `json:"content"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt  pgtype.Timestamptz `json:"updated_at"`
+}
+
+type FeedbackVote struct {
+	ID         pgtype.UUID        `json:"id"`
+	FeedbackID pgtype.UUID        `json:"feedback_id"`
+	UserID     pgtype.UUID        `json:"user_id"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
 }
 
 type GithubInstallation struct {

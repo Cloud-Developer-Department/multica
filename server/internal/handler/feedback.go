@@ -132,8 +132,10 @@ func (h *Handler) CreateFeedback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	fb, err := h.Queries.CreateFeedback(r.Context(), db.CreateFeedbackParams{
-		UserID:      parseUUID(userID),
-		Message:     message,
+		CreatorID:   parseUUID(userID),
+		Title:       feedbackTitleFromMessage(message),
+		Type:        feedbackTypeFromLegacyKind(req.Kind),
+		Description: message,
 		Metadata:    metaBytes,
 		WorkspaceID: workspaceID,
 	})
@@ -174,4 +176,36 @@ func validFeedbackContext(context *FeedbackContext) bool {
 		strings.TrimSpace(context.Trigger) != "" &&
 		strings.TrimSpace(context.Error.Name) != "" &&
 		strings.TrimSpace(context.Error.Message) != ""
+}
+
+// feedbackTitleFromMessage derives a title for the legacy message-only
+// submission path (desktop route-error reporting). The Feedback Center schema
+// requires a non-empty title; truncate the message or fall back to a
+// placeholder so legacy writes stay valid.
+func feedbackTitleFromMessage(message string) string {
+	if strings.TrimSpace(message) == "" {
+		return "(no title)"
+	}
+	const titleMax = 80
+	if len(message) <= titleMax {
+		return message
+	}
+	return message[:titleMax]
+}
+
+// feedbackTypeFromLegacyKind maps the legacy feedback kind picker
+// (bug/feature/general/praise) onto the Feedback Center type enum
+// (bug/feature/improvement/other). "general"/"praise" have no v1 counterpart
+// and collapse to "other"; unknown values also fall back to "other".
+func feedbackTypeFromLegacyKind(kind string) string {
+	switch strings.ToLower(strings.TrimSpace(kind)) {
+	case "bug":
+		return "bug"
+	case "feature":
+		return "feature"
+	case "improvement":
+		return "improvement"
+	default:
+		return "other"
+	}
 }

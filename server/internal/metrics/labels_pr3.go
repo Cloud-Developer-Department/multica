@@ -199,11 +199,12 @@ var (
 	}
 
 	knownFeedbackKinds = map[string]string{
-		"bug":     "bug",
-		"feature": "feature",
-		"general": "general",
-		"praise":  "praise",
-		"other":   "other",
+		"bug":         "bug",
+		"feature":     "feature",
+		"improvement": "improvement",
+		"general":     "general",
+		"praise":      "praise",
+		"other":       "other",
 	}
 
 	// Evidence kinds for multica_chat_output_local_path_total (MUL-4899). A

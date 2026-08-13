@@ -1342,6 +1342,21 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 			// Assignee frequency
 			r.Get("/api/assignee-frequency", h.GetAssigneeFrequency)
 
+			// Feedback Center (WS-24): Public Read + Authenticated Write.
+			// Workspace-scoped like /api/issues and /api/projects; the write
+			// endpoints additionally enforce requireUserID in the handler.
+			r.Route("/api/feedbacks", func(r chi.Router) {
+				r.Get("/", h.ListFeedbacks)
+				r.Post("/", h.CreateFeedbackCenter)
+				r.Route("/{id}", func(r chi.Router) {
+					r.Get("/", h.GetFeedback)
+					r.Post("/vote", h.CreateFeedbackVote)
+					r.Delete("/vote", h.DeleteFeedbackVote)
+					r.Get("/comments", h.ListFeedbackComments)
+					r.Post("/comments", h.CreateFeedbackComment)
+				})
+			})
+
 			// Issues
 			r.Route("/api/issues", func(r chi.Router) {
 				r.Post("/table/groups", h.ListIssueTableGroups)
