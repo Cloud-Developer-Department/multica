@@ -63,7 +63,11 @@ import type {
   WebhookDelivery,
 } from "../types";
 import type { CloudRuntimeNode } from "../runtimes/cloud-runtime";
-import type { CreateFeedbackResponse } from "../feedback/types";
+import type {
+  CreateFeedbackResponse,
+  Feedback,
+  FeedbackComment,
+} from "../feedback/types";
 
 export const GitHubInstallationSchema = z.object({
   id: z.string(),
@@ -652,6 +656,105 @@ export const CreateFeedbackResponseSchema = z.object({
 export const EMPTY_CREATE_FEEDBACK_RESPONSE: CreateFeedbackResponse = {
   id: "",
   created_at: "",
+};
+
+// ---------------------------------------------------------------------------
+// Feedback center — list / detail / comments
+// ---------------------------------------------------------------------------
+
+const FEEDBACK_TYPES = ["bug", "feature", "improvement", "other"] as const;
+
+export const FeedbackSummarySchema = z.object({
+  id: z.string(),
+  workspace_id: z.string(),
+  creator_id: z.string(),
+  creator_name: z.string(),
+  creator_avatar_url: z.string().nullable(),
+  title: z.string(),
+  description: z.string(),
+  type: z.enum(FEEDBACK_TYPES),
+  vote_count: z.number(),
+  comment_count: z.number(),
+  my_vote: z.boolean(),
+  created_at: z.string(),
+  updated_at: z.string(),
+}).loose();
+
+export const FeedbackSchema = FeedbackSummarySchema;
+
+export const FeedbackCommentSchema = z.object({
+  id: z.string(),
+  feedback_id: z.string(),
+  user_id: z.string(),
+  user_name: z.string(),
+  user_avatar_url: z.string().nullable(),
+  content: z.string(),
+  created_at: z.string(),
+  updated_at: z.string(),
+}).loose();
+
+export const FeedbackListSchema = z.array(FeedbackSummarySchema);
+
+export const FeedbackCommentsListSchema = z.object({
+  items: z.array(FeedbackCommentSchema).default([]),
+  total: z.number().default(0),
+}).loose();
+
+export const ListFeedbacksResponseSchema = z.object({
+  items: FeedbackListSchema.default([]),
+  total: z.number().default(0),
+  page: z.number().default(1),
+  page_size: z.number().default(20),
+  has_more: z.boolean().default(false),
+}).loose();
+
+export const EMPTY_LIST_FEEDBACKS_RESPONSE: {
+  items: Feedback[];
+  total: number;
+  page: number;
+  page_size: number;
+  has_more: boolean;
+} = {
+  items: [],
+  total: 0,
+  page: 1,
+  page_size: 20,
+  has_more: false,
+};
+
+export const EMPTY_LIST_FEEDBACK_COMMENTS_RESPONSE: {
+  items: FeedbackComment[];
+  total: number;
+} = {
+  items: [],
+  total: 0,
+};
+
+export const EMPTY_FEEDBACK: Feedback = {
+  id: "",
+  workspace_id: "",
+  creator_id: "",
+  creator_name: "",
+  creator_avatar_url: null,
+  title: "",
+  description: "",
+  type: "other",
+  vote_count: 0,
+  comment_count: 0,
+  my_vote: false,
+  created_at: "",
+  updated_at: "",
+};
+
+export const EMPTY_FEEDBACK_COMMENT: FeedbackComment = {
+  id: "",
+  feedback_id: "",
+  user_id: "",
+  user_name: "",
+  user_avatar_url: null,
+  content: "",
+  created_at: "",
+  updated_at: "",
 };
 
 export const CommentSchema = z.object({

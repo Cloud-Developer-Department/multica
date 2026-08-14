@@ -179,6 +179,13 @@ export function resolveTabPresentation(
         visual: { kind: "icon", icon: "BookOpenText" },
         title: textOr(data.skill?.name, "skill"),
       };
+    case "feedback":
+      // Feedback detail resolves like a plain page until a richer identity is
+      // added: the page icon + nav label (never a type-ambiguous default).
+      return {
+        visual: { kind: "icon", icon: WORKSPACE_PAGES.feedback.icon },
+        title: { kind: "nav", navKey: WORKSPACE_PAGES.feedback.navKey },
+      };
     case "machine":
       return {
         visual: { kind: "icon", icon: "Monitor" },

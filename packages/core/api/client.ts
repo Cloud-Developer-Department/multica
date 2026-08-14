@@ -189,6 +189,13 @@ import type {
   FeedbackKind,
 } from "../feedback/types";
 import type {
+  CreateCenterFeedbackRequest,
+  Feedback,
+  FeedbackComment,
+  ListFeedbacksParams,
+  ListFeedbacksResponse,
+} from "../feedback/types";
+import type {
   CloudRuntimeNode,
   CreateCloudRuntimeNodeRequest,
   ListCloudRuntimeNodesParams,
@@ -313,6 +320,14 @@ import {
   EMPTY_CHAT_DRAFT_RESTORES,
   CreateFeedbackResponseSchema,
   EMPTY_CREATE_FEEDBACK_RESPONSE,
+  FeedbackSchema,
+  FeedbackCommentSchema,
+  FeedbackCommentsListSchema,
+  ListFeedbacksResponseSchema,
+  EMPTY_LIST_FEEDBACKS_RESPONSE,
+  EMPTY_LIST_FEEDBACK_COMMENTS_RESPONSE,
+  EMPTY_FEEDBACK,
+  EMPTY_FEEDBACK_COMMENT,
   InboxUnreadSummarySchema,
   EMPTY_INBOX_UNREAD_SUMMARY,
   InboxItemListSchema,
@@ -940,6 +955,63 @@ export class ApiClient {
     });
     return parseWithFallback(raw, CreateFeedbackResponseSchema, EMPTY_CREATE_FEEDBACK_RESPONSE, {
       endpoint: "POST /api/feedback",
+    });
+  }
+
+  // Feedback center
+  async listFeedbacks(params?: ListFeedbacksParams): Promise<ListFeedbacksResponse> {
+    const search = new URLSearchParams();
+    if (params?.type) search.set("type", params.type);
+    if (params?.keyword?.trim()) search.set("keyword", params.keyword.trim());
+    if (params?.sort) search.set("sort", params.sort);
+    if (params?.page) search.set("page", String(params.page));
+    if (params?.page_size) search.set("page_size", String(params.page_size));
+    const raw = await this.fetch<unknown>(`/api/feedbacks?${search}`);
+    return parseWithFallback(raw, ListFeedbacksResponseSchema, EMPTY_LIST_FEEDBACKS_RESPONSE, {
+      endpoint: "GET /api/feedbacks",
+    });
+  }
+
+  async getFeedback(id: string): Promise<Feedback> {
+    const raw = await this.fetch<unknown>(`/api/feedbacks/${id}`);
+    return parseWithFallback(raw, FeedbackSchema, EMPTY_FEEDBACK, {
+      endpoint: "GET /api/feedbacks/{id}",
+    });
+  }
+
+  async createFeedbackCenter(data: CreateCenterFeedbackRequest): Promise<Feedback> {
+    const raw = await this.fetch<unknown>("/api/feedbacks", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+    return parseWithFallback(raw, FeedbackSchema, EMPTY_FEEDBACK, {
+      endpoint: "POST /api/feedbacks",
+    });
+  }
+
+  async addFeedbackVote(feedbackId: string): Promise<void> {
+    await this.fetch(`/api/feedbacks/${feedbackId}/vote`, { method: "POST" });
+  }
+
+  async removeFeedbackVote(feedbackId: string): Promise<void> {
+    await this.fetch(`/api/feedbacks/${feedbackId}/vote`, { method: "DELETE" });
+  }
+
+  async listFeedbackComments(feedbackId: string): Promise<FeedbackComment[]> {
+    const raw = await this.fetch<unknown>(`/api/feedbacks/${feedbackId}/comments`);
+    const resp = parseWithFallback(raw, FeedbackCommentsListSchema, EMPTY_LIST_FEEDBACK_COMMENTS_RESPONSE, {
+      endpoint: "GET /api/feedbacks/{id}/comments",
+    });
+    return resp.items;
+  }
+
+  async createFeedbackComment(feedbackId: string, content: string): Promise<FeedbackComment> {
+    const raw = await this.fetch<unknown>(`/api/feedbacks/${feedbackId}/comments`, {
+      method: "POST",
+      body: JSON.stringify({ content }),
+    });
+    return parseWithFallback(raw, FeedbackCommentSchema, EMPTY_FEEDBACK_COMMENT, {
+      endpoint: "POST /api/feedbacks/{id}/comments",
     });
   }
 
