@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/multica-ai/multica/server/internal/util"
 )
@@ -374,6 +375,141 @@ func TestCreateFeedbackCenterValidation(t *testing.T) {
 				t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
 			}
 		})
+	}
+}
+
+// TestCreateFeedbackCenterCJKLengthBoundaries verifies title/description
+// length validation counts runes (utf8.RuneCountInString), matching the
+// frontend maxLength semantics. A 200-CJK-character title is 600 bytes but
+// must be accepted; 201 must be rejected — byte-based len() would wrongly
+// reject the valid CJK input.
+func TestCreateFeedbackCenterCJKLengthBoundaries(t *testing.T) {
+	feedbackTestCleanup(t)
+
+	cjkTitle := strings.Repeat("反", feedbackCenterMaxTitle)
+	if utf8.RuneCountInString(cjkTitle) != feedbackCenterMaxTitle {
+		t.Fatalf("test setup: want %d runes, got %d", feedbackCenterMaxTitle, utf8.RuneCountInString(cjkTitle))
+	}
+	if len(cjkTitle) != feedbackCenterMaxTitle*3 {
+		t.Fatalf("test setup: want %d bytes, got %d", feedbackCenterMaxTitle*3, len(cjkTitle))
+	}
+
+	// Exactly 200 CJK chars must pass (bytes are 600, runes are 200).
+	req := newRequest("POST", "/api/feedbacks", CreateFeedbackCenterRequest{
+		Type:        "bug",
+		Title:       cjkTitle,
+		Description: "描述",
+	})
+	w := httptest.NewRecorder()
+	testHandler.CreateFeedbackCenter(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("title of %d CJK chars: expected 201, got %d: %s", feedbackCenterMaxTitle, w.Code, w.Body.String())
+	}
+
+	// 201 CJK chars must be rejected.
+	req2 := newRequest("POST", "/api/feedbacks", CreateFeedbackCenterRequest{
+		Type:        "bug",
+		Title:       cjkTitle + "反",
+		Description: "描述",
+	})
+	w2 := httptest.NewRecorder()
+	testHandler.CreateFeedbackCenter(w2, req2)
+	if w2.Code != http.StatusBadRequest {
+		t.Fatalf("title of %d CJK chars: expected 400, got %d: %s", feedbackCenterMaxTitle+1, w2.Code, w2.Body.String())
+	}
+
+	// Exactly 10000 CJK chars description must pass.
+	cjkDesc := strings.Repeat("反", feedbackCenterMaxDescription)
+	req3 := newRequest("POST", "/api/feedbacks", CreateFeedbackCenterRequest{
+		Type:        "bug",
+		Title:       "title",
+		Description: cjkDesc,
+	})
+	w3 := httptest.NewRecorder()
+	testHandler.CreateFeedbackCenter(w3, req3)
+	if w3.Code != http.StatusCreated {
+		t.Fatalf("description of %d CJK chars: expected 201, got %d: %s", feedbackCenterMaxDescription, w3.Code, w3.Body.String())
+	}
+
+	// 10001 CJK chars description must be rejected.
+	req4 := newRequest("POST", "/api/feedbacks", CreateFeedbackCenterRequest{
+		Type:        "bug",
+		Title:       "title",
+		Description: cjkDesc + "反",
+	})
+	w4 := httptest.NewRecorder()
+	testHandler.CreateFeedbackCenter(w4, req4)
+	if w4.Code != http.StatusBadRequest {
+		t.Fatalf("description of %d CJK chars: expected 400, got %d: %s", feedbackCenterMaxDescription+1, w4.Code, w4.Body.String())
+	}
+}
+
+// TestCreateFeedbackCommentCJKLengthBoundaries verifies comment length
+// validation counts runes so a valid CJK comment (5000 runes, 15000 bytes)
+// is accepted while 5001 runes is rejected.
+func TestCreateFeedbackCommentCJKLengthBoundaries(t *testing.T) {
+	feedbackTestCleanup(t)
+
+	fbID := insertTestFeedback(t, "cjk comment target", "bug", "desc")
+
+	cjkComment := strings.Repeat("反", feedbackCenterMaxComment)
+	if len(cjkComment) != feedbackCenterMaxComment*3 {
+		t.Fatalf("test setup: want %d bytes, got %d", feedbackCenterMaxComment*3, len(cjkComment))
+	}
+
+	// Exactly 5000 CJK chars must pass.
+	req := newRequest("POST", "/api/feedbacks/"+fbID+"/comments", CreateFeedbackCommentRequest{Content: cjkComment})
+	req = withURLParam(req, "id", fbID)
+	w := httptest.NewRecorder()
+	testHandler.CreateFeedbackComment(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("comment of %d CJK chars: expected 201, got %d: %s", feedbackCenterMaxComment, w.Code, w.Body.String())
+	}
+
+	// 5001 CJK chars must be rejected.
+	req2 := newRequest("POST", "/api/feedbacks/"+fbID+"/comments", CreateFeedbackCommentRequest{Content: cjkComment + "反"})
+	req2 = withURLParam(req2, "id", fbID)
+	w2 := httptest.NewRecorder()
+	testHandler.CreateFeedbackComment(w2, req2)
+	if w2.Code != http.StatusBadRequest {
+		t.Fatalf("comment of %d CJK chars: expected 400, got %d: %s", feedbackCenterMaxComment+1, w2.Code, w2.Body.String())
+	}
+}
+
+// TestCreateFeedbackLegacyCJKMessage verifies the legacy message-only
+// POST /api/feedback chain keeps working end-to-end with multi-byte CJK
+// messages: the derived title must be valid UTF-8 (rune-aware truncation),
+// so the row is persisted rather than rejected by PostgreSQL.
+func TestCreateFeedbackLegacyCJKMessage(t *testing.T) {
+	clearFeedbackForTestUser(t)
+
+	// 100 CJK chars = 300 bytes: exceeds the 80-byte budget but must truncate
+	// to exactly 80 runes without producing invalid UTF-8.
+	message := strings.Repeat("反", 100)
+	req := newRequest("POST", "/api/feedback", CreateFeedbackRequest{Message: message})
+	w := httptest.NewRecorder()
+	testHandler.CreateFeedback(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+	var resp FeedbackResponse
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	var title string
+	if err := testPool.QueryRow(context.Background(), `SELECT title FROM feedback WHERE id = $1`, parseUUID(resp.ID)).Scan(&title); err != nil {
+		t.Fatalf("load feedback title: %v", err)
+	}
+	if !utf8.ValidString(title) {
+		t.Fatalf("stored title is invalid UTF-8: %q", title)
+	}
+	if n := utf8.RuneCountInString(title); n != 80 {
+		t.Fatalf("expected title truncated to 80 runes, got %d: %q", n, title)
+	}
+	if title != strings.Repeat("反", 80) {
+		t.Fatalf("unexpected title content: %q", title)
 	}
 }
 

@@ -181,16 +181,19 @@ func validFeedbackContext(context *FeedbackContext) bool {
 // feedbackTitleFromMessage derives a title for the legacy message-only
 // submission path (desktop route-error reporting). The Feedback Center schema
 // requires a non-empty title; truncate the message or fall back to a
-// placeholder so legacy writes stay valid.
+// placeholder so legacy writes stay valid. Truncation is rune-aware: slicing
+// by bytes would split multi-byte UTF-8 (e.g. CJK) runes in half and produce
+// an invalid title that PostgreSQL rejects.
 func feedbackTitleFromMessage(message string) string {
 	if strings.TrimSpace(message) == "" {
 		return "(no title)"
 	}
 	const titleMax = 80
-	if len(message) <= titleMax {
+	runes := []rune(message)
+	if len(runes) <= titleMax {
 		return message
 	}
-	return message[:titleMax]
+	return string(runes[:titleMax])
 }
 
 // feedbackTypeFromLegacyKind maps the legacy feedback kind picker
