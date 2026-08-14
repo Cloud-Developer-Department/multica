@@ -27,7 +27,7 @@ export interface FeedbackSummary {
 }
 
 /** Full feedback detail (same shape as the summary today). */
-export interface Feedback extends FeedbackSummary {}
+export type Feedback = FeedbackSummary;
 
 /** A comment on a feedback item. */
 export interface FeedbackComment {
