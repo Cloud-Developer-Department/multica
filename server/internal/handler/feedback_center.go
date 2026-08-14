@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
@@ -303,7 +304,7 @@ func (h *Handler) CreateFeedbackCenter(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "title is required")
 		return
 	}
-	if len(req.Title) > feedbackCenterMaxTitle {
+	if utf8.RuneCountInString(req.Title) > feedbackCenterMaxTitle {
 		writeError(w, http.StatusBadRequest, "title too long")
 		return
 	}
@@ -311,7 +312,7 @@ func (h *Handler) CreateFeedbackCenter(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "description is required")
 		return
 	}
-	if len(req.Description) > feedbackCenterMaxDescription {
+	if utf8.RuneCountInString(req.Description) > feedbackCenterMaxDescription {
 		writeError(w, http.StatusBadRequest, "description too long")
 		return
 	}
@@ -576,7 +577,7 @@ func (h *Handler) CreateFeedbackComment(w http.ResponseWriter, r *http.Request) 
 		writeError(w, http.StatusBadRequest, "comment content is required")
 		return
 	}
-	if len(content) > feedbackCenterMaxComment {
+	if utf8.RuneCountInString(content) > feedbackCenterMaxComment {
 		writeError(w, http.StatusBadRequest, "comment too long")
 		return
 	}

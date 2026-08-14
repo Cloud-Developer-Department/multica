@@ -73,6 +73,7 @@ diff，全都挂在同一个任务下——没人需要重新捋一遍上下文�
 - **[人来验收](https://multica.ai/docs/issues) →** 活先进入审核中，不直接进 main。上不上线你说了算。
 - **[收件箱](https://multica.ai/docs/inbox) →** 只在智能体需要你拍板时提醒你，而不是每一步都来烦你。
 - **[重试与超时](https://multica.ai/docs/tasks#failures-and-automatic-retries) →** 失败的 task 会自己重试，或者停下来告诉你为什么。
+- **[反馈中心](docs/feedback-center/README.md) →** 一个全员可见的公共反馈池——浏览、搜索、点赞、评论产品反馈，也可以提交你自己的反馈。
 
 ## 整套都归你
 
@@ -173,6 +174,7 @@ Multica 不自带模型。它驱动的是你本来就装好、登录好的那些
 | 部署在自己的基础设施上 | [自部署](SELF_HOSTING.md) · [安全模型](https://multica.ai/docs/security-model) · [环境变量](https://multica.ai/docs/environment-variables) |
 | 用脚本驱动它 | [CLI 参考](https://multica.ai/docs/cli) · [CLI 与守护进程指南](CLI_AND_DAEMON.md) · [认证令牌](https://multica.ai/docs/auth-tokens) |
 | 查智能体为什么卡住了 | [执行任务](https://multica.ai/docs/tasks) · [问题排查](https://multica.ai/docs/troubleshooting) |
+| 给产品提反馈 | [反馈中心](docs/feedback-center/README.md) · [使用说明](docs/feedback-center/user-guide.md) · [API](docs/feedback-center/api.md) |
 
 ---
 

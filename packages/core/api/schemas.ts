@@ -694,7 +694,11 @@ export const FeedbackCommentSchema = z.object({
 }).loose();
 
 export const FeedbackListSchema = z.array(FeedbackSummarySchema);
-export const FeedbackCommentsListSchema = z.array(FeedbackCommentSchema);
+
+export const FeedbackCommentsListSchema = z.object({
+  items: z.array(FeedbackCommentSchema).default([]),
+  total: z.number().default(0),
+}).loose();
 
 export const ListFeedbacksResponseSchema = z.object({
   items: FeedbackListSchema.default([]),
@@ -716,6 +720,14 @@ export const EMPTY_LIST_FEEDBACKS_RESPONSE: {
   page: 1,
   page_size: 20,
   has_more: false,
+};
+
+export const EMPTY_LIST_FEEDBACK_COMMENTS_RESPONSE: {
+  items: FeedbackComment[];
+  total: number;
+} = {
+  items: [],
+  total: 0,
 };
 
 export const EMPTY_FEEDBACK: Feedback = {

@@ -325,6 +325,7 @@ import {
   FeedbackCommentsListSchema,
   ListFeedbacksResponseSchema,
   EMPTY_LIST_FEEDBACKS_RESPONSE,
+  EMPTY_LIST_FEEDBACK_COMMENTS_RESPONSE,
   EMPTY_FEEDBACK,
   EMPTY_FEEDBACK_COMMENT,
   InboxUnreadSummarySchema,
@@ -998,9 +999,10 @@ export class ApiClient {
 
   async listFeedbackComments(feedbackId: string): Promise<FeedbackComment[]> {
     const raw = await this.fetch<unknown>(`/api/feedbacks/${feedbackId}/comments`);
-    return parseWithFallback(raw, FeedbackCommentsListSchema, [], {
+    const resp = parseWithFallback(raw, FeedbackCommentsListSchema, EMPTY_LIST_FEEDBACK_COMMENTS_RESPONSE, {
       endpoint: "GET /api/feedbacks/{id}/comments",
     });
+    return resp.items;
   }
 
   async createFeedbackComment(feedbackId: string, content: string): Promise<FeedbackComment> {

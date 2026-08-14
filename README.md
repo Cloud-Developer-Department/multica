@@ -76,6 +76,7 @@ issue — so nobody reconstructs context, and nothing ships without a human sayi
 - **[Review gates](https://multica.ai/docs/issues) →** Work lands in review, not in main. You decide what ships.
 - **[Inbox](https://multica.ai/docs/inbox) →** Get pinged when an agent needs a call, not for every step.
 - **[Retries and timeouts](https://multica.ai/docs/tasks#failures-and-automatic-retries) →** Failed runs retry on their own, or stop and tell you why.
+- **[Feedback Center](docs/feedback-center/README.md) →** A shared, visible feedback pool — browse, search, upvote and comment on product feedback, or submit your own.
 
 ## Make it yours.
 
@@ -180,6 +181,7 @@ Installing and authenticating them: [Install an agent runtime](https://multica.a
 | Run it on my own infrastructure | [Self-hosting](SELF_HOSTING.md) · [Security model](https://multica.ai/docs/security-model) · [Environment variables](https://multica.ai/docs/environment-variables) |
 | Script it | [CLI reference](https://multica.ai/docs/cli) · [CLI and daemon guide](CLI_AND_DAEMON.md) · [Auth tokens](https://multica.ai/docs/auth-tokens) |
 | Work out why an agent is stuck | [Tasks](https://multica.ai/docs/tasks) · [Troubleshooting](https://multica.ai/docs/troubleshooting) |
+| Contribute to product feedback | [Feedback Center](docs/feedback-center/README.md) · [User guide](docs/feedback-center/user-guide.md) · [API](docs/feedback-center/api.md) |
 
 ---
 
