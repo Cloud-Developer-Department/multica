@@ -1237,6 +1237,8 @@ export const SquadSchema = z.object({
   updated_at: z.string(),
   archived_at: z.string().nullable().optional().transform((v) => v ?? null),
   archived_by: z.string().nullable().optional().transform((v) => v ?? null),
+  parent_squad_id: z.string().nullable().default(null),
+  upgrade_on_member_mention: z.boolean().default(true),
   member_count: z.number().default(0),
   member_preview: z.array(SquadMemberPreviewSchema).default([]),
 }).loose();
@@ -1250,6 +1252,8 @@ export const EMPTY_SQUAD: Squad = {
   description: "",
   instructions: "",
   avatar_url: null,
+  parent_squad_id: null,
+  upgrade_on_member_mention: true,
   leader_id: "",
   creator_id: "",
   created_at: "",

@@ -200,6 +200,7 @@ export type {
   SquadActivityLog,
   SquadActivityOutcome,
   CreateSquadRequest,
+  CreateSquadMember,
   UpdateSquadRequest,
   AddSquadMemberRequest,
   RemoveSquadMemberRequest,

@@ -164,27 +164,13 @@ import type {
   CreateBillingCheckoutSessionResponse,
   BillingCheckoutSessionStatus,
   CreateBillingPortalSessionResponse,
-  Workflow,
-  WorkflowListResponse,
-  WorkflowTransitionsResponse,
-  CreateWorkflowRequest,
-  AdvanceWorkflowResponse,
-  Artifact,
-  ArtifactListResponse,
-  ArtifactVersionsResponse,
-  ArtifactDiffResponse,
-  ArtifactReviewsResponse,
-  ArtifactStats,
-  ReviewQueueResponse,
-  ReviewArtifactRequest,
-  ReviewArtifactResponse,
-  CreateArtifactRequest,
   ExportResourceTemplateRequest,
   ExportResourceTemplateResponse,
   ValidateResourceTemplateRequest,
   ValidateResourceTemplateResponse,
   ApplyResourceTemplateRequest,
   ApplyResourceTemplateResponse,
+  CreateSquadRequest,
 } from "../types";
 import type { OnboardingCompletionPath } from "../onboarding/types";
 import type { CreateFeedbackResponse, FeedbackKind } from "../feedback/types";
@@ -2654,7 +2640,7 @@ export class ApiClient {
     }) as Squad;
   }
 
-  async createSquad(data: { name: string; description?: string; leader_id: string; avatar_url?: string }): Promise<Squad> {
+  async createSquad(data: CreateSquadRequest): Promise<Squad> {
     const raw = await this.fetch<unknown>("/api/squads", { method: "POST", body: JSON.stringify(data) });
     return parseWithFallback(raw, SquadSchema, EMPTY_SQUAD, {
       endpoint: "POST /api/squads",
@@ -3064,5 +3050,4 @@ export class ApiClient {
       body: JSON.stringify(data),
     });
   }
- (feat(web): agents/squads template export & import wizard (CLO-399))
 }

@@ -24,8 +24,6 @@ import enUsage from "./en/usage.json";
 import enUi from "./en/ui.json";
 import enSquads from "./en/squads.json";
 import enBilling from "./en/billing.json";
-import enMonitoring from "./en/monitoring.json";
-import enAnalytics from "./en/analytics.json";
 import enTemplates from "./en/templates.json";
 import zhHansCommon from "./zh-Hans/common.json";
 import zhHansAuth from "./zh-Hans/auth.json";
