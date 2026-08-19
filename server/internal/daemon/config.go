@@ -758,9 +758,18 @@ func ResolveWorkspacesRoot(profile, override string) (string, error) {
 		root = override
 	}
 	if root == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return "", fmt.Errorf("resolve home directory: %w (set MULTICA_WORKSPACES_ROOT to override)", err)
+		// An explicit HOME wins over the platform home lookup, mirroring
+		// cli.multicaConfigRoot: os.UserHomeDir() reads %USERPROFILE% (not
+		// HOME) on Windows, so a test or operator who redirects HOME to
+		// isolate the CLI would otherwise scan the real workspaces tree
+		// (CLO-651).
+		home := strings.TrimSpace(os.Getenv("HOME"))
+		if home == "" {
+			var err error
+			home, err = os.UserHomeDir()
+			if err != nil {
+				return "", fmt.Errorf("resolve home directory: %w (set MULTICA_WORKSPACES_ROOT to override)", err)
+			}
 		}
 		if profile != "" {
 			root = filepath.Join(home, "multica_workspaces_"+profile)
