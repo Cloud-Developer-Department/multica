@@ -52,8 +52,10 @@ if (Test-Path -LiteralPath $E) {
 }
 
 # 3) 检查是否还有测试服务进程占用端口（不应残留）
-$ports = @(5432, 18080, 3000, 61149, 58987, 55213)
-foreach ($p in $ports) {
+#    注意: 5432 是共享 Docker PostgreSQL（ensure-postgres.sh / local-env.sh），
+#    非测试残留，只报告不终止（CLO-651 复验要求，见第 4 步）。
+$testPorts = @(18080, 3000, 61149, 58987, 55213)
+foreach ($p in $testPorts) {
     $conn = Get-NetTCPConnection -LocalPort $p -State Listen -ErrorAction SilentlyContinue
     if ($conn) {
         $procId = ($conn | Select-Object -First 1).OwningProcess
@@ -62,6 +64,19 @@ foreach ($p in $ports) {
         Invoke-Step "Stop-Process -Id $procId -Force" "结束占用端口 $p 的进程 $procName"
     } else {
         Write-Host "端口 $p 空闲" -ForegroundColor DarkGray
+    }
+}
+
+# 4) 受保护端口（Docker 等共享服务，非测试残留）：只报告，绝不 Stop-Process
+$protectedPorts = @(5432)
+foreach ($p in $protectedPorts) {
+    $conn = Get-NetTCPConnection -LocalPort $p -State Listen -ErrorAction SilentlyContinue
+    if ($conn) {
+        $procId = ($conn | Select-Object -First 1).OwningProcess
+        $procName = (Get-Process -Id $procId -ErrorAction SilentlyContinue).ProcessName
+        Write-Host "端口 $p 被 $procName (PID $procId) 占用（受保护，不终止）" -ForegroundColor DarkYellow
+    } else {
+        Write-Host "端口 $p 空闲（受保护）" -ForegroundColor DarkGray
     }
 }
 
