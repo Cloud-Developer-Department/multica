@@ -414,6 +414,36 @@ func TestCLIConfig_NoTaskRootKeepsInteractiveHomeResolution(t *testing.T) {
 	}
 }
 
+// TestCLIConfig_HomeWinsOverPlatformHome is the CLO-651 regression guard:
+// on Windows os.UserHomeDir() reads %USERPROFILE% and ignores HOME, so a test
+// or operator who redirects HOME to isolate the CLI would silently write the
+// real ~/.multica/config.json. An explicit HOME must always win.
+func TestCLIConfig_HomeWinsOverPlatformHome(t *testing.T) {
+	isolatedHome := t.TempDir()
+	// Point USERPROFILE at a sentinel that must NOT be touched, to catch a
+	// platform home lookup that ignores HOME on Windows.
+	realishProfile := t.TempDir()
+	t.Setenv("HOME", isolatedHome)
+	t.Setenv("USERPROFILE", realishProfile)
+
+	if err := SaveCLIConfig(CLIConfig{ServerURL: "https://isolated.invalid"}); err != nil {
+		t.Fatalf("SaveCLIConfig: %v", err)
+	}
+	path, err := CLIConfigPath()
+	if err != nil {
+		t.Fatalf("CLIConfigPath: %v", err)
+	}
+	if want := filepath.Join(isolatedHome, ".multica", "config.json"); path != want {
+		t.Fatalf("config path = %q, want isolated %q", path, want)
+	}
+	if _, err := os.Stat(filepath.Join(realishProfile, ".multica", "config.json")); err == nil {
+		t.Fatalf("config leaked into USERPROFILE-derived home %q (CLO-651)", realishProfile)
+	}
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("isolated config not written: %v", err)
+	}
+}
+
 func TestCLIConfig_TaskRootRejectsProfilePathTraversal(t *testing.T) {
 	t.Setenv("MULTICA_TASK_CONFIG_ROOT", filepath.Join(t.TempDir(), "task-multica"))
 

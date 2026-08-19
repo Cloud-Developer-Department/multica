@@ -285,6 +285,14 @@ func multicaConfigRoot() (root string, taskLocal bool, err error) {
 		}
 		return root, true, nil
 	}
+	// An explicit HOME wins over the platform home lookup so HOME redirection
+	// behaves identically on every platform. os.UserHomeDir() reads %USERPROFILE%
+	// (not HOME) on Windows, so a test or operator who redirects HOME to isolate
+	// CLI config would otherwise silently write the real ~/.multica/config.json
+	// (CLO-651).
+	if home := strings.TrimSpace(os.Getenv("HOME")); home != "" {
+		return filepath.Clean(home), false, nil
+	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", false, err
