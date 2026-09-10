@@ -12,9 +12,11 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/multica-ai/multica/server/internal/analytics"
+	"github.com/multica-ai/multica/server/internal/issuestatus"
 	"github.com/multica-ai/multica/server/internal/logger"
 	obsmetrics "github.com/multica-ai/multica/server/internal/metrics"
 	db "github.com/multica-ai/multica/server/pkg/db/generated"
@@ -22,11 +24,47 @@ import (
 )
 
 var nonAlpha = regexp.MustCompile(`[^a-zA-Z]`)
+var nonAlphanumeric = regexp.MustCompile(`[^a-zA-Z0-9]`)
 var workspaceSlugPattern = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
+var issuePrefixPattern = regexp.MustCompile(`^[A-Z0-9]{1,10}$`)
 
-// generateIssuePrefix produces a 2-5 char uppercase prefix from a workspace name.
-// Examples: "Jiayuan's Workspace" → "JIA", "My Team" → "MYT", "AB" → "AB".
-func generateIssuePrefix(name string) string {
+// defaultIssuePrefixFromSlug derives a new workspace's default issue prefix
+// from its slug: alphanumerics only, first 4 chars, uppercased.
+// Examples: "acme" → "ACME", "front-end" → "FRON", "team-2" → "TEAM".
+//
+// The slug — not the name — is the derivation source on purpose (MUL-6050).
+// Name is the one field in the create flow that accepts non-ASCII, so deriving
+// an ASCII-only prefix from it forced every CJK/emoji-named workspace onto the
+// same "WS" fallback. Slug is validated as `^[a-z0-9]+(-[a-z0-9]+)*$` and
+// required, so it always yields a non-empty, workspace-specific prefix.
+//
+// Kept byte-for-byte in sync with the client-side preview in
+// packages/views/onboarding/steps/step-workspace.tsx — what the user sees on
+// the create screen has to be what the server would derive.
+func defaultIssuePrefixFromSlug(slug string) string {
+	head := nonAlphanumeric.ReplaceAllString(slug, "")
+	if head == "" {
+		// Unreachable for a validated slug; keeps the function total so a
+		// future caller can never persist an empty prefix.
+		return "WS"
+	}
+	if len(head) > 4 {
+		head = head[:4]
+	}
+	return strings.ToUpper(head)
+}
+
+// legacyIssuePrefixFromName is the pre-MUL-6050 derivation: first 3 ASCII
+// letters of the workspace name, uppercased, "WS" when the name has none.
+//
+// FROZEN — do not "fix" this to match defaultIssuePrefixFromSlug. Its only
+// caller is getIssuePrefix's fallback for workspaces whose stored prefix is
+// empty (rows predating the column). Issue identifiers are computed at read
+// time from the current prefix, so changing what this returns would silently
+// rewrite the identifier of every historical issue in those workspaces.
+// Deliberate product decision: no backfill, existing workspaces stay as they
+// are; only newly created ones follow the slug-derived rule.
+func legacyIssuePrefixFromName(name string) string {
 	letters := nonAlpha.ReplaceAllString(name, "")
 	if len(letters) == 0 {
 		return "WS"
@@ -37,6 +75,24 @@ func generateIssuePrefix(name string) string {
 	}
 	return letters
 }
+
+// normalizeIssuePrefix trims and uppercases a client-supplied issue prefix.
+// An all-whitespace value means "not provided" and reports ("", true) so the
+// caller can fall back to its default. Anything else must be 1-10 chars of
+// A-Z0-9, mirroring the client-side guardrail in
+// packages/views/settings/components/workspace-tab.tsx.
+func normalizeIssuePrefix(raw string) (string, bool) {
+	prefix := strings.ToUpper(strings.TrimSpace(raw))
+	if prefix == "" {
+		return "", true
+	}
+	if !issuePrefixPattern.MatchString(prefix) {
+		return "", false
+	}
+	return prefix, true
+}
+
+const issuePrefixFormatError = "issue prefix must be 1-10 uppercase letters or digits"
 
 type WorkspaceResponse struct {
 	ID          string  `json:"id"`
@@ -180,17 +236,27 @@ func (h *Handler) CreateWorkspace(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Resolve the prefix before opening the transaction: an invalid one is a
+	// 400 that should never cost a connection.
+	issuePrefix := ""
+	if req.IssuePrefix != nil {
+		prefix, ok := normalizeIssuePrefix(*req.IssuePrefix)
+		if !ok {
+			writeError(w, http.StatusBadRequest, issuePrefixFormatError)
+			return
+		}
+		issuePrefix = prefix
+	}
+	if issuePrefix == "" {
+		issuePrefix = defaultIssuePrefixFromSlug(req.Slug)
+	}
+
 	tx, err := h.TxStarter.Begin(r.Context())
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to create workspace")
 		return
 	}
 	defer tx.Rollback(r.Context())
-
-	issuePrefix := generateIssuePrefix(req.Name)
-	if req.IssuePrefix != nil && strings.TrimSpace(*req.IssuePrefix) != "" {
-		issuePrefix = strings.ToUpper(strings.TrimSpace(*req.IssuePrefix))
-	}
 
 	qtx := h.Queries.WithTx(tx)
 	ws, err := qtx.CreateWorkspace(r.Context(), db.CreateWorkspaceParams{
@@ -216,6 +282,14 @@ func (h *Handler) CreateWorkspace(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to add owner: "+err.Error())
+		return
+	}
+
+	// Seed the 7 built-in issue statuses inside the same transaction, so a
+	// workspace is never visible without its status catalog — an issue cannot
+	// be created before its status can be resolved. (MUL-6243)
+	if err := issuestatus.Ensure(r.Context(), qtx, ws.ID); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to seed issue statuses: "+err.Error())
 		return
 	}
 
@@ -339,7 +413,11 @@ func (h *Handler) UpdateWorkspace(w http.ResponseWriter, r *http.Request) {
 		params.Repos = reposJSON
 	}
 	if req.IssuePrefix != nil {
-		prefix := strings.ToUpper(strings.TrimSpace(*req.IssuePrefix))
+		prefix, ok := normalizeIssuePrefix(*req.IssuePrefix)
+		if !ok {
+			writeError(w, http.StatusBadRequest, issuePrefixFormatError)
+			return
+		}
 		if prefix != "" {
 			params.IssuePrefix = pgtype.Text{String: prefix, Valid: true}
 		}
@@ -369,7 +447,11 @@ func (h *Handler) UpdateWorkspace(w http.ResponseWriter, r *http.Request) {
 	slog.Info("workspace updated", append(logger.RequestAttrs(r), "workspace_id", id)...)
 	userID := requestUserID(r)
 	h.publish(protocol.EventWorkspaceUpdated, uuidToString(ws.ID), "member", userID, map[string]any{"workspace": h.workspaceToResponse(ws)})
-	if req.Name != nil {
+	// A rename changes what daemons display; a settings edit changes how they
+	// behave — the GitHub master switch and the Co-authored-by toggle are read
+	// from this JSONB. Daemons cache settings and have no other way to learn
+	// they moved, so both edits have to wake every member's daemons.
+	if req.Name != nil || req.Settings != nil {
 		if members, err := h.Queries.ListMembers(r.Context(), ws.ID); err == nil {
 			userIDs := make([]string, 0, len(members))
 			for _, member := range members {
@@ -474,80 +556,6 @@ func normalizeMemberRole(role string) (string, bool) {
 	default:
 		return "", false
 	}
-}
-
-func (h *Handler) CreateMember(w http.ResponseWriter, r *http.Request) {
-	workspaceID := workspaceIDFromURL(r, "id")
-	requester, ok := h.workspaceMember(w, r, workspaceID)
-	if !ok {
-		return
-	}
-
-	var req CreateMemberRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body")
-		return
-	}
-
-	email := strings.ToLower(strings.TrimSpace(req.Email))
-	if email == "" {
-		writeError(w, http.StatusBadRequest, "email is required")
-		return
-	}
-
-	role, valid := normalizeMemberRole(req.Role)
-	if !valid {
-		writeError(w, http.StatusBadRequest, "invalid member role")
-		return
-	}
-	if role == "owner" && requester.Role != "owner" {
-		writeError(w, http.StatusForbidden, "insufficient permissions")
-		return
-	}
-
-	user, err := h.Queries.GetUserByEmail(r.Context(), email)
-	if err != nil {
-		if isNotFound(err) {
-			// Auto-create user with email so they can be invited before signing up
-			user, err = h.Queries.CreateUser(r.Context(), db.CreateUserParams{
-				Name:  email,
-				Email: email,
-			})
-			if err != nil {
-				writeError(w, http.StatusInternalServerError, "failed to create user")
-				return
-			}
-		} else {
-			writeError(w, http.StatusInternalServerError, "failed to load user")
-			return
-		}
-	}
-
-	member, err := h.Queries.CreateMember(r.Context(), db.CreateMemberParams{
-		WorkspaceID: requester.WorkspaceID,
-		UserID:      user.ID,
-		Role:        role,
-	})
-	if err != nil {
-		if isUniqueViolation(err) {
-			writeError(w, http.StatusConflict, "user is already a member")
-			return
-		}
-		slog.Warn("create member failed", append(logger.RequestAttrs(r), "error", err, "workspace_id", workspaceID, "email", email)...)
-		writeError(w, http.StatusInternalServerError, "failed to create member")
-		return
-	}
-
-	slog.Info("member added", append(logger.RequestAttrs(r), "member_id", uuidToString(member.ID), "workspace_id", workspaceID, "email", email, "role", role)...)
-	userID := requestUserID(r)
-	eventPayload := map[string]any{"member": h.memberWithUserResponse(member, user)}
-	if ws, err := h.Queries.GetWorkspace(r.Context(), requester.WorkspaceID); err == nil {
-		eventPayload["workspace_name"] = ws.Name
-	}
-	h.publish(protocol.EventMemberAdded, uuidToString(requester.WorkspaceID), "member", userID, eventPayload)
-	h.notifyDaemonWorkspacesChanged(uuidToString(user.ID))
-
-	writeJSON(w, http.StatusCreated, h.memberWithUserResponse(member, user))
 }
 
 type UpdateMemberRequest struct {
@@ -672,6 +680,7 @@ func (h *Handler) DeleteMember(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "failed to delete member")
 		return
 	}
+	h.settleMemberCapacityRelease(r.Context(), uuid.UUID(target.WorkspaceID.Bytes), uuid.UUID(target.ID.Bytes))
 
 	h.MembershipCache.Invalidate(r.Context(), uuidToString(target.UserID), workspaceID)
 
@@ -715,6 +724,7 @@ func (h *Handler) LeaveWorkspace(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "failed to leave workspace")
 		return
 	}
+	h.settleMemberCapacityRelease(r.Context(), uuid.UUID(member.WorkspaceID.Bytes), uuid.UUID(member.ID.Bytes))
 
 	h.MembershipCache.Invalidate(r.Context(), uuidToString(member.UserID), workspaceID)
 
@@ -1094,6 +1104,8 @@ func (h *Handler) DeleteWorkspace(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback(r.Context())
 	qtx := h.Queries.WithTx(tx)
+	var sourceContextAttachmentURLs []string
+	var sourceContextIntentURLs []string
 
 	// SET LOCAL is transaction-scoped, so pgxpool hands this connection back
 	// out with the default (unbounded) lock_timeout after COMMIT / ROLLBACK.
@@ -1109,9 +1121,26 @@ func (h *Handler) DeleteWorkspace(w http.ResponseWriter, r *http.Request) {
 		failWorkspaceDelete(w, r, workspaceID, "lock workspace", err)
 		return
 	}
+	// Take a best-effort snapshot for post-commit daemon invalidation. Runtime
+	// registration does not participate in the workspace delete lock protocol,
+	// so PR1 retains the heartbeat lookup as the correctness fallback for a
+	// registration that races this snapshot.
+	runtimeIDs, err := qtx.ListAgentRuntimeIDsByWorkspace(r.Context(), requester.WorkspaceID)
+	if err != nil {
+		failWorkspaceDelete(w, r, workspaceID, "list runtimes", err)
+		return
+	}
 
 	if _, err := qtx.LockChatSessionsByWorkspace(r.Context(), requester.WorkspaceID); err != nil {
 		failWorkspaceDelete(w, r, workspaceID, "lock chat sessions", err)
+		return
+	}
+	if sourceContextAttachmentURLs, err = qtx.ListSourceContextAttachmentURLsByWorkspace(r.Context(), requester.WorkspaceID); err != nil {
+		failWorkspaceDelete(w, r, workspaceID, "list source context attachment objects", err)
+		return
+	}
+	if sourceContextIntentURLs, err = qtx.ListSourceContextObjectIntentURLsByWorkspace(r.Context(), requester.WorkspaceID); err != nil {
+		failWorkspaceDelete(w, r, workspaceID, "list source context pending objects", err)
 		return
 	}
 
@@ -1137,6 +1166,27 @@ func (h *Handler) DeleteWorkspace(w http.ResponseWriter, r *http.Request) {
 		{
 			name: "prepare relationship graph",
 			run:  func() error { return qtx.PrepareWorkspaceDeletionLinks(ctx, requester.WorkspaceID) },
+		},
+		{
+			// These FK-free intents deliberately survive the transaction so the
+			// worker can release every invitation/member seat after local rows
+			// disappear. Skipped for self-hosted/unmanaged deployments.
+			name: "prepare seat capacity release",
+			run: func() error {
+				if !h.seatCapacityEnabled() {
+					return nil
+				}
+				if err := qtx.DeleteSeatCapacityConfirmIntentsForWorkspaceDeletion(ctx, requester.WorkspaceID); err != nil {
+					return err
+				}
+				if err := qtx.PrepareSeatCapacityOperationReleasesForWorkspaceDeletion(ctx, requester.WorkspaceID); err != nil {
+					return err
+				}
+				if err := qtx.PrepareSeatCapacityInvitationReleasesForWorkspaceDeletion(ctx, requester.WorkspaceID); err != nil {
+					return err
+				}
+				return qtx.PrepareSeatCapacityMemberReleasesForWorkspaceDeletion(ctx, requester.WorkspaceID)
+			},
 		},
 		{
 			name: "delete chat pins",
@@ -1167,6 +1217,14 @@ func (h *Handler) DeleteWorkspace(w http.ResponseWriter, r *http.Request) {
 			run:  func() error { return qtx.DeleteWorkspaceAutopilotRuns(ctx, requester.WorkspaceID) },
 		},
 		{
+			name: "delete autopilot quota reservations",
+			run:  func() error { return qtx.DeleteWorkspaceAutopilotQuotaReservations(ctx, requester.WorkspaceID) },
+		},
+		{
+			name: "delete autopilot quota periods",
+			run:  func() error { return qtx.DeleteWorkspaceAutopilotQuotaPeriods(ctx, requester.WorkspaceID) },
+		},
+		{
 			name: "delete chat messages",
 			run:  func() error { return qtx.DeleteWorkspaceChatMessages(ctx, requester.WorkspaceID) },
 		},
@@ -1178,9 +1236,36 @@ func (h *Handler) DeleteWorkspace(w http.ResponseWriter, r *http.Request) {
 			name: "delete comments",
 			run:  func() error { return qtx.DeleteWorkspaceComments(ctx, requester.WorkspaceID) },
 		},
+		// Keep source-context object intents after the workspace row is gone.
+		// They are the durable retry ledger for an upload that began before the
+		// workspace lock but completed after this transaction's immediate object
+		// deletion pass. With no attachment left, the reconciler will delete the
+		// object and then the intent; deleting the ledger here would make that
+		// crash window permanently leak the late object.
+		{
+			name: "delete source context attachments",
+			run:  func() error { return qtx.DeleteSourceContextAttachmentsByWorkspace(ctx, requester.WorkspaceID) },
+		},
+		{
+			name: "delete source contexts",
+			run: func() error {
+				_, err := qtx.DeleteIssueSourceContextsForWorkspace(ctx, requester.WorkspaceID)
+				return err
+			},
+		},
 		{
 			name: "delete issue roots",
 			run:  func() error { return qtx.DeleteWorkspaceIssueRoots(ctx, requester.WorkspaceID) },
+		},
+		{
+			// issue_status carries no foreign key by project rule, so its rows
+			// are swept explicitly. Placed after the issue deletes so no issue
+			// row outlives the catalog its status key resolves against.
+			// (MUL-6243)
+			name: "delete issue statuses",
+			run: func() error {
+				return qtx.DeleteIssueStatusEntriesForWorkspace(ctx, requester.WorkspaceID)
+			},
 		},
 		{
 			name: "delete autopilot children",
@@ -1201,6 +1286,10 @@ func (h *Handler) DeleteWorkspace(w http.ResponseWriter, r *http.Request) {
 		{
 			name: "delete squads and skills",
 			run:  func() error { return qtx.DeleteWorkspaceSquadsAndSkills(ctx, requester.WorkspaceID) },
+		},
+		{
+			name: "delete plugin data",
+			run:  func() error { return qtx.DeleteWorkspacePluginData(ctx, requester.WorkspaceID) },
 		},
 		{
 			name: "delete agents",
@@ -1234,6 +1323,10 @@ func (h *Handler) DeleteWorkspace(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "failed to delete workspace")
 		return
 	}
+	for _, runtimeID := range runtimeIDs {
+		h.NotifyRuntimeGone(uuidToString(runtimeID))
+	}
+	h.deleteS3Objects(r.Context(), append(sourceContextAttachmentURLs, sourceContextIntentURLs...))
 
 	slog.Info("workspace deleted", append(logger.RequestAttrs(r), "workspace_id", workspaceID)...)
 	h.publish(protocol.EventWorkspaceDeleted, workspaceID, "member", requestUserID(r), map[string]any{

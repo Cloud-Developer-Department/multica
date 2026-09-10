@@ -5,7 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ChevronRight, Loader2, RotateCcw, Square } from "lucide-react";
 import { toast } from "sonner";
 import { api, dispatchReasonCode } from "@multica/core/api";
-import { issueKeys } from "@multica/core/issues/queries";
+import { issueTasksOptions } from "@multica/core/issues/queries";
 import { useCustomPricingStore } from "@multica/core/runtimes/custom-pricing-store";
 import type { AgentTask } from "@multica/core/types";
 import { useTimeAgo } from "../../i18n";
@@ -17,8 +17,9 @@ import {
 import { ActorAvatar } from "../../common/actor-avatar";
 import { formatDuration } from "../../agents/components/agent-activity-hover-content";
 import { TranscriptButton } from "../../common/task-transcript";
-import { failureReasonLabel } from "../../agents/components/tabs/task-failure";
+import { cancelReasonLabel, failureReasonLabel } from "../../agents/components/tabs/task-failure";
 import { useT } from "../../i18n";
+import { compareActiveIssueTasks } from "./active-task-order";
 import {
   formatTokens,
   formatUsd,
@@ -80,12 +81,7 @@ export function ExecutionLogSection({ issueId, identifier }: ExecutionLogSection
   // a `["issues", "tasks"]` prefix-match — no local WS subscriptions
   // needed, and the cache stays fresh even when this component isn't
   // mounted (e.g. user cancels from agent-side, then navigates here).
-  const { data: tasks = [] } = useQuery({
-    queryKey: issueKeys.tasks(issueId),
-    queryFn: () => api.listTasksByIssue(issueId),
-    staleTime: 30_000,
-    refetchOnWindowFocus: true,
-  });
+  const { data: tasks = [] } = useQuery(issueTasksOptions(issueId));
 
   const activeTasks = useMemo(
     () =>
@@ -98,7 +94,7 @@ export function ExecutionLogSection({ issueId, identifier }: ExecutionLogSection
           // what tells the user the agent is alive and will resume.
           t.status === "waiting_local_directory" ||
           t.status === "running",
-      ),
+      ).toSorted(compareActiveIssueTasks),
     [tasks],
   );
 
@@ -311,7 +307,7 @@ export function ActiveTaskRow({
 }: {
   task: AgentTask;
   issueId: string;
-  onTranscriptOpenChange?: (open: boolean) => void;
+  onTranscriptOpenChange?: (open: boolean, fromKeyboard?: boolean) => void;
 }) {
   const { t } = useT("issues");
   const [cancelling, setCancelling] = useState(false);
@@ -427,13 +423,27 @@ export function ActiveTaskRow({
 
 function PastRow({ task, issueId }: { task: AgentTask; issueId: string }) {
   const { t } = useT("issues");
+  const { t: tAgents } = useT("agents");
   const timeAgo = useTimeAgo();
   const [retrying, setRetrying] = useState(false);
   const label = useStatusLabel(task.status);
   const trigger = useTriggerText(task);
   const time = task.completed_at ? timeAgo(task.completed_at) : "—";
+  // A failed run always explains itself. A cancelled one only when the SERVER
+  // cancelled it for a persisted reason (worktree claim gate, preserved-work
+  // delivery) — a user-initiated cancel stays a plain "Cancelled".
   const failureLabel =
-    task.status === "failed" ? failureReasonLabel(task.failure_reason) : null;
+    task.status === "failed"
+      ? failureReasonLabel(task.failure_reason, tAgents)
+      : cancelReasonLabel(task, tAgents);
+  // Hovering the status mark reveals the localized reason, never the raw
+  // `task.error`. That field is operator-facing English prose the daemon and
+  // server write for classification and logs (#7411) — pasting it into a
+  // tooltip made every non-English workspace read English at the exact moment
+  // something broke, and dragged absolute worktree paths and machine names
+  // into hover text and screenshots. The full diagnostic stays one click away
+  // in the transcript's Run details.
+  const statusTitle = failureLabel ?? label;
 
   // What this run cost, in the slot the relative timestamp used to hold.
   //
@@ -493,7 +503,7 @@ function PastRow({ task, issueId }: { task: AgentTask; issueId: string }) {
     <RowShell task={task} title={rowTitle}>
       <TriggerText text={trigger} />
       <TaskCommentCoverage task={task} />
-      <RowStatus title={failureLabel ?? label}>
+      <RowStatus title={statusTitle}>
         <TaskStatusIcon status={task.status} />
         <span className="sr-only">
           {[failureLabel ?? label, time].filter(Boolean).join(" · ")}
