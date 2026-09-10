@@ -32,6 +32,45 @@ function Invoke-Step {
     }
 }
 
+# Confirm-TestResidueProcess 校验一个 PID 是否可证明属于本次测试残留。
+# 仅当进程的可执行路径或命令行能追溯到测试环境（multica_e2e_env 目录或
+# Go 编译的 *.test.exe 测试二进制）时才返回 Proven=$true；任何无法证明
+# 归属的进程一律 Proven=$false（fail closed：不生成也不执行 Stop-Process）。
+function Confirm-TestResidueProcess {
+    param([int]$ProcId)
+    if ($ProcId -le 0) { return @{ Proven = $false; Reason = "无有效 PID" } }
+    $proc = Get-Process -Id $ProcId -ErrorAction SilentlyContinue
+    if (-not $proc) { return @{ Proven = $false; Reason = "PID $ProcId 已不存在" } }
+    $name = $proc.ProcessName
+    $cim = Get-CimInstance Win32_Process -Filter "ProcessId=$ProcId" -ErrorAction SilentlyContinue
+    $exePath = $null
+    $cmdLine = $null
+    if ($cim) {
+        $exePath = $cim.ExecutablePath
+        $cmdLine = $cim.CommandLine
+    }
+    # 1) Go 编译的测试二进制（multica.test.exe 等）—— httptest 随机端口残留的典型归属。
+    if ($name -and $name -match '\.test$') {
+        return @{ Proven = $true; Reason = "进程名 $name 匹配 Go 测试二进制 (*.test.exe)" }
+    }
+    if ($exePath -and $exePath -match '\.test\.exe$') {
+        return @{ Proven = $true; Reason = "可执行路径 $exePath 匹配 Go 测试二进制 (*.test.exe)" }
+    }
+    # 2) 可执行路径落在测试环境目录下。
+    if ($exePath) {
+        foreach ($base in @($E, $EDisabled)) {
+            if ($base -and $exePath -like "$base*") {
+                return @{ Proven = $true; Reason = "可执行路径 $exePath 位于测试环境目录 $base 下" }
+            }
+        }
+    }
+    # 3) 命令行引用测试环境目录（supervisor.ps1 拉起的 server/web 进程）。
+    if ($cmdLine -and $cmdLine -like "*multica_e2e_env*") {
+        return @{ Proven = $true; Reason = "命令行引用测试环境目录 multica_e2e_env" }
+    }
+    return @{ Proven = $false; Reason = "无法证明 PID $ProcId ($name) 属于测试残留 (exe=$exePath)" }
+}
+
 # 1) 计划任务
 foreach ($task in @("multica-e2e-env", "multica-web-clo503")) {
     $exists = schtasks /query /tn $task 2>$null
@@ -52,18 +91,23 @@ if (Test-Path -LiteralPath $E) {
 }
 
 # 3) 检查是否还有测试服务进程占用端口（不应残留）
-#    注意: 5432 是共享 Docker PostgreSQL（ensure-postgres.sh / local-env.sh），
-#    非测试残留，只报告不终止（CLO-651 复验要求，见第 4 步）。
+#    仅终止「可证明属于本次测试残留」的进程；归属未明的只报告不终止
+#    （fail closed，CLO-872 整改要求）。5432 见第 4 步永久保护。
 $testPorts = @(18080, 3000, 61149, 58987, 55213)
 foreach ($p in $testPorts) {
     $conn = Get-NetTCPConnection -LocalPort $p -State Listen -ErrorAction SilentlyContinue
-    if ($conn) {
-        $procId = ($conn | Select-Object -First 1).OwningProcess
-        $procName = (Get-Process -Id $procId -ErrorAction SilentlyContinue).ProcessName
-        Write-Host "端口 $p 被 $procName (PID $procId) 占用" -ForegroundColor DarkYellow
-        Invoke-Step "Stop-Process -Id $procId -Force" "结束占用端口 $p 的进程 $procName"
-    } else {
+    if (-not $conn) {
         Write-Host "端口 $p 空闲" -ForegroundColor DarkGray
+        continue
+    }
+    $procId = ($conn | Select-Object -First 1).OwningProcess
+    $procName = (Get-Process -Id $procId -ErrorAction SilentlyContinue).ProcessName
+    $verdict = Confirm-TestResidueProcess -ProcId $procId
+    if ($verdict.Proven) {
+        Write-Host "端口 $p 被 $procName (PID $procId) 占用 —— 已证明归属：$($verdict.Reason)" -ForegroundColor DarkYellow
+        Invoke-Step "Stop-Process -Id $procId -Force" "结束占用端口 $p 的测试残留进程 $procName (PID $procId)"
+    } else {
+        Write-Host "端口 $p 被 $procName (PID $procId) 占用 —— 归属未明，仅报告不终止：$($verdict.Reason)" -ForegroundColor Red
     }
 }
 
