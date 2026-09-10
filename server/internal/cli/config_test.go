@@ -419,6 +419,11 @@ func TestCLIConfig_NoTaskRootKeepsInteractiveHomeResolution(t *testing.T) {
 // or operator who redirects HOME to isolate the CLI would silently write the
 // real ~/.multica/config.json. An explicit HOME must always win.
 func TestCLIConfig_HomeWinsOverPlatformHome(t *testing.T) {
+	// Daemon-managed task environments inject MULTICA_TASK_CONFIG_ROOT, which
+	// short-circuits multicaConfigRoot to the task-local branch and would make
+	// this HOME-branch guard false-fail (CLO-871). Clear it so the test is
+	// hermetic regardless of where it runs.
+	t.Setenv(TaskConfigRootEnv, "")
 	isolatedHome := t.TempDir()
 	// Point USERPROFILE at a sentinel that must NOT be touched, to catch a
 	// platform home lookup that ignores HOME on Windows.
