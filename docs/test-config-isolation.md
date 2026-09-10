@@ -25,7 +25,7 @@
 覆盖后所有 `multica` 命令打到本地 mock 服务器（404）或本地测试地址，且 daemon 被
 Application Control policy 拦截无法启动。
 
-## 根因修复（已合入 multica 仓库）
+## 根因修复（PR #27 提交中，待合入）
 
 让显式 `HOME` 优先于平台 home 查找，Windows 上与 POSIX 行为一致：
 
@@ -78,12 +78,20 @@ powershell -ExecutionPolicy Bypass -File scripts/restore-multica-config.ps1
 multica config show
 
 # 3. 固定验证命令：确认测试隔离生效（不写真实配置）
-#    在 multica/server 下，HOME 指向临时目录运行 diskusage 测试，
+#    在 multica/server 下运行 diskusage 测试，HOME/USERPROFILE 双重隔离到
+#    临时目录、显式清空 MULTICA_TASK_CONFIG_ROOT（daemon 托管环境会注入该变量，
+#    不清空则走 task-local 分支而非 HOME 分支）、GOCACHE 也指向临时目录，
 #    并比对 ~/.multica/config.json 的 SHA256 在运行前后不变。
-$before = (Get-FileHash "$env:USERPROFILE\.multica\config.json").Hash
-$env:HOME = "$env:TEMP\multica-iso-home"
+$cfg = "$env:USERPROFILE\.multica\config.json"
+$before = (Get-FileHash $cfg).Hash
+$iso = "$env:TEMP\multica-iso-home"
+New-Item -ItemType Directory -Force -Path $iso | Out-Null
+$env:HOME = $iso
+$env:USERPROFILE = $iso
+$env:GOCACHE = "$env:TEMP\multica-iso-gocache"
+Remove-Item Env:\MULTICA_TASK_CONFIG_ROOT -ErrorAction SilentlyContinue
 go test ./cmd/multica/ -run "TestRunDaemonDiskUsage|TestResolveDiskUsageRoot" -count=1
-$after = (Get-FileHash "$env:USERPROFILE\.multica\config.json").Hash
+$after = (Get-FileHash $cfg).Hash
 $before -eq $after   # 必须为 True
 ```
 
