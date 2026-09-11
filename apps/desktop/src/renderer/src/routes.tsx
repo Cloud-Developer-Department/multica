@@ -30,6 +30,8 @@ import { SquadsPage, SquadDetailPage as SquadDetailPageView } from "@multica/vie
 import { InboxPage } from "@multica/views/inbox";
 import { ChatPage } from "@multica/views/chat";
 import { SettingsPage } from "@multica/views/settings";
+import { FeedbackCenterPage } from "@multica/views/feedback";
+import { FeedbackDetailPage } from "./pages/feedback-detail-page";
 import { useT } from "@multica/views/i18n";
 import { Download, Server } from "lucide-react";
 import { DaemonSettingsTab } from "./components/daemon-settings-tab";
@@ -219,6 +221,16 @@ export const appRoutes: RouteObject[] = [
             path: "squads/:id",
             element: <SquadDetailPageView />,
             handle: { title: "Squad" },
+          },
+          {
+            path: "feedback",
+            element: <FeedbackCenterPage />,
+            handle: { title: "Feedback" },
+          },
+          {
+            path: "feedback/:id",
+            element: <FeedbackDetailPage />,
+            handle: { title: "Feedback" },
           },
           { path: "inbox", element: <InboxPage />, handle: { title: "Inbox" } },
           { path: "chat", element: <ChatPage />, handle: { title: "Chat" } },

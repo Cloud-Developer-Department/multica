@@ -1,0 +1,59 @@
+{
+  "page": {
+    "title": "反馈中心",
+    "subtitle": "帮助我们持续改进 Multica。提交问题反馈、功能建议或使用体验，与其他用户一起推动产品改进。",
+    "submit": "提交反馈",
+    "search_placeholder": "搜索反馈……",
+    "sort_label": "排序",
+    "sort_latest": "最新",
+    "sort_hot": "最热门",
+    "sort_comments": "评论最多",
+    "load_more": "加载中……",
+    "comment_count_other": "{{count}} 条评论",
+    "back": "返回反馈中心",
+    "load_failed": "加载反馈失败",
+    "reload": "重新加载",
+    "not_found": "未找到该反馈",
+    "not_found_description": "该反馈不存在或可能已被删除。",
+    "empty_title": "还没有反馈",
+    "empty_description": "成为第一个告诉我们如何改进 Multica 的人。",
+    "empty_action": "提交第一个反馈",
+    "empty_search_title": "没有找到相关反馈",
+    "empty_search_description": "尝试更换关键词或筛选条件。",
+    "submit_failed": "反馈提交失败，请稍后重试。",
+    "comment_failed": "评论发送失败，请稍后重试。"
+  },
+  "types": {
+    "all": "全部",
+    "bug": "问题反馈",
+    "feature": "功能建议",
+    "improvement": "体验优化",
+    "other": "其他"
+  },
+  "vote": {
+    "support": "支持",
+    "supported": "已支持",
+    "toggle_failed": "操作失败，请稍后重试。"
+  },
+  "comments": {
+    "title": "评论",
+    "placeholder": "发表评论……",
+    "send": "发送",
+    "sending": "发送中……",
+    "empty": "还没有评论，来发表第一条评论吧。"
+  },
+  "submit_dialog": {
+    "title": "提交反馈",
+    "type_label": "反馈类型",
+    "title_label": "标题",
+    "title_placeholder": "用一句话概括你的反馈",
+    "description_label": "详细描述",
+    "description_placeholder": "详细描述遇到的问题或建议……",
+    "cancel": "取消",
+    "submit": "提交",
+    "submitting": "提交中……",
+    "title_required": "请输入标题",
+    "description_required": "请输入详细描述",
+    "toast_sent": "感谢你的反馈！"
+  }
+}

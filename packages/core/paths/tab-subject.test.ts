@@ -18,11 +18,13 @@ describe("parseTabSubject", () => {
     ["/acme/runtimes", { kind: "page", page: "runtimes" }],
     ["/acme/skills", { kind: "page", page: "skills" }],
     ["/acme/settings", { kind: "page", page: "settings" }],
+    ["/acme/feedback", { kind: "page", page: "feedback" }],
     // Resource details
     ["/acme/issues/bug-1", { kind: "issue", id: "bug-1" }],
     ["/acme/projects/p1", { kind: "project", id: "p1" }],
     ["/acme/autopilots/a1", { kind: "autopilot", id: "a1" }],
     ["/acme/skills/s1", { kind: "skill", id: "s1" }],
+    ["/acme/feedback/fb1", { kind: "feedback", id: "fb1" }],
     ["/acme/attachments/att1/preview", { kind: "attachment", id: "att1", filename: null }],
     [
       "/acme/attachments/att1/preview?name=report.pdf",
@@ -92,6 +94,7 @@ describe("tabSubjectKey", () => {
     expect(tabSubjectKey({ kind: "issue", id: "x" })).toBe("issue:x");
     expect(tabSubjectKey({ kind: "chat", sessionId: null })).toBe("chat:");
     expect(tabSubjectKey({ kind: "chat", sessionId: "s1" })).toBe("chat:s1");
+    expect(tabSubjectKey({ kind: "feedback", id: "fb1" })).toBe("feedback:fb1");
     expect(
       tabSubjectKey({ kind: "actor", actorType: "member", id: "m1" }),
     ).toBe("actor:member:m1");

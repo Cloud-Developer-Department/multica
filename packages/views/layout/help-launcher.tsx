@@ -17,9 +17,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@multica/ui/components/ui/dropdown-menu";
-import { useModalStore } from "@multica/core/modals";
 import { useConfigStore } from "@multica/core/config";
 import { isDesktopShell } from "../platform/local-directory";
+import { useModalStore } from "@multica/core/modals";
+import { paths, useWorkspaceSlug } from "@multica/core/paths";
+import { useOptionalNavigation } from "../navigation";
 import { DISCORD_URL, DiscordIcon } from "./discord";
 import { useT } from "../i18n";
 
@@ -44,6 +46,16 @@ export function HelpLauncher() {
   // markup matches either way, so the link can ship in the SSR payload instead
   // of popping in a frame late.
   const desktop = isDesktopShell();
+  // The sidebar only renders inside a workspace route, so navigation is always
+  // available there. Outside one (e.g. standalone tests) we fall back to the
+  // legacy feedback modal so the entry never dead-ends.
+  const slug = useWorkspaceSlug();
+  const navigation = useOptionalNavigation();
+  const feedbackPath = slug ? paths.workspace(slug).feedback() : null;
+  const openFeedback = () => {
+    if (navigation && feedbackPath) navigation.push(feedbackPath);
+    else useModalStore.getState().open("feedback");
+  };
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -109,7 +121,7 @@ export function HelpLauncher() {
           <ArrowUpRight className="size-3 translate-y-px text-faint-foreground" />
         </DropdownMenuItem>
         <DropdownMenuItem
-          onClick={() => useModalStore.getState().open("feedback")}
+          onClick={openFeedback}
         >
           <MessageCircle className="h-3.5 w-3.5" />
           {t(($) => $.help.feedback)}

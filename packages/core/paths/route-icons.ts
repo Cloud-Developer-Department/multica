@@ -22,6 +22,7 @@
 export type RouteIconName =
   | "Inbox"
   | "MessageSquare"
+  | "MessageCircle"
   | "CircleUser"
   | "ListTodo"
   | "FolderKanban"
@@ -55,7 +56,8 @@ export type NavLabelKey =
   | "usage"
   | "runtimes"
   | "skills"
-  | "settings";
+  | "settings"
+  | "feedback";
 
 /** Stable identifier for each workspace navigation page. */
 export type WorkspacePageKey =
@@ -70,7 +72,8 @@ export type WorkspacePageKey =
   | "usage"
   | "runtimes"
   | "skills"
-  | "settings";
+  | "settings"
+  | "feedback";
 
 export interface WorkspacePage {
   /** Route segment at index 1 of `/{slug}/{segment}/...`. */
@@ -98,6 +101,7 @@ export const WORKSPACE_PAGES: Record<WorkspacePageKey, WorkspacePage> = {
   runtimes: { segment: "runtimes", icon: "Monitor", navKey: "runtimes" },
   skills: { segment: "skills", icon: "BookOpenText", navKey: "skills" },
   settings: { segment: "settings", icon: "Settings", navKey: "settings" },
+  feedback: { segment: "feedback", icon: "MessageCircle", navKey: "feedback" },
 };
 
 /** Reverse lookup: route segment → page key. */
