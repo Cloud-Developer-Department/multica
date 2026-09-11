@@ -1,4 +1,4 @@
-{
+﻿{
   "nav": {
     "inbox": "Inbox",
     "chat": "Chat",
@@ -8,6 +8,7 @@
     "autopilots": "Autopilot",
     "agents": "Agents",
     "squads": "Squads",
+    "marketplace": "Marketplace",
     "usage": "Analytics",
     "runtimes": "Runtimes",
     "skills": "Skills",
@@ -21,6 +22,7 @@
     "member": "Member",
     "squad": "Squad",
     "skill": "Skill",
+    "marketplace": "Marketplace",
     "machine": "Machine",
     "runtime": "Runtime",
     "attachment": "Attachment",

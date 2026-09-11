@@ -23,6 +23,7 @@ var workspaceDeletionManifest = map[string]workspaceDeleteAction{
 	"agent":                              workspaceDelete,
 	"agent_builder_draft":                workspaceDelete,
 	"agent_invocation_target":            workspaceDelete,
+	"agent_mcp_server":                   workspaceDelete,
 	"agent_runtime":                      workspaceDelete,
 	"agent_skill":                        workspaceDelete,
 	"agent_task_queue":                   workspaceDelete,
@@ -90,10 +91,11 @@ var workspaceDeletionManifest = map[string]workspaceDeleteAction{
 	"lark_installation":                  workspaceDelete,
 	"lark_outbound_card_message":         workspaceDelete,
 	"lark_user_binding":                  workspaceDelete,
-	"maintenance_job":                    workspaceDeleteKeep, // Global maintenance audit history, not workspace-owned.
+"maintenance_job":                    workspaceDeleteKeep, // Global maintenance audit history, not workspace-owned.
+	"marketplace_download_dedup":         workspaceDelete,
+	"marketplace_listings":               workspaceDelete,
+	"marketplace_stats":                  workspaceDelete,
 	"member":                             workspaceDelete,
-	"agent_mcp_server":                   workspaceDelete,
-	"workspace_mcp_server":               workspaceDelete,
 	"notification_preference":            workspaceDelete,
 	"personal_access_token":              workspaceDeleteKeep,
 	"pinned_item":                        workspaceDelete,
@@ -123,6 +125,7 @@ var workspaceDeletionManifest = map[string]workspaceDeleteAction{
 	"task_usage_hourly":                  workspaceDelete,
 	"task_usage_hourly_dirty":            workspaceDelete,
 	"task_usage_hourly_rollup_state":     workspaceDeleteKeep,
+	"template_apply_log":                 workspaceDelete,
 	"user":                               workspaceDeleteKeep,
 	"user_composio_connection":           workspaceDeleteKeep,
 	"vcs_commit_status":                  workspaceDelete,
@@ -132,6 +135,7 @@ var workspaceDeletionManifest = map[string]workspaceDeleteAction{
 	"webhook_delivery":                   workspaceDelete,
 	"workspace":                          workspaceDelete,
 	"workspace_invitation":               workspaceDelete,
+	"workspace_mcp_server":               workspaceDelete,
 	"workspace_share_link":               workspaceDelete,
 }
 
