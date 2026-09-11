@@ -32,6 +32,8 @@ export type TabSubject =
   | { kind: "skill"; id: string }
   /** A single feedback detail. */
   | { kind: "feedback"; id: string }
+  /** A single marketplace listing detail. */
+  | { kind: "marketplace"; id: string }
   /** A runtime machine detail. */
   | { kind: "machine"; machineId: string }
   /** A runtime nested under a machine. */
@@ -98,6 +100,10 @@ export function parseTabSubject(url: string): TabSubject {
       return id
         ? { kind: "actor", actorType: "squad", id }
         : { kind: "page", page: "squads" };
+    case "marketplace":
+      return id
+        ? { kind: "marketplace", id }
+        : { kind: "page", page: "marketplace" };
     case "usage":
       return { kind: "page", page: "usage" };
     case "issue-documents":
@@ -161,6 +167,8 @@ export function tabSubjectKey(subject: TabSubject): string {
       return `skill:${subject.id}`;
     case "feedback":
       return `feedback:${subject.id}`;
+    case "marketplace":
+      return `marketplace:${subject.id}`;
     case "machine":
       return `machine:${subject.machineId}`;
     case "runtime":

@@ -29,6 +29,7 @@ export type RouteIconName =
   | "Zap"
   | "Bot"
   | "Users"
+  | "Store"
   | "BarChart3"
   | "FileStack"
   | "Monitor"
@@ -54,6 +55,7 @@ export type NavLabelKey =
   | "autopilots"
   | "agents"
   | "squads"
+  | "marketplace"
   | "usage"
   | "issue_documents"
   | "runtimes"
@@ -71,6 +73,7 @@ export type WorkspacePageKey =
   | "autopilots"
   | "agents"
   | "squads"
+  | "marketplace"
   | "usage"
   | "issueDocuments"
   | "runtimes"
@@ -100,6 +103,7 @@ export const WORKSPACE_PAGES: Record<WorkspacePageKey, WorkspacePage> = {
   autopilots: { segment: "autopilots", icon: "Zap", navKey: "autopilots" },
   agents: { segment: "agents", icon: "Bot", navKey: "agents" },
   squads: { segment: "squads", icon: "Users", navKey: "squads" },
+  marketplace: { segment: "marketplace", icon: "Store", navKey: "marketplace" },
   usage: { segment: "usage", icon: "BarChart3", navKey: "usage" },
   issueDocuments: { segment: "issue-documents", icon: "FileStack", navKey: "issue_documents" },
   runtimes: { segment: "runtimes", icon: "Monitor", navKey: "runtimes" },

@@ -177,6 +177,29 @@ func cleanupHandlerTestFixture(ctx context.Context, pool *pgxpool.Pool) error {
 			return err
 		}
 	}
+	// Marketplace rows reference the workspace without an FK (repo rule), so
+	// orphaned listings would survive the workspace DELETE below; remove them
+	// explicitly in application-cleanup order (dedup → stats → listings).
+	if _, err := pool.Exec(ctx, `
+		DELETE FROM marketplace_download_dedup
+		WHERE listing_id IN (SELECT id FROM marketplace_listings
+		                     WHERE source_workspace_id = (SELECT id FROM workspace WHERE slug = $1))
+	`, handlerTestWorkspaceSlug); err != nil {
+		return err
+	}
+	if _, err := pool.Exec(ctx, `
+		DELETE FROM marketplace_stats
+		WHERE listing_id IN (SELECT id FROM marketplace_listings
+		                     WHERE source_workspace_id = (SELECT id FROM workspace WHERE slug = $1))
+	`, handlerTestWorkspaceSlug); err != nil {
+		return err
+	}
+	if _, err := pool.Exec(ctx, `
+		DELETE FROM marketplace_listings
+		WHERE source_workspace_id = (SELECT id FROM workspace WHERE slug = $1)
+	`, handlerTestWorkspaceSlug); err != nil {
+		return err
+	}
 	if _, err := pool.Exec(ctx, `DELETE FROM workspace WHERE slug = $1`, handlerTestWorkspaceSlug); err != nil {
 		return err
 	}

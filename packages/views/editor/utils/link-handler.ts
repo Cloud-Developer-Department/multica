@@ -33,6 +33,8 @@ const WORKSPACE_ROUTE_SEGMENTS = new Set([
   "runtimes",
   "skills",
   "feedback",
+  "squads",
+  "marketplace",
   "settings",
 ]);
 

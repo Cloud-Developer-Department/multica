@@ -1,0 +1,1 @@
+DROP INDEX CONCURRENTLY IF EXISTS marketplace_listings_source_workspace_id_title_key;
