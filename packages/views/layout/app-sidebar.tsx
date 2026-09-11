@@ -120,6 +120,7 @@ type NavKey =
   | "autopilots"
   | "agents"
   | "squads"
+  | "marketplace"
   | "usage"
   | "runtimes"
   | "skills"
@@ -136,6 +137,7 @@ type NavLabelKey =
   | "autopilots"
   | "agents"
   | "squads"
+  | "marketplace"
   | "usage"
   | "runtimes"
   | "skills"
@@ -154,6 +156,7 @@ const workNav: { key: NavKey; labelKey: NavLabelKey }[] = [
   { key: "issues", labelKey: "issues" },
   { key: "projects", labelKey: "projects" },
   { key: "autopilots", labelKey: "autopilots" },
+
 ];
 
 const aiTeamNav: { key: NavKey; labelKey: NavLabelKey }[] = [

@@ -221,6 +221,20 @@ import type {
   CreateCommentSubIssueManualRequest,
   CreateCommentSubIssueAgentRequest,
   CreateCommentSubIssueRequest,
+  ExportResourceTemplateRequest,
+  ExportResourceTemplateResponse,
+  ValidateResourceTemplateRequest,
+  ValidateResourceTemplateResponse,
+  ApplyResourceTemplateRequest,
+  ApplyResourceTemplateResponse,
+  CreateSquadRequest,
+  MarketplaceKind,
+  MarketplaceSort,
+  PublishMarketplaceListingRequest,
+  MarketplaceListing,
+  ListMarketplaceListingsResponse,
+  MarketplaceDetailResponse,
+  ReportMarketplaceDownloadResponse,
 } from "../types";
 import type { OnboardingCompletionPath } from "../onboarding/types";
 import type {
@@ -449,6 +463,14 @@ import {
   type IssueView,
   type IssueViewPreference,
   type CreateIssueViewRequest,
+  MarketplaceListingSchema,
+  ListMarketplaceListingsResponseSchema,
+  MarketplaceDetailResponseSchema,
+  ReportMarketplaceDownloadResponseSchema,
+  EMPTY_MARKETPLACE_LISTING,
+  EMPTY_LIST_MARKETPLACE_LISTINGS_RESPONSE,
+  EMPTY_MARKETPLACE_DETAIL_RESPONSE,
+  EMPTY_REPORT_MARKETPLACE_DOWNLOAD_RESPONSE,
 } from "./schemas";
 
 /** Identifies the calling client to the server.
@@ -4048,7 +4070,7 @@ export class ApiClient {
     }) as Squad;
   }
 
-  async createSquad(data: { name: string; description?: string; leader_id: string; avatar_url?: string }): Promise<Squad> {
+  async createSquad(data: CreateSquadRequest): Promise<Squad> {
     const raw = await this.fetch<unknown>("/api/squads", { method: "POST", body: JSON.stringify(data) });
     return parseWithFallback(raw, SquadSchema, EMPTY_SQUAD, {
       endpoint: "POST /api/squads",
@@ -4723,6 +4745,135 @@ export class ApiClient {
       RedeemTelegramBindingTokenResponseSchema,
       EMPTY_REDEEM_TELEGRAM_BINDING_TOKEN_RESPONSE,
       { endpoint: "POST /api/telegram/binding/redeem" },
+    );
+  }
+
+  // Resource templates (CLO-245): export/validate/apply portable agent & squad
+  // templates. The workspace is resolved server-side from the X-Workspace-Slug
+  // header (sent by authHeaders), so no workspace_id query is needed from the
+  // Web client. See server/internal/handler/resource_template.go.
+  async exportResourceTemplate(
+    data: ExportResourceTemplateRequest,
+  ): Promise<ExportResourceTemplateResponse> {
+    return this.fetch(`/api/templates/export`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async validateResourceTemplate(
+    data: ValidateResourceTemplateRequest,
+  ): Promise<ValidateResourceTemplateResponse> {
+    return this.fetch(`/api/templates/validate`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async applyResourceTemplate(
+    data: ApplyResourceTemplateRequest,
+  ): Promise<ApplyResourceTemplateResponse> {
+    return this.fetch(`/api/templates/apply`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  // Marketplace (F-523): publish / browse / detail / archive / download agent
+  // & squad listings. The workspace is resolved server-side from the
+  // X-Workspace-Slug header, matching the template endpoints above.
+  async publishMarketplaceListing(
+    data: PublishMarketplaceListingRequest,
+  ): Promise<MarketplaceListing> {
+    const raw = await this.fetch<unknown>(`/api/marketplace/listings`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+    return parseWithFallback(
+      raw,
+      MarketplaceListingSchema,
+      EMPTY_MARKETPLACE_LISTING,
+      { endpoint: "POST /api/marketplace/listings" },
+    );
+  }
+
+  async listMarketplaceListings(params: {
+    kind?: MarketplaceKind;
+    category?: string;
+    q?: string;
+    sort?: MarketplaceSort;
+    page?: number;
+    page_size?: number;
+  }): Promise<ListMarketplaceListingsResponse> {
+    const qs = new URLSearchParams();
+    if (params.kind) qs.set("kind", params.kind);
+    if (params.category) qs.set("category", params.category);
+    if (params.q) qs.set("q", params.q);
+    if (params.sort) qs.set("sort", params.sort);
+    if (params.page) qs.set("page", String(params.page));
+    if (params.page_size) qs.set("page_size", String(params.page_size));
+    const query = qs.toString();
+    const raw = await this.fetch<unknown>(
+      `/api/marketplace/listings${query ? `?${query}` : ""}`,
+    );
+    return parseWithFallback(
+      raw,
+      ListMarketplaceListingsResponseSchema,
+      EMPTY_LIST_MARKETPLACE_LISTINGS_RESPONSE,
+      { endpoint: "GET /api/marketplace/listings" },
+    );
+  }
+
+  async getMarketplaceListing(id: string): Promise<MarketplaceDetailResponse> {
+    const raw = await this.fetch<unknown>(
+      `/api/marketplace/listings/${encodeURIComponent(id)}`,
+    );
+    return parseWithFallback(
+      raw,
+      MarketplaceDetailResponseSchema,
+      EMPTY_MARKETPLACE_DETAIL_RESPONSE,
+      { endpoint: "GET /api/marketplace/listings/:id" },
+    );
+  }
+
+  async archiveMarketplaceListing(
+    id: string,
+    restore: boolean,
+  ): Promise<MarketplaceListing> {
+    const raw = await this.fetch<unknown>(
+      `/api/marketplace/listings/${encodeURIComponent(id)}/archive`,
+      {
+        method: "POST",
+        body: JSON.stringify({ restore }),
+      },
+    );
+    return parseWithFallback(
+      raw,
+      MarketplaceListingSchema,
+      EMPTY_MARKETPLACE_LISTING,
+      { endpoint: "POST /api/marketplace/listings/:id/archive" },
+    );
+  }
+
+  async downloadMarketplaceTemplate(id: string): Promise<Blob> {
+    return this.fetchRaw(
+      `/api/marketplace/listings/${encodeURIComponent(id)}/download`,
+      { extraHeaders: { "Content-Type": "application/json" } },
+    ).then((res) => res.blob());
+  }
+
+  async reportMarketplaceDownload(
+    id: string,
+  ): Promise<ReportMarketplaceDownloadResponse> {
+    const raw = await this.fetch<unknown>(
+      `/api/marketplace/listings/${encodeURIComponent(id)}/downloads`,
+      { method: "POST", body: JSON.stringify({ count: 1 }) },
+    );
+    return parseWithFallback(
+      raw,
+      ReportMarketplaceDownloadResponseSchema,
+      EMPTY_REPORT_MARKETPLACE_DOWNLOAD_RESPONSE,
+      { endpoint: "POST /api/marketplace/listings/:id/downloads" },
     );
   }
 }

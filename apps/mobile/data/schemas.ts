@@ -661,6 +661,8 @@ export const AgentSchema: z.ZodType<Agent> = z.object({
   updated_at: z.string().default(""),
   archived_at: z.string().nullable().default(null),
   archived_by: z.string().nullable().default(null),
+  parent_squad_id: z.string().nullable().default(null),
+  upgrade_on_member_mention: z.boolean().default(true),
 }).loose();
 
 export const AgentListSchema = z.array(AgentSchema).default([]);
@@ -717,6 +719,8 @@ export const SquadSchema: z.ZodType<Squad> = z.object({
   updated_at: z.string().default(""),
   archived_at: z.string().nullable().default(null),
   archived_by: z.string().nullable().default(null),
+  parent_squad_id: z.string().nullable().default(null),
+  upgrade_on_member_mention: z.boolean().default(true),
 }).loose();
 
 export const SquadListSchema = z.array(SquadSchema).default([]);

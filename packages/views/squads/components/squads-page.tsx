@@ -6,11 +6,13 @@ import {
   ArrowUp,
   ChevronDown,
   ExternalLink,
+  Download,
   Filter,
   Loader2,
   MoreHorizontal,
   Plus,
   Trash2,
+  Upload,
   Users,
   X,
 } from "lucide-react";
@@ -84,6 +86,8 @@ import { ActorAvatar as ActorAvatarBase } from "@multica/ui/components/common/ac
 import { ActorAvatar } from "../../common/actor-avatar";
 import { FILTER_ITEM_CLASS, HoverCheck } from "../../common/hover-check";
 import { useIntentNavigate, useRowLink } from "../../navigation";
+import { exportAndDownload } from "../../common/resource-template-export";
+import { ResourceTemplateImportDialog } from "../../common/resource-template-import-dialog";
 import {
   CollectionPageHeader,
   CollectionPageHeaderAction,
@@ -322,7 +326,27 @@ function SquadRowActions({ squad }: { squad: Squad }) {
   const { t: tCommon } = useT("common");
   const p = useWorkspacePaths();
   const intentNavigate = useIntentNavigate();
+  const { t: tt } = useT("templates");
   const [archiveOpen, setArchiveOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
+
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const { exported, failed } = await exportAndDownload([
+        { kind: "squad", resourceId: squad.id, name: squad.name },
+      ]);
+      if (exported.length > 0) {
+        toast.success(tt(($) => $.export.done, { name: squad.name, count: 1 }));
+      }
+      if (failed.length > 0) {
+        toast.error(tt(($) => $.export.failed, { error: failed[0]!.error }));
+      }
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <span
       onClick={(e) => e.stopPropagation()}
@@ -341,6 +365,13 @@ function SquadRowActions({ squad }: { squad: Squad }) {
           }
         />
         <DropdownMenuContent align="end" className="w-40">
+          <DropdownMenuItem
+            disabled={exporting}
+            onClick={handleExport}
+          >
+            <Download className="size-3.5" />
+            {tt(($) => $.export.button)}
+          </DropdownMenuItem>
           <DropdownMenuItem
             onClick={() =>
               intentNavigate(
@@ -773,11 +804,13 @@ function SquadListToolbar({
 export function SquadsPage() {
   const { t } = useT("squads");
   const locale = useLocale();
+  const { t: tt } = useT("templates");
   const workspace = useCurrentWorkspace();
   const wsId = workspace?.id ?? "";
   const p = useWorkspacePaths();
   const rowLink = useRowLink();
   const currentUser = useAuthStore((s) => s.user);
+  const [templateImportOpen, setTemplateImportOpen] = useState(false);
 
   const { data: squads = [], isLoading } = useQuery({
     ...squadListOptions(wsId),
@@ -916,11 +949,18 @@ export function SquadsPage() {
         title={t(($) => $.page.title)}
         count={squads.length}
         actions={
-          <CollectionPageHeaderAction
-            icon={Plus}
-            label={t(($) => $.page.new_button)}
-            onClick={() => useModalStore.getState().open("create-squad")}
-          />
+          <div className="flex items-center gap-2">
+            <CollectionPageHeaderAction
+              icon={Upload}
+              label={tt(($) => $.import.button)}
+              onClick={() => setTemplateImportOpen(true)}
+            />
+            <CollectionPageHeaderAction
+              icon={Plus}
+              label={t(($) => $.page.new_button)}
+              onClick={() => useModalStore.getState().open("create-squad")}
+            />
+          </div>
         }
       />
 
@@ -1030,6 +1070,11 @@ export function SquadsPage() {
           </div>
         </>
       )}
+
+      <ResourceTemplateImportDialog
+        open={templateImportOpen}
+        onOpenChange={setTemplateImportOpen}
+      />
     </div>
   );
 }

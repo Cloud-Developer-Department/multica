@@ -1,4 +1,4 @@
-import type { LocaleResources, SupportedLocale } from "@multica/core/i18n";
+﻿import type { LocaleResources, SupportedLocale } from "@multica/core/i18n";
 import enCommon from "./en/common.json";
 import enAuth from "./en/auth.json";
 import enSettings from "./en/settings.json";
@@ -24,6 +24,8 @@ import enUsage from "./en/usage.json";
 import enUi from "./en/ui.json";
 import enSquads from "./en/squads.json";
 import enBilling from "./en/billing.json";
+import enTemplates from "./en/templates.json";
+import enMarketplace from "./en/marketplace.json";
 import zhHansCommon from "./zh-Hans/common.json";
 import zhHansAuth from "./zh-Hans/auth.json";
 import zhHansSettings from "./zh-Hans/settings.json";
@@ -49,6 +51,8 @@ import zhHansUsage from "./zh-Hans/usage.json";
 import zhHansUi from "./zh-Hans/ui.json";
 import zhHansSquads from "./zh-Hans/squads.json";
 import zhHansBilling from "./zh-Hans/billing.json";
+import zhHansTemplates from "./zh-Hans/templates.json";
+import zhHansMarketplace from "./zh-Hans/marketplace.json";
 import koCommon from "./ko/common.json";
 import koAuth from "./ko/auth.json";
 import koSettings from "./ko/settings.json";
@@ -74,6 +78,8 @@ import koUsage from "./ko/usage.json";
 import koUi from "./ko/ui.json";
 import koSquads from "./ko/squads.json";
 import koBilling from "./ko/billing.json";
+import koTemplates from "./ko/templates.json";
+import koMarketplace from "./ko/marketplace.json";
 import jaCommon from "./ja/common.json";
 import jaAuth from "./ja/auth.json";
 import jaSettings from "./ja/settings.json";
@@ -99,6 +105,8 @@ import jaUsage from "./ja/usage.json";
 import jaUi from "./ja/ui.json";
 import jaSquads from "./ja/squads.json";
 import jaBilling from "./ja/billing.json";
+import jaTemplates from "./ja/templates.json";
+import jaMarketplace from "./ja/marketplace.json";
 
 // Single source of truth for the resource bundle. Both apps (web layout +
 // desktop App.tsx) import from here so adding a locale or namespace happens
@@ -129,7 +137,9 @@ export const RESOURCES: Record<SupportedLocale, LocaleResources> = {
     usage: enUsage,
     ui: enUi,
     squads: enSquads,
+    marketplace: enMarketplace,
     billing: enBilling,
+    templates: enTemplates,
   },
   "zh-Hans": {
     common: zhHansCommon,
@@ -156,7 +166,9 @@ export const RESOURCES: Record<SupportedLocale, LocaleResources> = {
     usage: zhHansUsage,
     ui: zhHansUi,
     squads: zhHansSquads,
+    marketplace: zhHansMarketplace,
     billing: zhHansBilling,
+    templates: zhHansTemplates,
   },
   ko: {
     common: koCommon,
@@ -183,7 +195,9 @@ export const RESOURCES: Record<SupportedLocale, LocaleResources> = {
     usage: koUsage,
     ui: koUi,
     squads: koSquads,
+    marketplace: koMarketplace,
     billing: koBilling,
+    templates: koTemplates,
   },
   ja: {
     common: jaCommon,
@@ -210,6 +224,8 @@ export const RESOURCES: Record<SupportedLocale, LocaleResources> = {
     usage: jaUsage,
     ui: jaUi,
     squads: jaSquads,
+    marketplace: jaMarketplace,
     billing: jaBilling,
+    templates: jaTemplates,
   },
 };

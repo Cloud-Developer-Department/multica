@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -239,6 +240,11 @@ func (h *Handler) CreateSquad(w http.ResponseWriter, r *http.Request) {
 		Description string  `json:"description"`
 		LeaderID    string  `json:"leader_id"`
 		AvatarURL   *string `json:"avatar_url"`
+		Members     []struct {
+			MemberType string `json:"member_type"`
+			MemberID   string `json:"member_id"`
+			Role       string `json:"role"`
+		} `json:"members"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
@@ -287,7 +293,61 @@ func (h *Handler) CreateSquad(w http.ResponseWriter, r *http.Request) {
 		avatarURL = pgtype.Text{String: accepted, Valid: true}
 	}
 
-	squad, err := h.Queries.CreateSquad(r.Context(), db.CreateSquadParams{
+	// Validate optional members up front so a bad selection fails the whole
+	// request atomically with a structured failed_members payload (F1/CLO-418).
+	// Agent members must exist in this workspace; human members must be
+	// workspace members. The leader is added separately with role "leader".
+	type memberReq struct {
+		memberType string
+		memberID   pgtype.UUID
+		role       string
+	}
+	var memberReqs []memberReq
+	var failed []map[string]string
+	for _, m := range req.Members {
+		role := strings.TrimSpace(m.Role)
+		if role == "" {
+			role = "member"
+		}
+		muuid, err := util.ParseUUID(m.MemberID)
+		if err != nil {
+			failed = append(failed, map[string]string{"member_type": m.MemberType, "member_id": m.MemberID, "reason": "invalid member id"})
+			continue
+		}
+		switch m.MemberType {
+		case "agent":
+			if _, err := h.Queries.GetAgentInWorkspace(r.Context(), db.GetAgentInWorkspaceParams{ID: muuid, WorkspaceID: wsUUID}); err != nil {
+				failed = append(failed, map[string]string{"member_type": m.MemberType, "member_id": m.MemberID, "reason": "agent not found in this workspace"})
+				continue
+			}
+		case "member":
+			if _, err := h.Queries.GetMemberByUserAndWorkspace(r.Context(), db.GetMemberByUserAndWorkspaceParams{UserID: muuid, WorkspaceID: wsUUID}); err != nil {
+				failed = append(failed, map[string]string{"member_type": m.MemberType, "member_id": m.MemberID, "reason": "user is not a member of this workspace"})
+				continue
+			}
+		default:
+			failed = append(failed, map[string]string{"member_type": m.MemberType, "member_id": m.MemberID, "reason": "unsupported member_type"})
+			continue
+		}
+		memberReqs = append(memberReqs, memberReq{memberType: m.MemberType, memberID: muuid, role: role})
+	}
+	if len(failed) > 0 {
+		writeJSON(w, http.StatusBadRequest, map[string]any{
+			"error":          "one or more squad members are invalid",
+			"failed_members": failed,
+		})
+		return
+	}
+
+	tx, err := h.TxStarter.Begin(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to start squad create transaction")
+		return
+	}
+	defer tx.Rollback(r.Context())
+	qtx := h.Queries.WithTx(tx)
+
+	squad, err := qtx.CreateSquad(r.Context(), db.CreateSquadParams{
 		WorkspaceID: wsUUID,
 		Name:        req.Name,
 		Description: req.Description,
@@ -301,12 +361,37 @@ func (h *Handler) CreateSquad(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Auto-add leader as a member with role "leader".
-	h.Queries.AddSquadMember(r.Context(), db.AddSquadMemberParams{
+	if _, err := qtx.AddSquadMember(r.Context(), db.AddSquadMemberParams{
 		SquadID:    squad.ID,
 		MemberType: "agent",
 		MemberID:   leaderUUID,
 		Role:       "leader",
-	})
+	}); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to add squad leader member")
+		return
+	}
+
+	// Add the requested members (skip the leader, which is already a member).
+	for _, m := range memberReqs {
+		if m.memberType == "agent" && m.memberID == leaderUUID {
+			continue
+		}
+		if _, err := qtx.AddSquadMember(r.Context(), db.AddSquadMemberParams{
+			SquadID:    squad.ID,
+			MemberType: m.memberType,
+			MemberID:   m.memberID,
+			Role:       m.role,
+		}); err != nil {
+			slog.Error("create squad: add member failed", "squad_id", uuidToString(squad.ID), "member_id", uuidToString(m.memberID), "error", err)
+			writeError(w, http.StatusInternalServerError, "failed to add squad member")
+			return
+		}
+	}
+
+	if err := tx.Commit(r.Context()); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to commit squad create")
+		return
+	}
 
 	resp, err := h.squadToResponseWithPreview(r.Context(), squad)
 	if err != nil {

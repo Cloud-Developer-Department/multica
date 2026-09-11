@@ -299,6 +299,13 @@ var concurrentIndexCleanups = map[string]string{
 	"445_comment_delegated_failure_unsettled_index":             "idx_comment_delegated_failure_unsettled",
 	"446_issue_properties_bigm_index":                           "idx_issue_properties_bigm",
 	"452_agent_task_pending_thread_unique":                      "idx_one_pending_task_per_issue_agent_thread",
+	"458_template_apply_log_idempotency_unique_index":           "template_apply_log_workspace_key_unique",
+	"461_marketplace_listings_kind_index":                       "marketplace_listings_kind_idx",
+	"462_marketplace_listings_category_index":                   "marketplace_listings_category_idx",
+	"463_marketplace_listings_created_index":                    "marketplace_listings_created_idx",
+	"465_marketplace_listings_fts_index":                        "marketplace_listings_fts_idx",
+	"467_marketplace_download_dedup_unique_index":               "marketplace_download_dedup_listing_workspace_member_unique",
+	"468_marketplace_listings_source_workspace_id_title_unique": "marketplace_listings_source_workspace_id_title_key",
 }
 
 // concurrentDownIndexCleanups covers every migration whose down direction
