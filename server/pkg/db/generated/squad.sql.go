@@ -101,6 +101,11 @@ type CreateSquadParams struct {
 	Instructions string      `json:"instructions"`
 }
 
+// CLO-250 DEF-4 (architect ruling): instructions is part of the portable
+// squad contract (SquadSpec) and the column already exists (088_squad_instructions),
+// but the insert previously omitted it, so template-apply squads could never
+// carry instructions; they only could be patched afterwards via UpdateSquad.
+// model / permission_mode are agent-level concepts and must NOT be added here.
 func (q *Queries) CreateSquad(ctx context.Context, arg CreateSquadParams) (Squad, error) {
 	row := q.db.QueryRow(ctx, createSquad,
 		arg.WorkspaceID,
