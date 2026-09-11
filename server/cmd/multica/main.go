@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -92,6 +93,7 @@ func init() {
 	rootCmd.AddCommand(configCmd)
 	rootCmd.AddCommand(updateCmd)
 	rootCmd.AddCommand(versionCmd)
+	rootCmd.AddCommand(templateCmd)
 
 	initHelp(rootCmd)
 }
@@ -107,6 +109,17 @@ func main() {
 	}
 	cli.CleanupStaleUpdateArtifacts()
 	if err := rootCmd.Execute(); err != nil {
+		// Template commands carry their own exit-code contract (0 ok / 1
+		// general / 2 validation failed / 3 conflict needs a decision), which
+		// the generic cli.ExitCodeFor mapping cannot express. Honor the
+		// exitCoder interface before falling through to the global mapping.
+		var coded interface{ ExitCode() int }
+		if errors.As(err, &coded) {
+			if err != errSilent {
+				fmt.Fprintln(os.Stderr, cli.FormatError(err, debugFlag))
+			}
+			os.Exit(coded.ExitCode())
+		}
 		if err != errSilent {
 			fmt.Fprintln(os.Stderr, cli.FormatError(err, debugFlag))
 		}

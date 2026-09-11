@@ -1,6 +1,11 @@
 -- name: CreateSquad :one
-INSERT INTO squad (workspace_id, name, description, leader_id, creator_id, avatar_url)
-VALUES ($1, $2, $3, $4, $5, $6)
+-- CLO-250 DEF-4 (architect ruling): instructions is part of the portable
+-- squad contract (SquadSpec) and the column already exists (088_squad_instructions),
+-- but the insert previously omitted it, so template-apply squads could never
+-- carry instructions; they only could be patched afterwards via UpdateSquad.
+-- model / permission_mode are agent-level concepts and must NOT be added here.
+INSERT INTO squad (workspace_id, name, description, leader_id, creator_id, avatar_url, instructions)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
 RETURNING *;
 
 -- name: GetSquad :one

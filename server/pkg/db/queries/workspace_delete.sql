@@ -646,6 +646,22 @@ deleted_packages AS (
 )
 DELETE FROM plugin_installation WHERE id IN (SELECT id FROM installations);
 
+-- name: DeleteWorkspaceMarketplace :exec
+-- Marketplace rows carry the workspace in source_workspace_id / workspace_id
+-- (listings) or only reference a listing (stats), so all three tables are
+-- swept together in FK-free application order (dedup → stats → listings).
+WITH deleted_dedup AS (
+    DELETE FROM marketplace_download_dedup
+    WHERE marketplace_download_dedup.workspace_id = $1
+),
+deleted_listings AS (
+    DELETE FROM marketplace_listings
+    WHERE marketplace_listings.source_workspace_id = $1
+    RETURNING marketplace_listings.id
+)
+DELETE FROM marketplace_stats
+WHERE marketplace_stats.listing_id IN (SELECT id FROM deleted_listings);
+
 -- name: DeleteWorkspaceAgents :exec
 DELETE FROM agent WHERE agent.workspace_id = $1;
 

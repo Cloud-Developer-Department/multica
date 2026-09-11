@@ -66,6 +66,10 @@ import type {
   ListWebhookDeliveriesResponse,
   IssueStatusEntry,
   ListIssueStatusesResponse,
+  MarketplaceListing,
+  ListMarketplaceListingsResponse,
+  MarketplaceDetailResponse,
+  ReportMarketplaceDownloadResponse,
   NotificationPreferenceResponse,
   PluginInstallation,
   PluginInstallationListResponse,
@@ -2053,6 +2057,8 @@ export const SquadSchema = z.object({
   updated_at: z.string(),
   archived_at: z.string().nullable().optional().transform((v) => v ?? null),
   archived_by: z.string().nullable().optional().transform((v) => v ?? null),
+  parent_squad_id: z.string().nullable().default(null),
+  upgrade_on_member_mention: z.boolean().default(true),
   member_count: z.number().default(0),
   member_preview: z.array(SquadMemberPreviewSchema).default([]),
 }).loose();
@@ -2066,6 +2072,8 @@ export const EMPTY_SQUAD: Squad = {
   description: "",
   instructions: "",
   avatar_url: null,
+  parent_squad_id: null,
+  upgrade_on_member_mention: true,
   leader_id: "",
   creator_id: "",
   created_at: "",
@@ -3258,6 +3266,50 @@ export const EMPTY_WORKSPACE_MCP_SERVER: WorkspaceMcpServer = {
   updated_at: "",
 };
 
+// --- Marketplace (F-523 / CLO-617) ---
+// The listing template payload is opaque JSON on the client (the server is
+// the sole authority over resourcetmpl.Template structure); the schemas only
+// pin the marketplace envelope fields the UI reads.
+
+export const MarketplaceListingSchema = z.object({
+  id: z.string().default(""),
+  kind: z.string().default("agent"),
+  title: z.string().default(""),
+  summary: z.string().default(""),
+  category: z.string().default("other"),
+  tags: z.array(z.string()).default([]),
+  version: z.string().default("1.0.0"),
+  author_id: z.string().default(""),
+  author_display_name: z.string().default(""),
+  source_workspace_id: z.string().default(""),
+  template_id: z.string().default(""),
+  status: z.string().default("published"),
+  downloads: z.number().default(0),
+  installs: z.number().default(0),
+  created_at: z.string().default(""),
+  updated_at: z.string().default(""),
+  template: z.unknown().optional(),
+}).loose();
+
+export const EMPTY_MARKETPLACE_LISTING: MarketplaceListing = {
+  id: "",
+  kind: "agent",
+  title: "",
+  summary: "",
+  category: "other",
+  tags: [],
+  version: "1.0.0",
+  author_id: "",
+  author_display_name: "",
+  source_workspace_id: "",
+  template_id: "",
+  status: "published",
+  downloads: 0,
+  installs: 0,
+  created_at: "",
+  updated_at: "",
+};
+
 // Share links. Introduced with the workspace share-link invite flow; schemas
 // mirror the API responses so malformed payloads fall back to safe defaults.
 export const ShareLinkSchema = z.object({
@@ -3337,4 +3389,34 @@ export const EMPTY_JOIN_SHARE_LINK_RESPONSE: {
   },
   workspace_id: "",
   workspace_slug: "",
+};
+
+export const ListMarketplaceListingsResponseSchema = z.object({
+  items: z.array(MarketplaceListingSchema).default([]),
+  total: z.number().default(0),
+  page: z.number().default(1),
+  page_size: z.number().default(20),
+}).loose();
+
+export const EMPTY_LIST_MARKETPLACE_LISTINGS_RESPONSE: ListMarketplaceListingsResponse = {
+  items: [],
+  total: 0,
+  page: 1,
+  page_size: 20,
+};
+
+export const MarketplaceDetailResponseSchema = z.object({
+  listing: MarketplaceListingSchema,
+}).loose();
+
+export const EMPTY_MARKETPLACE_DETAIL_RESPONSE: MarketplaceDetailResponse = {
+  listing: EMPTY_MARKETPLACE_LISTING,
+};
+
+export const ReportMarketplaceDownloadResponseSchema = z.object({
+  downloads: z.number().default(0),
+}).loose();
+
+export const EMPTY_REPORT_MARKETPLACE_DOWNLOAD_RESPONSE: ReportMarketplaceDownloadResponse = {
+  downloads: 0,
 };

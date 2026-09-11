@@ -2115,6 +2115,32 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 				})
 			})
 
+			// Agent templates catalog (browse + detail). The Create flow
+			// lives under /api/agents/from-template above; this route is for
+			// the picker UI to list available templates.
+			r.Route("/api/agent-templates", func(r chi.Router) {
+				r.Get("/", h.ListAgentTemplates)
+				r.Get("/{slug}", h.GetAgentTemplate)
+			})
+			// Resource templates (CLO-245): portable agent/squad export,
+			// validation and apply. Backed by internal/resourcetmpl.
+			r.Route("/api/templates", func(r chi.Router) {
+				r.Post("/export", h.ExportResourceTemplate)
+				r.Post("/validate", h.ValidateResourceTemplate)
+				r.Post("/apply", h.ApplyResourceTemplate)
+			})
+			// Marketplace (F-523): publish / browse / download agent & squad
+			// listings. Import reuses /api/templates/{validate,apply}.
+			r.Route("/api/marketplace", func(r chi.Router) {
+				r.Route("/listings", func(r chi.Router) {
+					r.Get("/", h.ListMarketplaceListings)
+					r.Post("/", h.PublishMarketplaceListing)
+					r.Get("/{id}", h.GetMarketplaceListing)
+					r.Post("/{id}/archive", h.ArchiveMarketplaceListing)
+					r.Get("/{id}/download", h.DownloadMarketplaceListingTemplate)
+					r.Post("/{id}/downloads", h.ReportMarketplaceDownload)
+				})
+			})
 			r.Route("/api/agent-builder/sessions", func(r chi.Router) {
 				// The creation studio's unfinished drafts. Builder sessions are
 				// invisible to every chat list (their carrier is kind='system'),

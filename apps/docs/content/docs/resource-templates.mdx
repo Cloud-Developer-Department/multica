@@ -1,0 +1,339 @@
+---
+title: Resource templates
+description: Export an agent or squad definition as a portable template, then load and tweak it into a teammate's own copy.
+---
+
+import { Callout } from "fumadocs-ui/components/callout";
+
+A resource template lets you **export** the definition and configuration of an [agent](/agents) or [squad](/squads) into a **portable JSON file**, so a teammate can **load it, tweak it**, and materialise their own copy in their workspace. It's the standard way to turn "a configuration I've validated works" into a reusable team asset.
+
+In phase 1, templates are **CLI-first** (`multica template export / validate / apply`), shared as JSON files within a workspace. Templates are not stored in a database and there is no Web UI.
+
+<Callout type="info">
+**How it differs from the built-in read-only templates.** Multica ships a set of curated, read-only agent templates (picked from the TemplateChooser when you create an agent) — those are static, repo-baked resources you can't customise. Resource templates are **your own** user templates: you export them, you edit them, you share them. The two systems are independent and never touch each other.
+</Callout>
+
+## The overall flow
+
+Turning one person's config into another person's copy is three steps:
+
+1. **export** — write a template file from an agent or squad you can read (redacted).
+2. **validate** — check the template's structure, version, references and conflicts against the target runtime, and get a plan of "what will be created".
+3. **apply** — create the copy in the target workspace, with dry-run preview, field overrides and safe retries.
+
+```bash
+# Export an agent as a template
+multica template export --kind agent --id my-reviewer --file reviewer.json
+
+# Validate against the target runtime
+multica template validate --file reviewer.json --runtime-id <rt>
+
+# Preview what would be created (writes nothing)
+multica template apply --file reviewer.json --runtime-id <rt> --dry-run
+
+# Create for real once you're happy
+multica template apply --file reviewer.json --runtime-id <rt> --yes
+```
+
+## Template JSON structure
+
+A template is a plain JSON object. The top-level shape is (JSON can't carry comments — the `//` below is just for explanation):
+
+```jsonc
+{
+  "schema_version": "1.0",
+  "template_id": "<server-derived deterministic UUID>",
+  "kind": "agent",                // or "squad"
+  "metadata": {
+    "name": "Code Reviewer",
+    "description": "...",
+    "author": { "id": "<uuid>", "display_name": "..." },
+    "version": "1.0.0",          // user-managed SemVer
+    "visibility": "workspace",   // only this value in v1
+    "tags": ["review", "qa"],
+    "source_workspace": "<uuid>", // display-only, never an import-authority source
+    "created_at": "2026-08-05T14:00:00Z",
+    "readme": "README.md"        // companion prose filename (display-only, not a path)
+  },
+  "spec": {
+    "agent": { "..." }           // "agent" when kind=agent; "squad" when kind=squad
+  }
+}
+```
+
+### Top-level fields
+
+| Field | Notes |
+| --- | --- |
+| `schema_version` | The format version, required. Form is `major.minor` (patch ignored). **The major must equal the server-supported major, and the template's minor must not exceed the server's minor.** The phase-1 server is `1.0`, so it accepts `1.0.x` and rejects `1.1+` and `0.x`/`2.x`. A major mismatch returns `TEMPLATE_VERSION_UNSUPPORTED` outright — no guessing, no downgrade. |
+| `template_id` | **Derived deterministically by the server from the exported resource**, so re-exporting the same resource yields the same id (useful for idempotent recognition). It's a provenance/idempotency handle only — **never** an import-authority source. `metadata.version` is the user-managed SemVer and moves independently of this id. |
+| `kind` | `agent` or `squad`. `bundle` is not supported in phase 1 and returns `TEMPLATE_INVALID`. `kind` must match the single key under `spec` — a second key or an unknown top-level key is rejected. |
+| `metadata` | Authorship, versioning and display-only provenance. `source_workspace` and `created_at` are display-only and carry no authorisation weight. |
+| `spec` | Carries the `agent` or `squad` payload per `kind` (see below). |
+
+<Callout type="warning">
+**`schema_version` compatibility policy**: major must be equal, the template's minor must not exceed the server's minor, patch is ignored. This is stricter than "only compare major" — otherwise a template carrying `1.7` would be silently misread as `1.0`. On any mismatch the whole template is rejected rather than processed with defaulted semantics.
+</Callout>
+
+### AgentSpec (kind=agent)
+
+```jsonc
+"spec": {
+  "agent": {
+    "name": "Code Reviewer",
+    "description": "...",
+    "instructions": "...",
+    "model": "claude-opus-5",            // empty = target runtime default
+    "thinking_level": "",                // empty; re-validated against the target runtime
+    "service_tier": "",                  // same
+    "max_concurrent_tasks": 6,
+    "permission_mode": "private",        // private or public_to
+    "public_to_workspace": false,
+    "custom_args": ["..."],
+    "skills": [
+      { "name": "multica-squads", "source_url": "https://...", "enabled": true }
+    ],
+    "custom_env_keys": [
+      { "key": "API_KEY", "required": true, "description": "..." }
+    ],
+    "mcp_servers": [
+      { "name": "...", "transport": "stdio", "requires_auth": true,
+        "config_skeleton": { "command": "...", "args": ["..."] } }
+    ]
+  }
+}
+```
+
+Notes:
+
+- An empty `model` means the target runtime's default model. `thinking_level` / `service_tier` are runtime-native tokens: at apply time they are re-validated against the **target runtime** with `IsKnownThinkingValue` / `IsKnownServiceTier`; an unknown value is rejected with a hint to leave it empty — **never silently dropped**.
+- `skills[].source_url` is the only auto-materialisable handle (it reuses the URL families the skill importer supports). A skill without `source_url` is resolved by `name` (find-or-create) in the target workspace; if not found it lands in `required_inputs.missing_skills` and **is never auto-installed by running an untrusted script**.
+- `custom_env_keys` carries the key name and whether it's required — **never a value**. A missing required key at apply time returns `REQUIRED_INPUT_MISSING` and must be supplied through the secure channel.
+- `mcp_servers` keeps only the structural skeleton (command/args/transport); auth/token/headers/env values are stripped on export.
+
+### SquadSpec (kind=squad)
+
+```jsonc
+"spec": {
+  "squad": {
+    "name": "Engineering squad",
+    "description": "...",
+    "instructions": "...",
+    "members_mode": "embedded",          // or "references"
+    "leader_ref": "architect-agent",
+    "members": [
+      { "ref": "architect-agent", "role": "leader", "agent": { "...AgentSpec..." } },
+      { "ref": "senior-dev", "role": "core-dev", "agent": { "..." } }
+    ]
+  }
+}
+```
+
+- `ref` is a **template-internal symbol** (not a UUID) that links `leader_ref` to `members[].ref`. It must be unique within the template.
+- `leader_ref` must resolve to a member, and that member's `role` must be `leader`.
+- Human members (`member_type=member`) are not portable — they are dropped on export with a `MEMBER_HUMAN_DROPPED` warning. A template only carries agent members.
+
+## Redaction: a template never carries secrets
+
+export redacts strictly before writing the file, then runs secret detection. These fields are **never exported**:
+
+| What's dropped | Why |
+| --- | --- |
+| `runtime_id` / `runtime_mode` / `runtime_config` | Machine-local config; the caller re-specifies it at apply time. |
+| `custom_env` **values** | Secrets. Downgraded to `custom_env_keys` (key + required). |
+| `mcp_config` auth/token/headers/env values | Secrets. Downgraded to `mcp_servers` (skeleton + `requires_auth`). |
+| `invocation_targets` member targets | Workspace user UUIDs, not portable. Compressed into `permission_mode` + `public_to_workspace`. |
+| `composio_toolkit_allowlist` / `avatar_url` / `owner_id` / `creator_id` / IDs / timestamps / `archived_*` | Local footprint or local identity — not part of a reusable config. |
+
+**Why templates can't carry secrets**: a template is, by nature, a file that gets pasted into chat logs, issue comments, terminal scrollback and PRs. Any plaintext credential in a template is effectively leaked. So redaction is hard — on both export and import, a detected plaintext secret returns `SECRET_DETECTED` and the template is rejected. **It is never silently stripped.**
+
+Secret detection runs two parallel signals and **reports on a key-name hit with no value-length threshold** (a false negative is unacceptable; a false positive is acceptable):
+
+1. case-insensitive key-name matching against token / password / secret / api_key / private_key / authorization patterns (including compound-name boundary matches like `github_token`, `db_password`, `x-api-key`);
+2. value-shape matching against known credential prefixes and structures (`sk-`, `ghp_`, `AKIA`, `xoxb-`, `Bearer`/`Basic` structures, PEM `-----BEGIN … PRIVATE KEY-----`, `scheme://user:pass@` inline credentials).
+
+If you get a false positive, review the field and apply again after correcting it.
+
+## Credential injection: there is no plaintext flag
+
+When apply needs credentials, it only accepts them from a **file or stdin** — there is no plaintext command-line flag:
+
+- `--custom-env-file ./env.json` (recommended; set the file to `0600`)
+- `--custom-env-stdin` (read JSON from stdin)
+- Interactive fallback: in a TTY, each key is prompted with `ReadPassword` (no echo); you can skip to leave a placeholder and configure it later with `multica agent env`.
+
+The `env.json` shape is keyed by **agent ref** (for a squad template that's the member's `ref`; for a single-agent template it's the agent name):
+
+```json
+{
+  "architect-agent": { "API_KEY": "<your value>" },
+  "senior-dev":      { "DB_PASSWORD": "<your value>" }
+}
+```
+
+Why no `--custom-env KEY=value` plaintext flag? Because templates routinely end up pasted into chat logs and terminal scrollback — stricter than `agent create`, removing the credential-from-logs risk at the source.
+
+## CLI examples
+
+### Export an agent → validate → apply
+
+Turning one person's config into another person's copy is three steps:
+
+1. **Export.** Use a name or a full UUID; name resolution is scoped to the current CLI workspace.
+
+```bash
+multica template export --kind agent --id my-reviewer --file reviewer.json
+# Optional: customise version, description, tags
+multica template export --kind agent --id my-reviewer --file reviewer.json \
+    --version 1.2.0 --description "Code reviewer template" --tag review --tag qa
+```
+
+2. **Validate against the target runtime.** `model` / `thinking_level` / `service_tier` are re-checked against the runtime; missing skills, missing env keys and name conflicts are all listed at once.
+
+```bash
+multica template validate --file reviewer.json --runtime-id <rt> --output json
+```
+
+3. **Dry-run** the resources that would be created (writes nothing), then create the copy with `--yes` once you're happy. Non-interactive runs require `--yes`; interactive runs print the dry-run plan first and then confirm.
+
+```bash
+multica template apply --file reviewer.json --runtime-id <rt> --dry-run
+multica template apply --file reviewer.json --runtime-id <rt> --yes
+```
+
+### Export a squad (embedded)
+
+embedded mode inlines each member's full AgentSpec into the template; apply creates any missing agents and then assembles the squad:
+
+```bash
+multica template export --kind squad --id my-squad \
+    --members-mode embedded --file squad-embedded.json
+```
+
+### Export a squad (references)
+
+references mode exports only each member's `ref` + `role` — no agent definition. At apply time it matches **existing** agents in the target workspace by `ref` (i.e. the agent name at export time):
+
+```bash
+multica template export --kind squad --id my-squad \
+    --members-mode references --file squad-refs.json
+```
+
+### Tweak fields then apply
+
+You can override any field at apply time. `--set` takes a **dotted path** rooted at the template document (array indices supported); complex/batch overrides go through `--overrides-file` (JSON, deep-merged; `--set` wins on conflict):
+
+```bash
+multica template apply --file squad-embedded.json --runtime-id <rt> --yes \
+    --set metadata.name="My engineering squad" \
+    --set spec.squad.members[0].agent.name="My architect"
+```
+
+<Callout>
+Note that `env` and `overrides` use different addressing: `overrides` follow the template document's dotted path, while `env` is keyed by **agent ref** (credentials must follow the symbolic reference and not get misaligned when members are reordered). Don't mix the two.
+</Callout>
+
+### The three conflict strategies
+
+When the target workspace already has a same-named resource, `--conflict-policy` decides what happens (default `fail`):
+
+| Strategy | Behaviour |
+| --- | --- |
+| `fail` | Stop on a name clash and exit (exit code 3). Lets you decide first. |
+| `rename` | Append `"<name>-" + 8-char lowercase hex` and return the old→new mapping in `resource_mapping`. |
+| `skip` | Skip same-named resources (recorded in `skipped`) and create the rest. |
+
+```bash
+# Rename on clash
+multica template apply --file reviewer.json --runtime-id <rt> --yes --conflict-policy rename
+# Skip on clash
+multica template apply --file reviewer.json --runtime-id <rt> --yes --conflict-policy skip
+```
+
+<Callout type="warning">
+**There is no `overwrite` strategy, and there never will be.** Passing `overwrite` is rejected outright. Silently overwriting someone else's resource conflicts with the "no half-finished results on failure" principle.
+</Callout>
+
+### Idempotent retry
+
+The apply response carries an `idempotency_key` (auto-generated and printed by the CLI when you don't supply one). If an apply times out (`RETRYABLE`, 5xx) with an indeterminate result, **retry with the same key** — the server recognises it as the same execution and either replays the existing result (`idempotent_replay: true`, no duplicate creation) or continues converging to the same end state. To run a fresh execution after a failure, use a new key.
+
+```bash
+# First attempt timed out; retry with the echoed key
+multica template apply --file reviewer.json --runtime-id <rt> --yes \
+    --idempotency-key tmpl-a1b2c3d4e5f6
+```
+
+## Choosing between embedded and references
+
+| Mode | What's in the template | What apply does | Good for |
+| --- | --- | --- | --- |
+| `embedded` | Each member's full AgentSpec | Build all member agents in dependency order, then the squad, then wire members | Moving a whole team into a new workspace |
+| `references` | Only each member's ref + role | Match existing agents in the target workspace by ref (agent name) | The target already has those agents; you only want the team structure |
+
+An important directional constraint: **an embedded template can be applied in references mode** (the inline definitions are discarded and existing agents are matched by name — that's information loss, which is fine); **a references template cannot be applied in embedded mode** — it has no agent definitions and can't conjure them. It must error and prompt a re-export, never degrade into "create empty-shell agents".
+
+```bash
+# Override the template's own mode at apply time
+multica template apply --file squad-embedded.json --runtime-id <rt> --yes \
+    --members-mode references
+```
+
+## Upgrades and rollbacks
+
+### Reading a rollback result on failure
+
+Apply's atomicity is hard: skill bindings, agents, the squad and members are written in the **same database transaction**. Any step failing rolls the whole thing back and returns `APPLY_ROLLED_BACK` + the failing dependency + `rolled_back: true`, **leaving no orphaned resources**. You don't clean up half-finished results by hand.
+
+### Safe retry
+
+For "indeterminate result" cases like a network timeout, retry with the **same idempotency key** (see above). For a transactional failure that already rolled back, use a **new** key and apply again.
+
+### Cleaning up applied resources
+
+Everything apply creates is a regular agent or squad, no different from one created by hand — clean it up the usual way:
+
+```bash
+multica agent archive <agent-id>
+multica squad archive <squad-id>
+```
+
+## Error codes
+
+validate / apply errors are carried in a structured `errors[]` array, each entry with `code` + `path` + `message`. Validation **collects every error before returning** (no fail-fast, so you can see them all at once):
+
+| code | Meaning |
+| --- | --- |
+| `TEMPLATE_INVALID` | Broken JSON, missing fields, unknown top-level fields, bad enums, kind/spec mismatch |
+| `TEMPLATE_VERSION_UNSUPPORTED` | schema_version major mismatch |
+| `SECRET_DETECTED` | Plaintext secret in the template (rejected on both export and import) |
+| `DEPENDENCY_NOT_FOUND` | references mode can't resolve an agent / a dependency is archived |
+| `NAME_CONFLICT` | Same name and the policy is fail |
+| `APPLY_ROLLED_BACK` | Transactional failure, rolled back |
+| `REQUIRED_INPUT_MISSING` | A required env key wasn't supplied at apply |
+| `RUNTIME_NOT_FOUND` | target_runtime_id doesn't exist or the caller can't access it |
+| `FORBIDDEN` | Unauthorised export/creation (doesn't leak whether the resource exists) |
+| `CONFIG_NOT_ALLOWED` | permission/mcp/runtime config failed the target allowlist |
+
+CLI exit codes: `0` success, `1` general error, `2` validation failure (errors non-empty), `3` conflict needing a decision.
+
+## Phase-1 boundaries
+
+To ship the core capability quickly, phase 1 has a few explicit scope limits:
+
+- **No server-side template catalogue**: templates are files, shared via CLI + JSON within a workspace. No database template marketplace.
+- **No Web UI**: all interaction is through the CLI.
+- **`visibility` is fixed to `workspace`**: only intra-workspace sharing in phase 1.
+- **`kind` is only agent / squad**: no bundle.
+
+The metadata fields `author`, `version`, `visibility`, `tags`, `source_workspace` are reserved for **future** cross-workspace and even community sharing — they can be exported and displayed now, but they don't yet drive any cross-workspace import-authorisation logic.
+
+---
+
+That's how you turn a validated agent or squad into a reusable team template. Next, try exporting one of your own agents, or check the full CLI parameters.
+
+## Next steps
+
+- [Agents](/agents) — the primary thing a template materialises
+- [Squads](/squads) — a team of agents that work together
+- [CLI reference](/cli) — full parameters for `multica template`

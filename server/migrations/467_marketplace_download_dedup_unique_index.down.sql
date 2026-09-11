@@ -1,0 +1,1 @@
+DROP INDEX CONCURRENTLY IF EXISTS marketplace_download_dedup_listing_workspace_member_unique;

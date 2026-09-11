@@ -699,6 +699,71 @@ describe("ApiClient schema fallback", () => {
     });
   });
 
+  describe("marketplace (F-523)", () => {
+    it("falls back to an empty listing when publish responds malformed", async () => {
+      stubFetchJson({ id: 123 });
+      const client = new ApiClient("https://api.example.test");
+      const listing = await client.publishMarketplaceListing({
+        kind: "agent",
+        resource_id: "agent-1",
+        metadata: { title: "X" },
+      });
+      expect(listing.id).toBe("");
+      expect(listing.title).toBe("");
+    });
+
+    it("falls back to an empty page when the list response is malformed", async () => {
+      stubFetchJson({ items: "not-an-array", total: "oops" });
+      const client = new ApiClient("https://api.example.test");
+      const res = await client.listMarketplaceListings({ q: "search" });
+      expect(res).toEqual({ items: [], total: 0, page: 1, page_size: 20 });
+    });
+
+    it("accepts a well-formed listing list and defaults missing fields", async () => {
+      stubFetchJson({
+        items: [{ id: "m-1", title: "Agent" }],
+        total: 1,
+        page: 1,
+        page_size: 20,
+      });
+      const client = new ApiClient("https://api.example.test");
+      const res = await client.listMarketplaceListings({});
+      expect(res.items).toHaveLength(1);
+      expect(res.items[0]?.id).toBe("m-1");
+      expect(res.items[0]?.downloads).toBe(0);
+      expect(res.items[0]?.tags).toEqual([]);
+    });
+
+    it("falls back to an empty detail when the detail response is malformed", async () => {
+      stubFetchJson({ listing: { id: 123 } });
+      const client = new ApiClient("https://api.example.test");
+      const res = await client.getMarketplaceListing("m-1");
+      expect(res.listing.id).toBe("");
+    });
+
+    it("falls back to an empty listing when archive responds malformed", async () => {
+      stubFetchJson({ nope: true });
+      const client = new ApiClient("https://api.example.test");
+      const listing = await client.archiveMarketplaceListing("m-1", false);
+      expect(listing.status).toBe("published");
+      expect(listing.id).toBe("");
+    });
+
+    it("falls back to 0 downloads when the report response is malformed", async () => {
+      stubFetchJson({ downloads: "many" });
+      const client = new ApiClient("https://api.example.test");
+      const res = await client.reportMarketplaceDownload("m-1");
+      expect(res).toEqual({ downloads: 0 });
+    });
+
+    it("accepts a well-formed download report", async () => {
+      stubFetchJson({ downloads: 7 });
+      const client = new ApiClient("https://api.example.test");
+      const res = await client.reportMarketplaceDownload("m-1");
+      expect(res.downloads).toBe(7);
+    });
+  });
+
   describe("previewCommentTriggers", () => {
     it("returns an empty agent list when the response is malformed", async () => {
       stubFetchJson({ agents: "not-an-array" });
