@@ -303,7 +303,7 @@ var concurrentIndexCleanups = map[string]string{
 	"445_comment_delegated_failure_unsettled_index":             "idx_comment_delegated_failure_unsettled",
 	"446_issue_properties_bigm_index":                           "idx_issue_properties_bigm",
 	"452_agent_task_pending_thread_unique":                      "idx_one_pending_task_per_issue_agent_thread",
-	"459_chat_message_assistant_task_index":                     "idx_chat_message_assistant_task",
+"459_chat_message_assistant_task_index":                     "idx_chat_message_assistant_task",
 	"460_agent_task_queue_autopilot_run_created_at_index":       "idx_agent_task_queue_autopilot_run_created_at",
 	"465_agent_task_queue_chat_with_session_index":              "idx_agent_task_queue_chat_with_session_created_at",
 	"466_activity_log_member_assignee_frequency_index":          "idx_activity_log_member_assignee_frequency",
@@ -312,6 +312,13 @@ var concurrentIndexCleanups = map[string]string{
 	"480_instance_telemetry_state_singleton_index":              "instance_telemetry_state_singleton_uidx",
 	"482_agent_task_queue_telemetry_started_index":              "idx_agent_task_queue_telemetry_started",
 	"484_issue_triage_state_index":                              "idx_issue_triage_state",
+	"458_template_apply_log_idempotency_unique_index":           "template_apply_log_workspace_key_unique",
+	"461_marketplace_listings_kind_index":                       "marketplace_listings_kind_idx",
+	"462_marketplace_listings_category_index":                   "marketplace_listings_category_idx",
+	"463_marketplace_listings_created_index":                    "marketplace_listings_created_idx",
+	"465_marketplace_listings_fts_index":                        "marketplace_listings_fts_idx",
+	"467_marketplace_download_dedup_unique_index":               "marketplace_download_dedup_listing_workspace_member_unique",
+	"468_marketplace_listings_source_workspace_id_title_unique": "marketplace_listings_source_workspace_id_title_key",
 }
 
 // concurrentDownIndexCleanups covers every migration whose down direction
