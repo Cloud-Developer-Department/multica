@@ -23,7 +23,7 @@
   },
   "status_catalog_error": {
     "title": "Impossible de charger la liste des états",
-    "hint": "Les tâches restent masquées tant qu'elle n'est pas chargée, car un filtre par état ne peut pas s'appliquer sans elle.",
+    "hint": "Les tâches ne peuvent pas s’afficher tant que les statuts ne sont pas chargés.",
     "retry": "Réessayer"
   },
   "source_context": {
@@ -101,7 +101,6 @@
     "breadcrumb_title": "Tâches",
     "breadcrumb_workspace_fallback": "Espace de travail",
     "empty_title": "Aucune tâche pour l'instant",
-    "empty_hint": "Créez une tâche pour commencer.",
     "move_failed": "Échec du déplacement de la tâche"
   },
   "status": {
@@ -323,12 +322,10 @@
     },
     "empty": {
       "assigned": {
-        "title": "Aucune tâche assignée",
-        "description": "Les tâches assignées ici apparaîtront dans cette vue."
+        "title": "Aucune tâche assignée"
       },
       "created": {
-        "title": "Aucune tâche créée",
-        "description": "Les tâches créées ici apparaîtront dans cette vue."
+        "title": "Aucune tâche créée"
       }
     },
     "search_placeholder": "Rechercher des tâches...",
@@ -461,7 +458,9 @@
     "project_directory_path_copied": "Chemin du répertoire du projet copié",
     "project_directory_path_copied_with_branch": "Chemin du répertoire du projet copié — le travail se trouve sur {{branch}}",
     "workdir_path_copy_failed": "Échec de la copie du chemin du répertoire de travail",
-    "workdir_path_unavailable": "Aucun répertoire de travail local — cette tâche n'a pas encore été traitée par un agent local"
+    "workdir_path_unavailable": "Aucun répertoire de travail local — cette tâche n'a pas encore été traitée par un agent local",
+    "pull_requests_empty_title": "Aucune pull request associée.",
+    "pull_requests_help": "Comment associer une PR"
   },
   "timeline": {
     "loading": "Chargement..."
@@ -622,7 +621,6 @@
   },
   "filtered_empty": {
     "title": "Aucune tâche ne correspond à ces filtres",
-    "hint": "Ajustez ou effacez les filtres pour voir les tâches de cette vue.",
     "clear_button": "Effacer les filtres"
   },
   "agent_live": {
