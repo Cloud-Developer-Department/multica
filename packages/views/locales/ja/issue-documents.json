@@ -51,6 +51,7 @@
   "detail": {
     "versions": "Versions",
     "download": "Download",
-    "no_content": "This document has no inline content."
+    "no_content": "This document has no inline content.",
+    "version_prefix": "v{{version}}"
   }
 }

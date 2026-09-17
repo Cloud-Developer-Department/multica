@@ -106,7 +106,7 @@ export function DocumentDetailDrawer({ document, onClose }: DocumentDetailDrawer
                   key={v.id}
                   className="flex items-center gap-2 text-xs text-muted-foreground"
                 >
-                  <span className="tabular-nums">v{v.version}</span>
+                  <span className="tabular-nums">{t(($) => $.detail.version_prefix, { version: v.version })}</span>
                   <span className="ml-auto tabular-nums">{timeAgo(v.updated_at)}</span>
                 </li>
               ))}

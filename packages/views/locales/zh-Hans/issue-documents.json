@@ -51,6 +51,7 @@
   "detail": {
     "versions": "版本历史",
     "download": "下载",
-    "no_content": "该文档没有内联内容。"
+    "no_content": "该文档没有内联内容。",
+    "version_prefix": "v{{version}}"
   }
 }
