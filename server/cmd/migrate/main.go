@@ -299,6 +299,11 @@ var concurrentIndexCleanups = map[string]string{
 	"445_comment_delegated_failure_unsettled_index":             "idx_comment_delegated_failure_unsettled",
 	"446_issue_properties_bigm_index":                           "idx_issue_properties_bigm",
 	"452_agent_task_pending_thread_unique":                      "idx_one_pending_task_per_issue_agent_thread",
+	"458_issue_document_workspace_updated_index":                "idx_issue_document_workspace_updated",
+	"459_issue_document_workspace_type_index":                   "idx_issue_document_workspace_type",
+	"460_issue_document_workspace_status_index":                 "idx_issue_document_workspace_status",
+	"461_issue_document_issue_index":                            "idx_issue_document_issue",
+	"462_issue_document_issue_type_version_unique_index":        "idx_issue_document_issue_type_version",
 }
 
 // concurrentDownIndexCleanups covers every migration whose down direction

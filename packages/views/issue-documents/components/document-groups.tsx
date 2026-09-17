@@ -71,7 +71,7 @@ export function DocumentGroupList({ groups, onSelect }: DocumentGroupListProps) 
                   <TableCell className="max-w-64">
                     <span className="block truncate font-medium">{doc.title}</span>
                   </TableCell>
-                  <TableCell className="tabular-nums">v{doc.version}</TableCell>
+                  <TableCell className="tabular-nums">{t(($) => $.detail.version_prefix, { version: doc.version })}</TableCell>
                   <TableCell className="max-w-32">
                     <span className="block truncate">{doc.author_name || "—"}</span>
                   </TableCell>
