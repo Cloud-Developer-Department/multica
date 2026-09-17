@@ -276,20 +276,15 @@ var (
 	// process PATH. Mirrors the detectAgentVersion hook above.
 	lookPath = exec.LookPath
 
-	// profilePathExecutable reports whether path points at an existing,
-	// non-directory file with at least one executable bit set. It is the
-	// gate appendProfileRuntimes uses before trusting a per-machine command
-	// path override (MUL-3284) — a stale or mistyped override must fall back
-	// to the PATH lookup rather than register a runtime that can't launch.
-	// Indirected as a package var so tests can assert override preference
-	// without staging a real executable on disk.
-	profilePathExecutable = func(path string) bool {
-		info, err := os.Stat(path)
-		if err != nil || info.IsDir() {
-			return false
-		}
-		return info.Mode().Perm()&0o111 != 0
-	}
+	// resolveProfileOverridePath is what appendProfileRuntimes uses before
+	// trusting a per-machine command path override (MUL-3284). It must be the
+	// same contract agent launches use — resolveAgentExecutablePath /
+	// exec.LookPath — so Windows PATHEXT completion (.cmd shims, extension-less
+	// pins) and unix exec-bit checks stay in one place. A stale or mistyped
+	// override must fall back to PATH rather than register a runtime that
+	// can't launch. Indirected as a package var so override-preference tests
+	// can decide which paths resolve without staging real files on disk.
+	resolveProfileOverridePath = resolveAgentExecutablePath
 )
 
 // workspaceState tracks registered runtimes for a single workspace.
@@ -3088,8 +3083,8 @@ func (d *Daemon) appendProfileRuntimes(ctx context.Context, workspaceID string, 
 		var resolved string
 		var failureReason string
 		if override := strings.TrimSpace(d.cfg.ProfileCommandOverrides[profile.ID]); override != "" {
-			if profilePathExecutable(override) {
-				resolved = override
+			if path, err := resolveProfileOverridePath(override); err == nil {
+				resolved = path
 				d.logger.Info("custom runtime profile: using per-machine command path override",
 					"workspace_id", workspaceID, "profile_id", profile.ID, "command_path", resolved)
 			} else {
