@@ -3,12 +3,14 @@ FROM golang:1.26-alpine AS builder
 
 RUN apk add --no-cache git
 
+ENV GOPROXY=https://goproxy.cn,direct
 WORKDIR /src
+
 
 # Cache dependencies
 COPY server/go.mod server/go.sum ./server/
 RUN cd server && go mod download
-ENV GOPROXY=https://goproxy.cn,direct
+
 
 
 # Copy server source
