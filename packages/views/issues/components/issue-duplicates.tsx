@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronRight, Copy } from "lucide-react";
+import { ChevronRight, CircleEqual } from "lucide-react";
 import type { Issue } from "@multica/core/types";
 import { issueStatusCategory } from "@multica/core/issues";
 import { issueDuplicatesOptions } from "@multica/core/issues/queries";
@@ -39,7 +39,7 @@ export function IssueDuplicateBanner({
 
   return (
     <div className="mb-4 flex items-center gap-2 rounded-md border bg-muted/40 px-3 py-2 text-body">
-      <Copy className="h-4 w-4 shrink-0 text-muted-foreground" />
+      <CircleEqual className="h-4 w-4 shrink-0 text-muted-foreground" />
       <span className="min-w-0 flex-1 truncate">
         {t(($) => $.duplicates.banner_prefix)}{" "}
         <AppLink

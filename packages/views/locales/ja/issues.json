@@ -789,7 +789,7 @@
       "create_failed": "ラベルを作成できませんでした"
     },
     "status": {
-      "mark_duplicate": "重複としてマーク..."
+      "mark_duplicate": "重複としてマーク"
     }
   },
   "labels_panel": {

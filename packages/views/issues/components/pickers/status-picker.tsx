@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Copy } from "lucide-react";
+import { CircleEqual } from "lucide-react";
 import type { IssueStatus, UpdateIssueRequest } from "@multica/core/types";
 import { STATUS_CONFIG } from "@multica/core/issues/config";
 import { useIssueStatuses } from "@multica/core/issue-statuses/hooks";
@@ -39,7 +39,7 @@ export function StatusPicker({
   onOpenChange?: (v: boolean) => void;
   align?: "start" | "center" | "end";
   /**
-   * Adds the "Mark as duplicate…" action. It is an action, not a status: it
+   * Adds the "Mark as duplicate" action. It is an action, not a status: it
    * opens a picker for the original and only writes once one is chosen. Pass
    * it only for an existing single issue — never on create or batch surfaces.
    */
@@ -99,9 +99,9 @@ export function StatusPicker({
               setQuery("");
               onMarkDuplicate();
             }}
-            className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-body text-muted-foreground hover:bg-accent transition-colors"
+            className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-body hover:bg-accent transition-colors"
           >
-            <Copy className="h-3.5 w-3.5" />
+            <CircleEqual className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
             <span>{t(($) => $.pickers.status.mark_duplicate)}</span>
           </button>
         ) : undefined
