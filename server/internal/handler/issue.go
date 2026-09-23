@@ -4184,7 +4184,8 @@ func (h *Handler) DeleteIssue(w http.ResponseWriter, r *http.Request) {
 	// other clients after an identifier-path delete.
 	resolvedID := uuidToString(issue.ID)
 	h.publish(protocol.EventIssueDeleted, uuidToString(issue.WorkspaceID), actorType, actorID, map[string]any{"issue_id": resolvedID})
-	h.publishDetachedChildren(r.Context(), deleteResult.DetachedChildren, actorType, actorID)
+	h.publishIssueSnapshots(r.Context(), deleteResult.DetachedChildren, actorType, actorID)
+	h.publishIssueSnapshots(r.Context(), deleteResult.ClearedDuplicates, actorType, actorID)
 	slog.Info("issue deleted", append(logger.RequestAttrs(r), "issue_id", resolvedID, "workspace_id", uuidToString(issue.WorkspaceID))...)
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -4197,6 +4198,9 @@ func (h *Handler) DeleteIssue(w http.ResponseWriter, r *http.Request) {
 type issueDeleteResult struct {
 	AttachmentURLs   []string
 	DetachedChildren []db.Issue
+	// ClearedDuplicates lost their duplicate mark because their original was
+	// deleted. They stay cancelled.
+	ClearedDuplicates []db.Issue
 }
 
 func (h *Handler) deleteIssueAndCollectAttachmentURLs(ctx context.Context, issue db.Issue, excludedIssueIDs []pgtype.UUID) (issueDeleteResult, error) {
@@ -4228,6 +4232,13 @@ func (h *Handler) deleteIssuesAndCollectAttachmentURLs(ctx context.Context, issu
 			return issueDeleteResult{}, fmt.Errorf("detach child issues: %w", err)
 		}
 		result.DetachedChildren = append(result.DetachedChildren, detached...)
+		cleared, err := qtx.ClearIssueDuplicatesOf(ctx, db.ClearIssueDuplicatesOfParams{
+			WorkspaceID: issue.WorkspaceID, IssueID: issue.ID, ExcludedIssueIds: excludedIssueIDs,
+		})
+		if err != nil {
+			return issueDeleteResult{}, fmt.Errorf("clear duplicate marks: %w", err)
+		}
+		result.ClearedDuplicates = append(result.ClearedDuplicates, cleared...)
 		attachmentURLs, err := qtx.ListAttachmentURLsByIssueOrComments(ctx, issue.ID)
 		if err != nil {
 			return issueDeleteResult{}, fmt.Errorf("list issue attachment URLs: %w", err)
@@ -4280,11 +4291,13 @@ func (h *Handler) deleteIssuesAndCollectAttachmentURLs(ctx context.Context, issu
 	return result, nil
 }
 
-func (h *Handler) publishDetachedChildren(ctx context.Context, children []db.Issue, actorType, actorID string) {
-	for _, child := range children {
-		response := issueToResponse(child, h.getIssuePrefix(ctx, child.WorkspaceID))
-		h.fillStatusCategory(ctx, child.WorkspaceID, &response)
-		h.publish(protocol.EventIssueUpdated, uuidToString(child.WorkspaceID), actorType, actorID, map[string]any{"issue": response})
+// publishIssueSnapshots broadcasts issue:updated for issues a delete rewrote:
+// detached children and duplicates whose original was deleted.
+func (h *Handler) publishIssueSnapshots(ctx context.Context, issues []db.Issue, actorType, actorID string) {
+	for _, issue := range issues {
+		response := issueToResponse(issue, h.getIssuePrefix(ctx, issue.WorkspaceID))
+		h.fillStatusCategory(ctx, issue.WorkspaceID, &response)
+		h.publish(protocol.EventIssueUpdated, uuidToString(issue.WorkspaceID), actorType, actorID, map[string]any{"issue": response})
 	}
 }
 
@@ -4728,7 +4741,8 @@ func (h *Handler) BatchDeleteIssues(w http.ResponseWriter, r *http.Request) {
 	for _, issue := range issues {
 		h.publish(protocol.EventIssueDeleted, workspaceID, actorType, actorID, map[string]any{"issue_id": uuidToString(issue.ID)})
 	}
-	h.publishDetachedChildren(r.Context(), deleteResult.DetachedChildren, actorType, actorID)
+	h.publishIssueSnapshots(r.Context(), deleteResult.DetachedChildren, actorType, actorID)
+	h.publishIssueSnapshots(r.Context(), deleteResult.ClearedDuplicates, actorType, actorID)
 	deleted := len(issues)
 
 	slog.Info("batch delete issues", append(logger.RequestAttrs(r), "count", deleted)...)

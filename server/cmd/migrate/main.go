@@ -334,6 +334,7 @@ var concurrentIndexCleanups = map[string]string{
 	"480_instance_telemetry_state_singleton_index":              "instance_telemetry_state_singleton_uidx",
 	"482_agent_task_queue_telemetry_started_index":              "idx_agent_task_queue_telemetry_started",
 	"484_issue_triage_state_index":                              "idx_issue_triage_state",
+"537_issue_duplicate_of_index":                              "idx_issue_duplicate_of",
 	"549_issue_document_workspace_updated_index":                "idx_issue_document_workspace_updated",
 	"550_issue_document_workspace_type_index":                   "idx_issue_document_workspace_type",
 	"551_issue_document_workspace_status_index":                 "idx_issue_document_workspace_status",
