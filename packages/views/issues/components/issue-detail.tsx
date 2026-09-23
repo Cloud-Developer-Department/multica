@@ -1831,33 +1831,41 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
     },
     [],
   );
+  // Flash the landed comment the same way inbox deep-links do, so the eye has
+  // an anchor after the instant jump. (Folded resolved bars don't take the
+  // highlight prop — the scroll itself is the feedback there.)
+  const flashJumpTarget = useCallback((commentId: string) => {
+    setHighlightedId(commentId);
+    if (jumpFlashTimerRef.current !== null) window.clearTimeout(jumpFlashTimerRef.current);
+    jumpFlashTimerRef.current = window.setTimeout(() => setHighlightedId(null), 2000);
+  }, []);
+  // Jump to a mounted comment: any row in flat mode, or a reply inside a
+  // rendered thread. Drive the container's scrollTop directly — never native
+  // scrollIntoView, which also scrolls the desktop shell (#3929).
+  const jumpToComment = useCallback(
+    (commentId: string) => {
+      const el = document.getElementById(`comment-${commentId}`);
+      const container = scrollContainerEl;
+      if (!el || !container) return;
+      const c = container.getBoundingClientRect();
+      const e = el.getBoundingClientRect();
+      container.scrollTop = Math.max(0, container.scrollTop + (e.top - c.top) - 16);
+      flashJumpTarget(commentId);
+    },
+    [scrollContainerEl, flashJumpTarget],
+  );
   const jumpToThread = useCallback(
     (threadId: string) => {
-      if (isFlatTimeline) {
-        // Flat mode mounts every row, so the anchor is always in the DOM.
-        // Drive the container's scrollTop directly — never native
-        // scrollIntoView, which also scrolls the desktop shell (#3929).
-        const el = document.getElementById(`comment-${threadId}`);
-        const container = scrollContainerEl;
-        if (!el || !container) return;
-        const c = container.getBoundingClientRect();
-        const e = el.getBoundingClientRect();
-        container.scrollTop = Math.max(0, container.scrollTop + (e.top - c.top) - 16);
-      } else {
-        // Virtualized mode: the target row may not be mounted, so scroll by
-        // index and let Virtuoso mount it. Offset leaves a small top gap.
-        const index = items.findIndex((it) => it.id === threadId);
-        if (index < 0) return;
-        virtuosoRef.current?.scrollToIndex({ index, align: "start", offset: -16 });
-      }
-      // Flash the landed thread the same way inbox deep-links do, so the eye
-      // has an anchor after the instant jump. (Folded resolved bars don't
-      // take the highlight prop — the scroll itself is the feedback there.)
-      setHighlightedId(threadId);
-      if (jumpFlashTimerRef.current !== null) window.clearTimeout(jumpFlashTimerRef.current);
-      jumpFlashTimerRef.current = window.setTimeout(() => setHighlightedId(null), 2000);
+      // Flat mode mounts every row, so the anchor is always in the DOM.
+      if (isFlatTimeline) return jumpToComment(threadId);
+      // Virtualized mode: the target row may not be mounted, so scroll by
+      // index and let Virtuoso mount it. Offset leaves a small top gap.
+      const index = items.findIndex((it) => it.id === threadId);
+      if (index < 0) return;
+      virtuosoRef.current?.scrollToIndex({ index, align: "start", offset: -16 });
+      flashJumpTarget(threadId);
     },
-    [isFlatTimeline, items, scrollContainerEl],
+    [isFlatTimeline, items, jumpToComment, flashJumpTarget],
   );
 
   const {
@@ -2758,7 +2766,7 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
             onReplyAccepted: scrollToTimelineBottom, onEdit: editComment, onDelete: deleteComment,
             onToggleReaction: handleToggleReaction, onCreateSubIssue: openCommentSubIssue,
             onResolveToggle: handleResolveToggle,
-            onCopyLink: actions.copyCommentLink,
+            onCopyLink: actions.copyCommentLink, onJumpToComment: jumpToComment,
             onCollapseResolved: reply.resolved_at ? () => toggleResolvedExpand(reply.id, false) : undefined,
             expandedResolvedIds: expandedResolved, onResolvedExpandChange: toggleResolvedExpand,
             highlightedCommentId: highlightedId,
@@ -2797,6 +2805,7 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
             onCreateSubIssue={openCommentSubIssue}
             onResolveToggle={handleResolveToggle}
             onCopyLink={actions.copyCommentLink}
+            onJumpToComment={jumpToComment}
             onCollapseResolved={isResolved ? () => toggleResolvedExpand(item.id, false) : undefined}
             expandedResolvedIds={expandedResolved}
             onResolvedExpandChange={toggleResolvedExpand}
