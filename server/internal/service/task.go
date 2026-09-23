@@ -2607,7 +2607,7 @@ func (s *TaskService) CancelTasksForIssue(ctx context.Context, issueID pgtype.UU
 		if err != nil {
 			return err
 		}
-		return SettleDeliveredDelegatedFailureRecoveries(ctx, qtx, cancelled...)
+		return SettleTerminalTaskState(ctx, qtx, cancelled...)
 	}); err != nil {
 		return err
 	}
@@ -2658,7 +2658,7 @@ func (s *TaskService) CancelTasksForAgent(ctx context.Context, agentID pgtype.UU
 		if err != nil {
 			return err
 		}
-		return SettleDeliveredDelegatedFailureRecoveries(ctx, qtx, cancelled...)
+		return SettleTerminalTaskState(ctx, qtx, cancelled...)
 	}); err != nil {
 		return nil, err
 	}
@@ -2686,7 +2686,7 @@ func (s *TaskService) CancelTasksByTriggerComment(ctx context.Context, commentID
 		if err != nil {
 			return err
 		}
-		return SettleDeliveredDelegatedFailureRecoveries(ctx, qtx, cancelled...)
+		return SettleTerminalTaskState(ctx, qtx, cancelled...)
 	}); err != nil {
 		return nil, err
 	}
@@ -2937,7 +2937,7 @@ func (s *TaskService) CancelTaskWithResult(ctx context.Context, taskID pgtype.UU
 			task = cancelled
 			// CancelAgentTaskByUser appends the recovery receipt in the same
 			// statement, so the returned row already carries it.
-			if err := SettleDeliveredDelegatedFailureRecoveries(ctx, qtx, cancelled); err != nil {
+			if err := SettleTerminalTaskState(ctx, qtx, cancelled); err != nil {
 				return err
 			}
 			if !cancelled.ChatSessionID.Valid {
@@ -2999,7 +2999,7 @@ func (s *TaskService) CancelQueuedChatTasks(ctx context.Context, sessionID, agen
 		if err != nil {
 			return fmt.Errorf("cancel queued chat tasks: %w", err)
 		}
-		if err := SettleDeliveredDelegatedFailureRecoveries(ctx, qtx, tasks...); err != nil {
+		if err := SettleTerminalTaskState(ctx, qtx, tasks...); err != nil {
 			return err
 		}
 		for _, task := range tasks {
@@ -4397,7 +4397,7 @@ func (s *TaskService) CompleteTaskWithTransition(ctx context.Context, taskID pgt
 
 		// Atomic with the status flip: a crash between the two would leave a
 		// finished obligation looking pending forever.
-		if err := SettleDeliveredDelegatedFailureRecoveries(ctx, qtx, t); err != nil {
+		if err := SettleTerminalTaskState(ctx, qtx, t); err != nil {
 			return err
 		}
 
@@ -4892,7 +4892,7 @@ func (s *TaskService) FailTaskWithTransition(ctx context.Context, taskID pgtype.
 		// coordinator that already received the recovery comment has consumed
 		// the obligation: the pre-existing delivered_comment_ids coverage check
 		// never looked at the covering task's status either.
-		if err := SettleDeliveredDelegatedFailureRecoveries(ctx, qtx, t); err != nil {
+		if err := SettleTerminalTaskState(ctx, qtx, t); err != nil {
 			return err
 		}
 
@@ -5767,7 +5767,7 @@ func (s *TaskService) RerunIssue(ctx context.Context, issueID pgtype.UUID, sourc
 			if err != nil {
 				return err
 			}
-			return SettleDeliveredDelegatedFailureRecoveries(ctx, qtx, cancelled...)
+			return SettleTerminalTaskState(ctx, qtx, cancelled...)
 		})
 		if cerr != nil {
 			slog.Warn("rerun: cancel pending tasks failed",
@@ -5900,7 +5900,7 @@ func (s *TaskService) enqueueRerunTask(ctx context.Context, issue db.Issue, agen
 
 // The bulk terminal writes below are the sweeper, archive and daemon-recovery
 // paths that finalize many tasks in one statement. They exist on TaskService rather than
-// being called as bare queries so the statement and its delegated-failure
+// being called as bare queries so the statement and all terminal-state
 // settlement share a transaction.
 //
 // That is not a stylistic preference. HandleFailedTasks and
@@ -5979,7 +5979,7 @@ func (s *TaskService) terminateTasksInTx(ctx context.Context, fail func(*db.Quer
 		if err != nil {
 			return err
 		}
-		return SettleDeliveredDelegatedFailureRecoveries(ctx, qtx, failed...)
+		return SettleTerminalTaskState(ctx, qtx, failed...)
 	}); err != nil {
 		return nil, err
 	}
@@ -6102,6 +6102,30 @@ const (
 	delegatedFailureRecoveryCommentType     = "progress_update"
 )
 
+// SettleTerminalTaskState applies every application-owned side effect of a
+// task entering a terminal state. It must run with the same qtx as the status
+// update so task completion and its dependent receipts commit atomically.
+//
+// Keeping this as the single terminal-settlement entry point is important:
+// task supplements used to rely on an agent_task_queue trigger that performed
+// a cross-table update invisibly. Explicit settlement preserves the existing
+// task-row -> dependent-row lock order without making task status writes depend
+// on database trigger behavior.
+func SettleTerminalTaskState(ctx context.Context, q *db.Queries, tasks ...db.AgentTaskQueue) error {
+	if len(tasks) == 0 {
+		return nil
+	}
+
+	taskIDs := make([]pgtype.UUID, 0, len(tasks))
+	for _, task := range tasks {
+		taskIDs = append(taskIDs, task.ID)
+	}
+	if _, err := q.SettleTerminalTaskSupplements(ctx, taskIDs); err != nil {
+		return fmt.Errorf("settle terminal task supplements: %w", err)
+	}
+	return SettleDeliveredDelegatedFailureRecoveries(ctx, q, tasks...)
+}
+
 // SettleDeliveredDelegatedFailureRecoveries retires every delegated-failure
 // recovery comment the given now-terminal tasks actually received, so those
 // comments drop out of idx_comment_delegated_failure_unsettled instead of
@@ -6109,10 +6133,11 @@ const (
 // sweeper tick. Without it the outbox scan grows with total history even when
 // it returns nothing.
 //
-// INVARIANT: every path that moves tasks to a terminal status must reach this
-// with the same qtx as the terminal write — per-task writes and bulk
-// cancellations alike, so the marker commits atomically with the status change
-// or not at all. A row stranded by a committed-but-unsettled terminal write
+// INVARIANT: every path that moves tasks to a terminal status must reach
+// SettleTerminalTaskState with the same qtx as the terminal write — per-task
+// writes and bulk cancellations alike, so every marker commits atomically with
+// the status change or not at all. A row stranded by a
+// committed-but-unsettled terminal write
 // cannot be repaired later: ListPendingDelegatedFailureRecoveries excludes a
 // comment whose covering task is already terminal and holds its receipt, so
 // nothing replays the settlement and nothing else marks it, and the index
