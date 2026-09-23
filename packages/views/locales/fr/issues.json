@@ -568,6 +568,7 @@
     "delete_failed": "Échec de la suppression du commentaire",
     "reply_count_one": "{{count}} réponse",
     "reply_count_other": "{{count}} réponses",
+    "replying_to": "En réponse à {{name}} : {{preview}}",
     "leave_comment_placeholder": "Laisser un commentaire...",
     "send_tooltip": "Envoyer",
     "trigger_source_issue_assignee": "assigné",

@@ -557,6 +557,7 @@
     "send_reply_failed": "답글을 보내지 못했습니다",
     "delete_failed": "댓글을 삭제하지 못했습니다",
     "reply_count_other": "답글 {{count}}개",
+    "replying_to": "{{name}}에게 답글: {{preview}}",
     "leave_comment_placeholder": "댓글 남기기...",
     "send_tooltip": "보내기",
     "trigger_source_issue_assignee": "담당자",
