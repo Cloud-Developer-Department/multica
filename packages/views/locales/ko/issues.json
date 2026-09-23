@@ -505,7 +505,13 @@
     "squad_leader_failed_reason": "평가 실패: {{reason}}",
     "coalesced_badge": "×{{count}}",
     "activity_count_other": "활동 {{count}}개",
-    "show_more_activities_other": "활동 {{count}}개 더 보기"
+    "show_more_activities_other": "활동 {{count}}개 더 보기",
+    "duplicate_marked": "이 태스크를 {{identifier}}의 중복으로 표시했습니다",
+    "duplicate_unmarked": "이 태스크의 {{identifier}} 중복 표시를 해제했습니다",
+    "duplicate_unmarked_to": "이 태스크의 {{identifier}} 중복 표시를 해제하고 {{status}}(으)로 이동했습니다",
+    "duplicate_unmarked_original_deleted": "중복 표시를 해제했습니다 ({{identifier}} 삭제됨)",
+    "duplicate_added": "{{identifier}}을(를) 이 태스크의 중복으로 표시했습니다",
+    "duplicate_removed": "{{identifier}}의 중복 표시를 해제했습니다"
   },
   "comment": {
     "add_reaction": "반응 추가",
@@ -810,7 +816,8 @@
       "create_failed": "라벨을 만들지 못했습니다"
     },
     "status": {
-      "mark_duplicate": "중복으로 표시"
+      "mark_duplicate": "중복으로 표시",
+      "change_original": "원본 변경"
     }
   },
   "labels_panel": {
@@ -1066,7 +1073,8 @@
   },
   "duplicates": {
     "banner_prefix": "중복 원본:",
-    "unmark": "표시 해제 후 할 일로 이동",
-    "section_title": "중복 항목"
+    "unmark": "중복 아님",
+    "section_title": "중복 항목",
+    "unmark_toast": "할 일로 다시 열었습니다"
   }
 }

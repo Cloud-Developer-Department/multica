@@ -7614,13 +7614,17 @@ func IssueToMap(issue db.Issue, issuePrefix string) map[string]any {
 		// — clients localize those from the key — and a CUSTOM one is filled in
 		// by IssueToMapResolved, which has the catalog. Emitted unconditionally
 		// so this rendering cannot lose a key the HTTP one carries. (MUL-6749)
-		"status_name":      "",
-		"priority":         issue.Priority,
-		"assignee_type":    util.TextToPtr(issue.AssigneeType),
-		"assignee_id":      util.UUIDToPtr(issue.AssigneeID),
-		"creator_type":     issue.CreatorType,
-		"creator_id":       util.UUIDToString(issue.CreatorID),
-		"parent_issue_id":  util.UUIDToPtr(issue.ParentIssueID),
+		"status_name":     "",
+		"priority":        issue.Priority,
+		"assignee_type":   util.TextToPtr(issue.AssigneeType),
+		"assignee_id":     util.UUIDToPtr(issue.AssigneeID),
+		"creator_type":    issue.CreatorType,
+		"creator_id":      util.UUIDToString(issue.CreatorID),
+		"parent_issue_id": util.UUIDToPtr(issue.ParentIssueID),
+		// Mirrors handler.IssueResponse.DuplicateOf. The paths that render this
+		// map (autopilot creates, background status resets) never carry a live
+		// duplicate mark, and a reset clears one, so null is the true value.
+		"duplicate_of":     nil,
 		"project_id":       util.UUIDToPtr(issue.ProjectID),
 		"position":         issue.Position,
 		"stage":            util.Int4ToPtr(issue.Stage),

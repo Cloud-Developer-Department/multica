@@ -147,3 +147,19 @@ describe("StatusPicker mark-as-duplicate action", () => {
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 });
+
+describe("StatusPicker on an issue that already is a duplicate", () => {
+  it("relabels the action to re-point the mark", () => {
+    renderWithI18n(
+      <StatusPicker
+        status="cancelled"
+        onUpdate={() => {}}
+        open
+        onOpenChange={() => {}}
+        onMarkDuplicate={() => {}}
+        isDuplicate
+      />,
+    );
+    expect(screen.getByRole("button", { name: "Change original" })).toBeTruthy();
+  });
+});
