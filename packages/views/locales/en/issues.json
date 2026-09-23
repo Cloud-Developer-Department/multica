@@ -514,7 +514,13 @@
     "activity_count_one": "{{count}} activity",
     "activity_count_other": "{{count}} activities",
     "show_more_activities_one": "Show {{count}} more activity",
-    "show_more_activities_other": "Show {{count}} more activities"
+    "show_more_activities_other": "Show {{count}} more activities",
+    "duplicate_marked": "marked this issue as a duplicate of {{identifier}}",
+    "duplicate_unmarked": "unmarked this issue as a duplicate of {{identifier}}",
+    "duplicate_unmarked_to": "unmarked this issue as a duplicate of {{identifier}} and moved it to {{status}}",
+    "duplicate_unmarked_original_deleted": "removed the duplicate mark, {{identifier}} was deleted",
+    "duplicate_added": "marked {{identifier}} as a duplicate of this issue",
+    "duplicate_removed": "unmarked {{identifier}} as a duplicate of this issue"
   },
   "comment": {
     "add_reaction": "Add reaction",
@@ -841,7 +847,8 @@
       "create_failed": "Failed to create label"
     },
     "status": {
-      "mark_duplicate": "Mark as duplicate"
+      "mark_duplicate": "Mark as duplicate",
+      "change_original": "Change original"
     }
   },
   "labels_panel": {
@@ -1097,7 +1104,8 @@
   },
   "duplicates": {
     "banner_prefix": "Duplicate of",
-    "unmark": "Unmark and move to Todo",
-    "section_title": "Duplicates"
+    "unmark": "Not a duplicate",
+    "section_title": "Duplicates",
+    "unmark_toast": "Reopened as Todo"
   }
 }

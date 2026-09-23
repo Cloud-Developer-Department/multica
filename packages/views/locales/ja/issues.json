@@ -505,7 +505,13 @@
     "squad_leader_failed_reason": "評価に失敗しました: {{reason}}",
     "coalesced_badge": "×{{count}}",
     "activity_count_other": "アクティビティ {{count}} 件",
-    "show_more_activities_other": "アクティビティをさらに {{count}} 件表示"
+    "show_more_activities_other": "アクティビティをさらに {{count}} 件表示",
+    "duplicate_marked": "このタスクを {{identifier}} の重複としてマークしました",
+    "duplicate_unmarked": "このタスクの {{identifier}} との重複マークを解除しました",
+    "duplicate_unmarked_to": "このタスクの {{identifier}} との重複マークを解除し、{{status}} に移動しました",
+    "duplicate_unmarked_original_deleted": "重複マークを解除しました（{{identifier}} は削除されました）",
+    "duplicate_added": "{{identifier}} をこのタスクの重複としてマークしました",
+    "duplicate_removed": "{{identifier}} の重複マークを解除しました"
   },
   "comment": {
     "add_reaction": "リアクションを追加",
@@ -810,7 +816,8 @@
       "create_failed": "ラベルを作成できませんでした"
     },
     "status": {
-      "mark_duplicate": "重複としてマーク"
+      "mark_duplicate": "重複としてマーク",
+      "change_original": "元のタスクを変更"
     }
   },
   "labels_panel": {
@@ -1066,7 +1073,8 @@
   },
   "duplicates": {
     "banner_prefix": "重複元:",
-    "unmark": "マークを解除して未着手に戻す",
-    "section_title": "重複"
+    "unmark": "重複ではない",
+    "section_title": "重複",
+    "unmark_toast": "未着手として再開しました"
   }
 }

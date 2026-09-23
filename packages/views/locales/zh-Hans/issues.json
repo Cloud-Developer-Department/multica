@@ -505,7 +505,13 @@
     "squad_leader_failed_reason": "评估失败：{{reason}}",
     "coalesced_badge": "×{{count}}",
     "activity_count_other": "{{count}} 条动态",
-    "show_more_activities_other": "展开更早 {{count}} 条动态"
+    "show_more_activities_other": "展开更早 {{count}} 条动态",
+    "duplicate_marked": "把这个任务标记为 {{identifier}} 的重复",
+    "duplicate_unmarked": "取消了这个任务对 {{identifier}} 的重复标记",
+    "duplicate_unmarked_to": "取消了这个任务对 {{identifier}} 的重复标记，并移至{{status}}",
+    "duplicate_unmarked_original_deleted": "移除了重复标记，{{identifier}} 已被删除",
+    "duplicate_added": "把 {{identifier}} 标记为这个任务的重复",
+    "duplicate_removed": "取消了 {{identifier}} 对这个任务的重复标记"
   },
   "comment": {
     "add_reaction": "添加表情回应",
@@ -810,7 +816,8 @@
       "create_failed": "创建标签失败"
     },
     "status": {
-      "mark_duplicate": "标记为重复"
+      "mark_duplicate": "标记为重复",
+      "change_original": "更改原始任务"
     }
   },
   "labels_panel": {
@@ -1066,7 +1073,8 @@
   },
   "duplicates": {
     "banner_prefix": "重复于",
-    "unmark": "取消标记并移至待办",
-    "section_title": "重复项"
+    "unmark": "不是重复",
+    "section_title": "重复项",
+    "unmark_toast": "已重新打开为待办"
   }
 }

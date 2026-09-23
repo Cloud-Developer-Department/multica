@@ -24,6 +24,7 @@ export function StatusPicker({
   onOpenChange: controlledOnOpenChange,
   align,
   onMarkDuplicate,
+  isDuplicate,
 }: {
   /**
    * The currently-selected status, used to check the matching row. `null`
@@ -44,6 +45,8 @@ export function StatusPicker({
    * it only for an existing single issue — never on create or batch surfaces.
    */
   onMarkDuplicate?: () => void;
+  /** The issue already carries a mark, so the action re-points it. */
+  isDuplicate?: boolean;
 }) {
   const [internalOpen, setInternalOpen] = useState(false);
   const open = controlledOpen ?? internalOpen;
@@ -102,7 +105,11 @@ export function StatusPicker({
             className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-body hover:bg-accent transition-colors"
           >
             <CircleEqual className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-            <span>{t(($) => $.pickers.status.mark_duplicate)}</span>
+            <span>
+              {t(($) =>
+                isDuplicate ? $.pickers.status.change_original : $.pickers.status.mark_duplicate,
+              )}
+            </span>
           </button>
         ) : undefined
       }

@@ -8,7 +8,7 @@
 SELECT i.id, i.workspace_id, i.title, i.description, i.status, i.priority,
        i.assignee_type, i.assignee_id, i.creator_type, i.creator_id,
        i.parent_issue_id, i.position, i.start_date, i.due_date, i.created_at, i.updated_at, i.last_activity_at, i.number, i.project_id, i.metadata, i.stage, i.properties,
-       i.revision
+       i.revision, i.duplicate_of_issue_id
 FROM issue i
 WHERE i.workspace_id = $1
   AND (sqlc.narg('status')::text IS NULL OR i.status = sqlc.narg('status'))
@@ -379,6 +379,11 @@ WHERE workspace_id = sqlc.arg('workspace_id')
   AND status = 'cancelled'
 ORDER BY created_at ASC, id ASC;
 
+-- name: GetIssueRefInWorkspace :one
+-- The summary a duplicate's response carries for its original (MUL-7349).
+SELECT id, number, title, status FROM issue
+WHERE id = $1 AND workspace_id = $2;
+
 -- name: ClearIssueDuplicatesOf :many
 -- Deleting an issue clears the pointers of its duplicates, the way deleting a
 -- parent detaches its children. They stay cancelled. Issues deleted in the
@@ -489,7 +494,7 @@ DELETE FROM issue WHERE issue.id IN (SELECT target.id FROM target);
 SELECT i.id, i.workspace_id, i.title, i.description, i.status, i.priority,
        i.assignee_type, i.assignee_id, i.creator_type, i.creator_id,
        i.parent_issue_id, i.position, i.start_date, i.due_date, i.created_at, i.updated_at, i.last_activity_at, i.number, i.project_id, i.metadata, i.stage, i.properties,
-       i.revision
+       i.revision, i.duplicate_of_issue_id
 FROM issue i
 WHERE i.workspace_id = $1
   -- Negate only known terminal keys so an unknown legacy key remains visible.
