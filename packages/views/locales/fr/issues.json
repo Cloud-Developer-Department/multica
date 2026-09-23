@@ -820,7 +820,7 @@
       "create_failed": "Échec de la création de l'étiquette"
     },
     "status": {
-      "mark_duplicate": "Marquer comme doublon..."
+      "mark_duplicate": "Marquer comme doublon"
     }
   },
   "labels_panel": {

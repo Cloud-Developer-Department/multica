@@ -820,7 +820,7 @@
       "create_failed": "Failed to create label"
     },
     "status": {
-      "mark_duplicate": "Mark as duplicate..."
+      "mark_duplicate": "Mark as duplicate"
     }
   },
   "labels_panel": {

@@ -120,7 +120,7 @@ describe("StatusPicker mark-as-duplicate action", () => {
     renderWithI18n(
       <StatusPicker status="todo" onUpdate={() => {}} open onOpenChange={() => {}} />,
     );
-    expect(screen.queryByRole("button", { name: "Mark as duplicate..." })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Mark as duplicate" })).toBeNull();
   });
 
   it("is an action beside the options, not another status", () => {
@@ -137,7 +137,7 @@ describe("StatusPicker mark-as-duplicate action", () => {
       />,
     );
 
-    const action = screen.getByRole("button", { name: "Mark as duplicate..." });
+    const action = screen.getByRole("button", { name: "Mark as duplicate" });
     // Outside the arrow-key listbox, so keyboard nav and search skip it.
     expect(action.hasAttribute("data-picker-item")).toBe(false);
 

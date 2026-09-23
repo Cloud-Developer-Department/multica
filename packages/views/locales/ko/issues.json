@@ -789,7 +789,7 @@
       "create_failed": "라벨을 만들지 못했습니다"
     },
     "status": {
-      "mark_duplicate": "중복으로 표시..."
+      "mark_duplicate": "중복으로 표시"
     }
   },
   "labels_panel": {

@@ -30,7 +30,7 @@ test.describe("Mark as duplicate", () => {
     // loading, so retry opening until the action takes the click.
     await expect(async () => {
       await page.getByRole("button", { name: "Todo", exact: true }).first().click();
-      await page.getByRole("button", { name: "Mark as duplicate..." }).click({ timeout: 2000 });
+      await page.getByRole("button", { name: "Mark as duplicate" }).click({ timeout: 2000 });
     }).toPass();
 
     const picker = page.getByRole("dialog");

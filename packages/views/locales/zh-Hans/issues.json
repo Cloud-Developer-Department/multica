@@ -789,7 +789,7 @@
       "create_failed": "创建标签失败"
     },
     "status": {
-      "mark_duplicate": "标记为重复..."
+      "mark_duplicate": "标记为重复"
     }
   },
   "labels_panel": {
