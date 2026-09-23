@@ -356,12 +356,14 @@ describe("orderTimelineWithRuns", () => {
       .toEqual(["first", "second", "run"]);
   });
 
-  it("parks a working run at the live end and keeps live runs in enqueue order", () => {
-    const earlier = task("earlier", { status: "running", created_at: "2026-09-07T10:00:00Z" });
+  it.each(["queued", "dispatched", "waiting_local_directory", "running"] as const)("keeps a %s run before later comments in enqueue order", (status) => {
+    const earlier = task("earlier", { status, created_at: "2026-09-07T10:00:00Z" });
     const later = task("later", { status: "queued", created_at: "2026-09-07T10:30:00Z" });
+    const before = comment("before", { created_at: "2026-09-07T09:45:00Z" });
+    const between = comment("between", { created_at: "2026-09-07T10:15:00Z" });
     const posted = comment("posted", { created_at: "2026-09-07T10:45:00Z" });
-    expect(order([posted], [{ task: earlier, hasReply: false }, { task: later, hasReply: false }]))
-      .toEqual(["posted", "earlier", "later"]);
+    expect(order([before, between, posted], [{ task: later, hasReply: false }, { task: earlier, hasReply: false }]))
+      .toEqual(["before", "earlier", "between", "later", "posted"]);
   });
 
   it("settles a run that ended without a reply at the time it ended", () => {

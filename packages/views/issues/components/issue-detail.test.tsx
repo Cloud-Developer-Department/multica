@@ -455,7 +455,11 @@ const scrollToIndexSpy = vi.hoisted(() => vi.fn());
 
 vi.mock("react-virtuoso", () => ({
   Virtuoso: forwardRef(function MockVirtuoso(
-    { data, itemContent }: { data: unknown[]; itemContent: (i: number, item: unknown) => unknown },
+    { data, itemContent, computeItemKey }: {
+      data: unknown[];
+      itemContent: (i: number, item: unknown) => unknown;
+      computeItemKey: (i: number, item: unknown) => React.Key;
+    },
     ref: any,
   ) {
     useImperativeHandle(ref, () => ({
@@ -468,7 +472,7 @@ vi.mock("react-virtuoso", () => ({
     return (
       <div data-testid="virtuoso-mock">
         {data.map((item, i) => (
-          <div key={i}>{itemContent(i, item) as React.ReactElement}</div>
+          <div key={computeItemKey(i, item)}>{itemContent(i, item) as React.ReactElement}</div>
         ))}
       </div>
     );
@@ -2973,6 +2977,47 @@ describe("IssueDetail (shared)", () => {
         ),
       );
     });
+  });
+
+  it("keeps the initial assignment block before a later mention and its run (MUL-7632)", async () => {
+    const assignment: AgentTask = {
+      id: "initial-assignment", agent_id: "agent-1", runtime_id: "rt-1", issue_id: "issue-1",
+      kind: "direct", status: "running", priority: 0,
+      created_at: "2026-01-16T00:00:00Z", started_at: "2026-01-16T00:00:00Z",
+      dispatched_at: null, completed_at: null, result: null, error: null, delivered_comment_ids: [],
+    };
+    mockApiObj.listTimeline.mockResolvedValue([]);
+    mockApiObj.listTasksByIssue.mockResolvedValue([assignment]);
+    const client = createTestQueryClient();
+    const { container } = render(
+      <I18nProvider locale="en" resources={TEST_RESOURCES}>
+        <QueryClientProvider client={client}>
+          <IssueDetail issueId="issue-1" defaultSidebarOpen={false} />
+        </QueryClientProvider>
+      </I18nProvider>,
+    );
+    await waitFor(() => expect(container.querySelector('[data-run-slot-id="initial-assignment"]')).not.toBeNull());
+    const initialSlot = container.querySelector('[data-run-slot-id="initial-assignment"]')!;
+    const mention: TimelineEntry = {
+      type: "comment", id: "later-mention", actor_type: "member", actor_id: "user-1",
+      content: "Please handle the other task", parent_id: null, created_at: "2026-01-16T00:01:00Z",
+    };
+    const mentionedRun: AgentTask = {
+      ...assignment, id: "mentioned-run", agent_id: "agent-2", trigger_comment_id: mention.id,
+      created_at: "2026-01-16T00:01:01Z", delivered_comment_ids: [mention.id],
+    };
+    mockApiObj.listTimeline.mockResolvedValue([mention]);
+    mockApiObj.listTasksByIssue.mockResolvedValue([assignment, mentionedRun]);
+    act(() => {
+      client.setQueryData(issueKeys.timeline("issue-1"), [mention]);
+      client.setQueryData(issueKeys.tasks("issue-1"), [assignment, mentionedRun]);
+    });
+    await screen.findByText(mention.content!);
+    await waitFor(() => expect(container.querySelector('[data-run-id="mentioned-run"]')).not.toBeNull());
+    expect(container.querySelector('[data-run-slot-id="initial-assignment"]')).toBe(initialSlot);
+    const mentionBlock = container.querySelector("#comment-later-mention")!;
+    expect(initialSlot.compareDocumentPosition(mentionBlock) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(mentionBlock.querySelector('[data-run-id="mentioned-run"]')).not.toBeNull();
   });
 
   // MUL-7211 regression: a standalone run's published reply belongs at the

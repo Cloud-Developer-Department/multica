@@ -1621,8 +1621,8 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
       "duplicate_added",
       "duplicate_removed",
     ]);
-    // Unanchored runs join the timeline at the time their card shows: a
-    // published reply's own time, the live end while still working.
+    // Unanchored runs keep their enqueue-time slot while working, then use
+    // the published reply's time or the run's end time.
     const entryById = new Map(displayTimeline.map((entry) => [entry.id, entry]));
     const chronological = orderTimelineWithRuns(topLevel, standaloneRuns, entryById);
     const coalesced: (TimelineEntry | CommentRun)[] = [];
