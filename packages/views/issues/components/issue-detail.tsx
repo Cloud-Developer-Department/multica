@@ -103,7 +103,7 @@ import { ExecutionLogSection } from "./execution-log-section";
 import { WakeupsSection } from "./wakeups-section";
 import { QuickActionsSection } from "./quick-actions-section";
 import { PluginPanelSection } from "../../plugins";
-import { PullRequestList } from "./pull-request-list";
+import { PullRequestsSection } from "./pull-requests-section";
 import { useGitHubSettings } from "@multica/core/github";
 import { useQuery } from "@tanstack/react-query";
 import { useAuthStore } from "@multica/core/auth";
@@ -308,10 +308,22 @@ function formatActivity(
     case "created":
       return t(($) => $.activity.created);
     case "status_changed":
+      // PR auto-complete (MUL-7429) says why the status moved.
+      if (details.source === "pr_automation") {
+        return t(($) => $.activity.status_changed_pr, {
+          from: statusLabel(details.from ?? "?", t, resolveStatusLabel),
+          to: statusLabel(details.to ?? "?", t, resolveStatusLabel),
+          prs: details.pull_requests ?? "",
+        });
+      }
       return t(($) => $.activity.status_changed, {
         from: statusLabel(details.from ?? "?", t, resolveStatusLabel),
         to: statusLabel(details.to ?? "?", t, resolveStatusLabel),
       });
+    case "pr_auto_complete_changed":
+      return (entry.details as { disabled?: unknown } | undefined)?.disabled === true
+        ? t(($) => $.activity.pr_auto_complete_disabled)
+        : t(($) => $.activity.pr_auto_complete_enabled);
     case "priority_changed":
       return t(($) => $.activity.priority_changed, {
         from: priorityLabel(details.from ?? "?", t),
@@ -2664,17 +2676,12 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
           (or the GitHub master switch is off). Backend data is kept either
           way so re-enabling restores the section instantly. */}
       {githubSettings.prSidebar && (
-        <div>
-          <button
-            type="button"
-            className={`flex w-full items-center gap-1 rounded-md px-2 py-1 text-caption font-medium transition-colors mb-2 hover:bg-accent/70 ${pullRequestsOpen ? "" : "text-muted-foreground hover:text-foreground"}`}
-            onClick={() => setPullRequestsOpen(!pullRequestsOpen)}
-          >
-            {t(($) => $.detail.section_pull_requests)}
-            <ChevronRight className={`!size-3 shrink-0 stroke-[2.5] text-muted-foreground transition-transform ${pullRequestsOpen ? "rotate-90" : ""}`} />
-          </button>
-          {pullRequestsOpen && <div className="pl-2"><PullRequestList issueId={id} /></div>}
-        </div>
+        <PullRequestsSection
+          issueId={id}
+          identifier={issue.identifier}
+          open={pullRequestsOpen}
+          onOpenChange={setPullRequestsOpen}
+        />
       )}
 
       {/* Execution log — active runs + collapsed past runs, each carrying its
