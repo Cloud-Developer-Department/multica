@@ -1970,8 +1970,8 @@ func (h *Handler) advanceIssueToDone(ctx context.Context, issue db.Issue, worksp
 		"source":         "github_pr_merged",
 		// Reaching done clears a duplicate mark (MUL-7349); carry both ends so
 		// the activity log and clients see the mark go.
-		"duplicate_of_issue_id":      uuidToPtr(updated.DuplicateOfIssueID),
-		"prev_duplicate_of_issue_id": uuidToPtr(issue.DuplicateOfIssueID),
+		"duplicate_of_issue_id":      liveDuplicateMark(updated.Status, updated.DuplicateOfIssueID),
+		"prev_duplicate_of_issue_id": liveDuplicateMark(issue.Status, issue.DuplicateOfIssueID),
 	})
 }
 
