@@ -2,8 +2,11 @@ import { githubUrl, discordUrl } from "../components/shared";
 import { createEnDict } from "./en";
 import type { LandingDict } from "./types";
 
-export function createJaDict(allowSignup: boolean): LandingDict {
-  const base = createEnDict(allowSignup);
+export function createJaDict(
+  allowSignup: boolean,
+  docsHref: string,
+): LandingDict {
+  const base = createEnDict(allowSignup, docsHref);
 
   return {
     ...base,
@@ -241,7 +244,7 @@ export function createJaDict(allowSignup: boolean): LandingDict {
         resources: {
           label: "リソース",
           links: [
-            { label: "ドキュメント", href: "/docs/ja" },
+            { label: "ドキュメント", href: docsHref },
             { label: "API", href: githubUrl },
             { label: "X (Twitter)", href: "https://x.com/MulticaAI" },
             { label: "Discord", href: discordUrl },

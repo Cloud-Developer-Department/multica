@@ -1,7 +1,10 @@
 import { githubUrl, discordUrl } from "../components/shared";
 import type { LandingDict } from "./types";
 
-export function createZhDict(allowSignup: boolean): LandingDict {
+export function createZhDict(
+  allowSignup: boolean,
+  docsHref: string,
+): LandingDict {
   return {
   header: {
     github: "GitHub",
@@ -241,7 +244,7 @@ export function createZhDict(allowSignup: boolean): LandingDict {
       resources: {
         label: "\u8d44\u6e90",
         links: [
-          { label: "\u6587\u6863", href: "/docs/zh" },
+          { label: "\u6587\u6863", href: docsHref },
           { label: "API", href: githubUrl },
           { label: "X (Twitter)", href: "https://x.com/MulticaAI" },
           { label: "Discord", href: discordUrl },

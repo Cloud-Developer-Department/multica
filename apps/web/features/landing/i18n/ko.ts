@@ -2,8 +2,11 @@ import { githubUrl, discordUrl } from "../components/shared";
 import { createEnDict } from "./en";
 import type { LandingDict } from "./types";
 
-export function createKoDict(allowSignup: boolean): LandingDict {
-  const base = createEnDict(allowSignup);
+export function createKoDict(
+  allowSignup: boolean,
+  docsHref: string,
+): LandingDict {
+  const base = createEnDict(allowSignup, docsHref);
 
   return {
     ...base,
@@ -240,7 +243,7 @@ export function createKoDict(allowSignup: boolean): LandingDict {
         resources: {
           label: "리소스",
           links: [
-            { label: "문서", href: "/docs/ko" },
+            { label: "문서", href: docsHref },
             { label: "API", href: githubUrl },
             { label: "X (Twitter)", href: "https://x.com/MulticaAI" },
             { label: "Discord", href: discordUrl },
