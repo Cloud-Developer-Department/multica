@@ -1137,6 +1137,7 @@
     "waiting_other": "Se termine quand {{prs}} sont fusionnées",
     "not_merged": "{{prs}} fermée sans fusion",
     "not_merged_action": "Retirer",
+    "no_close_intent": "Aucune PR n’indique « Closes {{identifier}} » : la fusion ne terminera pas cette tâche",
     "all_merged": "Toutes les PR sont fusionnées. La prochaine PR fusionnée terminera la tâche.",
     "issue_disabled": "Fin automatique désactivée pour cette tâche",
     "issue_disabled_action": "Réactiver",
