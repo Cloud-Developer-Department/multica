@@ -425,7 +425,7 @@ describe("PullRequestList auto-complete", () => {
     mockAutoComplete = decision("no_close_intent");
     renderList();
     expect(await screen.findByTestId("pr-auto-complete-line")).toHaveTextContent(
-      "No PR says “Closes MUL-1”, so merging won’t complete this issue",
+      "Won’t complete: no “Closes MUL-1”",
     );
   });
 
