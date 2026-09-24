@@ -1137,6 +1137,7 @@
     "waiting_other": "Completes when {{prs}} merge",
     "not_merged": "{{prs}} closed without merging",
     "not_merged_action": "Remove",
+    "no_close_intent": "No PR says “Closes {{identifier}}”, so merging won’t complete this issue",
     "all_merged": "All PRs merged. The next merged PR completes this issue.",
     "issue_disabled": "Auto-complete is off for this issue",
     "issue_disabled_action": "Turn on",
