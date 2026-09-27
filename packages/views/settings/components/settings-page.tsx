@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
+  AlarmClock,
   Bell,
   Blocks,
   CircleDot,
@@ -59,6 +60,7 @@ import { SETTINGS_ANCHOR_ATTR } from "./settings-layout";
 import { searchSettings } from "./settings-search";
 import { HighlightText } from "../../search/highlight-text";
 import { useSettingsSearchIndex } from "./use-settings-search-index";
+import { WakeupsTab } from "./wakeups-tab";
 import { CollapsedNavTrigger } from "../../layout/page-header";
 import { useT } from "../../i18n";
 
@@ -210,6 +212,10 @@ export function SettingsPage({ extraDeviceTabs = [] }: SettingsPageProps = {}) {
               <IssueStatusesTab />,
               { wide: true, adminOnly: true },
             ),
+            entry("wakeups", t(($) => $.page.tabs.wakeups), AlarmClock, <WakeupsTab />, {
+              wide: true,
+              adminOnly: true,
+            }),
             entry("labels", t(($) => $.page.tabs.labels), Tags, <LabelsTab />, {
               wide: true,
             }),
