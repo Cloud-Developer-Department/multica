@@ -338,6 +338,20 @@ describe("SettingsPage search", () => {
     expect(screen.queryByRole("listbox")).toBeNull();
   });
 
+  it("finds the issue-opening preference by the name of its options", () => {
+    renderWithI18n(<SettingsPage />);
+    fireEvent.change(screen.getByRole("searchbox", { name: "Search settings" }), {
+      target: { value: "side preview" },
+    });
+    const results = screen.getByRole("listbox", { name: "Search settings" });
+    const option = within(results).getByRole("option", { name: /Opening issues/ });
+    expect(within(results).getAllByRole("option")).toHaveLength(1);
+    fireEvent.click(option);
+    expect(push).toHaveBeenCalledWith(
+      "/acme/settings?tab=preferences&section=issue-opening",
+    );
+  });
+
   it("does not offer pages hidden by feature flags", () => {
     renderWithI18n(<SettingsPage />);
     fireEvent.change(

@@ -70,6 +70,21 @@ export function useSettingsSearchIndex(
       },
       {
         tab: "preferences",
+        anchor: "issue-opening",
+        title: t(($) => $.issue.opening.click),
+        description: t(($) => $.issue.opening.hint),
+      },
+      // Same row, found by its section title or its options: someone looking
+      // for "side preview" searches for the choice, not the row's label. Only
+      // consulted when the entry above did not match (results dedupe by anchor).
+      {
+        tab: "preferences",
+        anchor: "issue-opening",
+        title: t(($) => $.issue.opening.title),
+        description: `${t(($) => $.issue.opening.page)} · ${t(($) => $.issue.opening.peek)}`,
+      },
+      {
+        tab: "preferences",
         anchor: "issue",
         title: t(($) => $.preferences.issue_fields_title),
         description: t(($) => $.issue.description),

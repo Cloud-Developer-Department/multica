@@ -315,6 +315,13 @@
     "floating_hint": "Afficher le bouton de chat flottant sur chaque page."
   },
   "issue": {
+    "opening": {
+      "title": "Ouverture des tâches",
+      "click": "Un clic sur une carte ou une ligne ouvre",
+      "page": "La page complète",
+      "peek": "L'aperçu latéral",
+      "hint": "Maj+clic ouvre l'autre."
+    },
     "description": "Choisissez les champs que chaque fenêtre de création garde dans sa barre d'outils. Les champs masqués restent accessibles depuis le menu ⋯ et réapparaissent tant qu'ils contiennent une valeur.",
     "fields": {
       "status": "Statut",

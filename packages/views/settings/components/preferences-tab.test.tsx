@@ -105,6 +105,7 @@ vi.mock("@multica/core/auth", async () => {
 
 import { PreferencesTab } from "./preferences-tab";
 import { useCommentComposerStore } from "@multica/core/issues/stores";
+import { useIssueOpeningStore } from "@multica/core/issues/stores/issue-opening-store";
 import {
   DEFAULT_MANUAL_CREATE_FIELDS,
   DEFAULT_QUICK_CREATE_FIELDS,
@@ -429,6 +430,22 @@ describe("PreferencesTab — Scope", () => {
   it("labels where each group of settings is stored", () => {
     render(<PreferencesTab />, { wrapper: I18nWrapper });
     expect(screen.getByText("Account · synced")).toBeInTheDocument();
-    expect(screen.getAllByText("This device only")).toHaveLength(2);
+    // Appearance, opening issues, comments & chat.
+    expect(screen.getAllByText("This device only")).toHaveLength(3);
+  });
+
+  it("switches what clicking a card or row opens, and says what Shift does", async () => {
+    useIssueOpeningStore.setState({ openMode: "page" });
+    const user = userEvent.setup();
+    render(<PreferencesTab />, { wrapper: I18nWrapper });
+    const group = screen.getByRole("group", { name: "Clicking a card or row opens" });
+    const fullPage = within(group).getByRole("button", { name: "Full page" });
+    const preview = within(group).getByRole("button", { name: "Side preview" });
+    expect(fullPage).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByText("Shift+Click opens the other one.")).toBeInTheDocument();
+
+    await user.click(preview);
+    expect(useIssueOpeningStore.getState().openMode).toBe("peek");
+    expect(preview).toHaveAttribute("aria-pressed", "true");
   });
 });
