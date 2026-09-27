@@ -1984,6 +1984,16 @@ func NewRouterWithOptions(pool *pgxpool.Pool, hub *realtime.Hub, bus *events.Bus
 			// Assignee frequency
 			r.Get("/api/assignee-frequency", h.GetAssigneeFrequency)
 
+			// Local search index sync for Web/Desktop (MUL-7754). Human clients
+			// only: agents search through /api/issues/search.
+			r.Route("/api/search-index", func(r chi.Router) {
+				r.Use(handler.RequireHumanActor)
+				r.Use(h.RequireLocalSearchIndex)
+				r.Get("/manifest", h.GetSearchIndexManifest)
+				r.Get("/snapshot", h.GetSearchIndexSnapshot)
+				r.Post("/changes", h.ListSearchIndexChanges)
+			})
+
 			// Issues
 			r.Route("/api/issues", func(r chi.Router) {
 				r.Get("/limit-usage", h.GetIssueLimitUsage)
