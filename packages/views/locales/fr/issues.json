@@ -370,6 +370,13 @@
     "ordered_by": "Tableau trié par {{field}}",
     "manual_reorder_hint": "Passez au tri Manuel pour réorganiser les tâches dans une colonne."
   },
+  "peek": {
+    "panel_label": "Aperçu de la tâche",
+    "previous": "Tâche précédente",
+    "next": "Tâche suivante",
+    "open_full_page": "Ouvrir la page complète",
+    "close": "Fermer l'aperçu"
+  },
   "detail": {
     "not_found": "Cette tâche n'existe pas ou a été supprimée dans cet espace de travail.",
     "breadcrumb_project_unknown": "Projet inconnu",

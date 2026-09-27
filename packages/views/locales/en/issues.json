@@ -370,6 +370,13 @@
     "ordered_by": "Board ordered by {{field}}",
     "manual_reorder_hint": "Switch to Manual ordering to rearrange issues within a column."
   },
+  "peek": {
+    "panel_label": "Issue preview",
+    "previous": "Previous issue",
+    "next": "Next issue",
+    "open_full_page": "Open full page",
+    "close": "Close preview"
+  },
   "detail": {
     "not_found": "This issue does not exist or has been deleted in this workspace.",
     "breadcrumb_project_unknown": "Unknown project",

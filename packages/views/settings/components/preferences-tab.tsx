@@ -38,6 +38,10 @@ import {
   type RunningAgentReply,
 } from "@multica/core/issues/stores";
 import {
+  useIssueOpeningStore,
+  type IssueOpenMode,
+} from "@multica/core/issues/stores/issue-opening-store";
+import {
   MANUAL_CREATE_FIELDS,
   QUICK_CREATE_FIELDS,
   useIssueCreateSettingsStore,
@@ -96,6 +100,16 @@ export function PreferencesTab() {
           <StickyCommentBarRow />
           <RunningAgentReplyRow />
           <FloatingChatRow />
+        </SettingsCard>
+      </SettingsSection>
+
+      <SettingsSection
+        title={t(($) => $.issue.opening.title)}
+        scope="device"
+        anchor="issue-opening"
+      >
+        <SettingsCard>
+          <IssueOpeningRow />
         </SettingsCard>
       </SettingsSection>
 
@@ -279,6 +293,37 @@ function RunningAgentReplyRow() {
           ))}
         </SelectContent>
       </Select>
+    </SettingsRow>
+  );
+}
+
+/**
+ * What a plain click on an issue card or row opens across the issue views.
+ * The hint carries the one non-obvious part: Shift+Click opens the other one,
+ * so both stay one click away whichever is chosen.
+ */
+function IssueOpeningRow() {
+  const { t } = useT("settings");
+  const value = useIssueOpeningStore((s) => s.openMode);
+  const setValue = useIssueOpeningStore((s) => s.setOpenMode);
+  const label = t(($) => $.issue.opening.click);
+  return (
+    <SettingsRow
+      anchor="issue-opening"
+      label={label}
+      description={t(($) => $.issue.opening.hint)}
+    >
+      <div role="group" aria-label={label}>
+        <SegmentedToggle<IssueOpenMode>
+          value={value}
+          onChange={setValue}
+          buttonClassName="px-3 py-1 text-label"
+          options={[
+            ["page", t(($) => $.issue.opening.page)],
+            ["peek", t(($) => $.issue.opening.peek)],
+          ]}
+        />
+      </div>
     </SettingsRow>
   );
 }

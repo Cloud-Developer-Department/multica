@@ -85,6 +85,7 @@ import { LabelChip } from "../../labels/label-chip";
 import { IssueAgentActivityIndicator } from "./issue-agent-activity-indicator";
 import { SubIssuesAgentWorkingChip } from "./sub-issues-agent-working-chip";
 import { ProjectPicker } from "../../projects/components/project-picker";
+import { IssuePropertyPills } from "./issue-property-pills";
 import { LocalDirectoryHint } from "../../projects/components/local-directory-hint";
 import { useNewRunIds } from "./use-run-comment-motion";
 import { AgentRunComment, CommentCard } from "./comment-card";
@@ -1133,6 +1134,14 @@ interface IssueDetailProps {
    * the surface the reader arrived from, so only the host can spell that trip.
    */
   leadingAction?: ReactNode;
+  /**
+   * `"peek"` renders the detail inside the board's side peek (`IssuePeekHost`):
+   * a single column with the core properties as pills under the title, no
+   * properties sidebar, and `trailingActions` where the sidebar toggle sits.
+   */
+  variant?: "page" | "peek";
+  /** Peek only: host controls at the end of the header (open full page, close). */
+  trailingActions?: ReactNode;
 }
 
 // ---------------------------------------------------------------------------
@@ -1148,6 +1157,7 @@ interface IssueDetailProps {
 export function IssueNotFound({
   showBackLink = true,
   leading,
+  trailing,
 }: {
   showBackLink?: boolean;
   /**
@@ -1157,6 +1167,8 @@ export function IssueNotFound({
    * there is none.
    */
   leading?: ReactNode;
+  /** Host controls at the end of the bar — the side peek's close button. */
+  trailing?: ReactNode;
 }) {
   const { t } = useT("issues");
   const backOrReplace = useBackOrReplace();
@@ -1164,8 +1176,11 @@ export function IssueNotFound({
 
   return (
     <div className="flex flex-1 min-h-0 flex-col">
-      {leading && (
-        <div className={cn("flex h-12 shrink-0 items-center gap-2 border-b", PAGE_GUTTER)}>{leading}</div>
+      {(leading || trailing) && (
+        <div className={cn("flex h-12 shrink-0 items-center gap-2 border-b", PAGE_GUTTER)}>
+          {leading}
+          {trailing && <div className="ml-auto flex shrink-0 items-center gap-1">{trailing}</div>}
+        </div>
       )}
       <div className="flex flex-1 min-h-0 flex-col items-center justify-center gap-3 text-body text-muted-foreground">
         <p>{t(($) => $.detail.not_found)}</p>
@@ -1189,7 +1204,11 @@ export function IssueNotFound({
  * an identifier URL to its issue — the two waits are indistinguishable to the
  * user, and rendering the same skeleton keeps them that way.
  */
-export function IssueDetailSkeleton({ leading }: { leading?: ReactNode } = {}) {
+export function IssueDetailSkeleton({
+  leading,
+  trailing,
+  sidebar = true,
+}: { leading?: ReactNode; trailing?: ReactNode; sidebar?: boolean } = {}) {
   return (
     <div className="flex flex-1 min-h-0 flex-col">
       {/* The way back is real from the first frame, not once the issue lands:
@@ -1203,6 +1222,7 @@ export function IssueDetailSkeleton({ leading }: { leading?: ReactNode } = {}) {
             <Skeleton className="h-4 w-24" />
           </>
         )}
+        {trailing && <div className="ml-auto flex shrink-0 items-center gap-1">{trailing}</div>}
       </div>
       <div className="flex flex-1 min-h-0">
         {/* Same scrollbar-gutter as the loaded scroller below, so the skeleton
@@ -1230,21 +1250,23 @@ export function IssueDetailSkeleton({ leading }: { leading?: ReactNode } = {}) {
             </div>
           </div>
         </div>
-        <div className="hidden md:block w-80 border-l p-4 space-y-5">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="flex items-center gap-2">
-              <Skeleton className="h-3 w-16 shrink-0" />
-              <Skeleton className="h-5 w-24" />
-            </div>
-          ))}
-          <Skeleton className="h-px w-full" />
-          {Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="flex items-center gap-2">
-              <Skeleton className="h-3 w-16 shrink-0" />
-              <Skeleton className="h-4 w-28" />
-            </div>
-          ))}
-        </div>
+        {sidebar && (
+          <div className="hidden md:block w-80 border-l p-4 space-y-5">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <Skeleton className="h-3 w-16 shrink-0" />
+                <Skeleton className="h-5 w-24" />
+              </div>
+            ))}
+            <Skeleton className="h-px w-full" />
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <Skeleton className="h-3 w-16 shrink-0" />
+                <Skeleton className="h-4 w-28" />
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -1254,7 +1276,8 @@ export function IssueDetailSkeleton({ leading }: { leading?: ReactNode } = {}) {
 // IssueDetail
 // ---------------------------------------------------------------------------
 
-export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = true, layoutId = "multica_issue_detail_layout", highlightCommentId, highlightRequestToken, leadingAction }: IssueDetailProps) {
+export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = true, layoutId = "multica_issue_detail_layout", highlightCommentId, highlightRequestToken, leadingAction, variant = "page", trailingActions }: IssueDetailProps) {
+  const isPeek = variant === "peek";
   const { t } = useT("issues");
   const locale = useLocale();
   const timeAgo = useTimeAgo();
@@ -1357,7 +1380,9 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
   // in the query string while memento entries key by pathname — a bare
   // "main" would restore notification A's offset into notification B's
   // detail.
-  const scrollContainerKey = `main:${id}`;
+  // The peek gets its own key: it is an overlay on the board's route, and
+  // must neither restore the full page's offset nor leave one behind for it.
+  const scrollContainerKey = `${isPeek ? "peek" : "main"}:${id}`;
   const restoredScrollTop = useRestoredScrollOffset(scrollContainerKey);
   const restoreScrollRef = useRestoredScrollRef(scrollContainerKey);
   // Whether this issue's comment-highlight deep link already landed here
@@ -1379,11 +1404,12 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
   const rightSidebarShortcutTargetRef = useRef<HTMLDivElement | null>(null);
   const attachScrollContainer = useCallback(
     (el: HTMLDivElement | null) => {
-      rightSidebarShortcutTargetRef.current = el;
+      // The peek has no sidebar, so it must not claim the toggle shortcut.
+      rightSidebarShortcutTargetRef.current = isPeek ? null : el;
       setScrollContainerEl(el);
       restoreScrollRef(el);
     },
-    [restoreScrollRef],
+    [isPeek, restoreScrollRef],
   );
   const [pendingPostedCommentId, setPendingPostedCommentId] = useState<string | null>(null);
   const scrollToTimelineBottom = useCallback((commentId: string) => {
@@ -2519,7 +2545,8 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
     // switch back), this hook's retry loop IS the restore: the one-shot
     // ref-attach assignment clamps against a container whose async content
     // (markdown, images) hasn't reached its captured height yet.
-    disabled: !!highlightCommentId && consumedHighlightId !== highlightCommentId,
+    // A peek always opens at the top: it is a glance, not a place to return to.
+    disabled: isPeek || (!!highlightCommentId && consumedHighlightId !== highlightCommentId),
     // The tab memento's offset, when the platform serves one. It must win
     // over this hook's module-level map — see the parameter doc.
     overrideTop: restoredScrollTop,
@@ -2538,11 +2565,13 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
   );
 
   if (loading) {
-    return <IssueDetailSkeleton leading={leadingAction} />;
+    // The host's trailing controls hold the peek's only close button, so the
+    // waiting and missing states carry them too.
+    return <IssueDetailSkeleton leading={leadingAction} trailing={trailingActions} sidebar={!isPeek} />;
   }
 
   if (!issue) {
-    return <IssueNotFound showBackLink={!onDelete} leading={leadingAction} />;
+    return <IssueNotFound showBackLink={!onDelete} leading={leadingAction} trailing={trailingActions} />;
   }
 
   const persistDescriptionSave = (
@@ -3051,6 +3080,8 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
         ]
       : [];
 
+  const titleSizeClass = isPeek ? "text-title-lg font-semibold" : "text-display-sm font-bold";
+
   const detailContent = (
     <CurrentIssueRenderContextProvider value={currentIssueRenderContext}>
     <div className="relative flex h-full min-w-0 flex-1 flex-col">
@@ -3078,7 +3109,7 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
               className="flex min-w-0 transition-opacity hover:opacity-80"
             >
               <span className="truncate font-medium text-foreground">
-                {issue.identifier} {issue.title}
+                {isPeek ? issue.identifier : `${issue.identifier} ${issue.title}`}
               </span>
             </AppLink>
           }
@@ -3150,21 +3181,25 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
                 </Button>
               }
             />
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <Button
-                    variant={sidebarOpen ? "secondary" : "ghost"}
-                    size="icon-sm"
-                    className={sidebarOpen ? "" : "text-muted-foreground"}
-                    onClick={handleToggleSidebar}
-                  >
-                    <PanelRight />
-                  </Button>
-                }
-              />
-              <TooltipContent side="bottom">{t(($) => $.detail.sidebar_tooltip)}</TooltipContent>
-            </Tooltip>
+            {isPeek ? (
+              trailingActions
+            ) : (
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <Button
+                      variant={sidebarOpen ? "secondary" : "ghost"}
+                      size="icon-sm"
+                      className={sidebarOpen ? "" : "text-muted-foreground"}
+                      onClick={handleToggleSidebar}
+                    >
+                      <PanelRight />
+                    </Button>
+                  }
+                />
+                <TooltipContent side="bottom">{t(($) => $.detail.sidebar_tooltip)}</TooltipContent>
+              </Tooltip>
+            )}
             </>
           }
         />
@@ -3177,7 +3212,7 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
             nothing and render unchanged. */}
         <div
           ref={attachScrollContainer}
-          data-tab-scroll-root={scrollContainerKey}
+          data-tab-scroll-root={isPeek ? undefined : scrollContainerKey}
           className="relative flex-1 overflow-y-auto [scrollbar-gutter:stable_both-edges]"
         >
         {/* Gutters: 32px is a comfortable reading margin on a desktop column
@@ -3186,7 +3221,14 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
             of the scroll: below `md` the composer is not pinned (see
             `useStickyComposer`), so it lands here — right where the launcher
             floats — once the reader scrolls to the bottom. */}
-        <div className="mx-auto w-full max-w-4xl px-3 py-6 max-md:pb-chat-launcher md:px-8 md:py-8">
+        <div
+          className={cn(
+            "mx-auto w-full",
+            // The peek is already a narrow column, so it takes a tighter gutter
+            // and never reaches the chat launcher's corner (see IssuePeekHost).
+            isPeek ? "px-6 py-5" : "max-w-4xl px-3 py-6 max-md:pb-chat-launcher md:px-8 md:py-8",
+          )}
+        >
           <IssueDuplicateBanner
             issue={issue}
             onUnmark={() =>
@@ -3203,7 +3245,7 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
                 ref={titleEditorRef}
                 defaultValue={titleConflictDraft ?? issue.title}
                 placeholder={t(($) => $.detail.title_placeholder)}
-                className="w-full text-display-sm font-bold leading-snug tracking-tight"
+                className={cn("w-full leading-snug tracking-tight", titleSizeClass)}
                 onReady={titleLazy.onReady}
                 onBlur={(value) => {
                   const trimmed = value.trim();
@@ -3231,7 +3273,7 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
             <div
               role="button"
               tabIndex={0}
-              className="w-full cursor-text text-display-sm font-bold leading-snug tracking-tight"
+              className={cn("w-full cursor-text leading-snug tracking-tight", titleSizeClass)}
               onClick={(e) => {
                 // A drag-selection (copying the title) must not summon the editor.
                 const sel = window.getSelection();
@@ -3329,6 +3371,17 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
                 );
               })()}
             </AppLink>
+          )}
+
+          {isPeek && (
+            <div className="mt-3">
+              <IssuePropertyPills
+                issue={issue}
+                onUpdate={handleUpdateField}
+                onMarkDuplicate={actions.openMarkDuplicate}
+                isDuplicate={isDuplicateIssue(issue)}
+              />
+            </div>
           )}
 
           {issue.source_context && (
@@ -3792,7 +3845,7 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
             the resize handle's 4px drag strip at the panel edge. Hover
             previews a comment, click jumps to it. Hidden on mobile: no
             hover, and the gutter is too tight. */}
-        {!isMobile && (
+        {!isMobile && !isPeek && (
           <ThreadMinimap
             threads={minimapThreads}
             scrollContainerEl={scrollContainerEl}
@@ -3827,6 +3880,12 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
       />
     </PreviewSequenceProvider>
   );
+
+  // The peek has no room for the properties sidebar: its core properties are
+  // the pills under the title, and the rest is one click away on the page.
+  if (isPeek) {
+    return withPreview(<div className="flex flex-1 min-h-0">{detailContent}</div>);
+  }
 
   if (isMobile) {
     return withPreview(

@@ -366,6 +366,13 @@
     "ordered_by": "按{{field}}排序",
     "manual_reorder_hint": "切换到“手动”排序后，才能调整同一列内的顺序。"
   },
+  "peek": {
+    "panel_label": "任务预览",
+    "previous": "上一个任务",
+    "next": "下一个任务",
+    "open_full_page": "打开完整页面",
+    "close": "关闭预览"
+  },
   "detail": {
     "not_found": "这个任务不存在或已在该工作区被删除。",
     "breadcrumb_project_unknown": "未知项目",
