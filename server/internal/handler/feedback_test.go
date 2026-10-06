@@ -6,7 +6,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"strings"
 	"testing"
+	"unicode/utf8"
 )
 
 func TestCreateFeedbackHappyPath(t *testing.T) {
@@ -224,10 +226,78 @@ func TestCreateFeedbackRateLimit(t *testing.T) {
 // window when run in sequence.
 func clearFeedbackForTestUser(t *testing.T) {
 	t.Helper()
-	if _, err := testPool.Exec(context.Background(), `DELETE FROM feedback WHERE user_id = $1`, parseUUID(testUserID)); err != nil {
+	if _, err := testPool.Exec(context.Background(), `DELETE FROM feedback WHERE creator_id = $1`, parseUUID(testUserID)); err != nil {
 		t.Fatalf("clear feedback: %v", err)
 	}
 	t.Cleanup(func() {
-		testPool.Exec(context.Background(), `DELETE FROM feedback WHERE user_id = $1`, parseUUID(testUserID))
+		testPool.Exec(context.Background(), `DELETE FROM feedback WHERE creator_id = $1`, parseUUID(testUserID))
 	})
+}
+
+// TestFeedbackTitleFromMessageCJK verifies that title derivation from the
+// legacy message truncates by runes, never splitting a multi-byte UTF-8 (CJK)
+// rune — the byte-slice behavior that previously produced invalid UTF-8 titles
+// rejected by PostgreSQL.
+func TestFeedbackTitleFromMessageCJK(t *testing.T) {
+	tests := []struct {
+		name    string
+		message string
+		want    string
+	}{
+		{
+			name:    "empty message falls back to placeholder",
+			message: "   ",
+			want:    "(no title)",
+		},
+		{
+			name:    "short ascii passes through unchanged",
+			message: "short title",
+			want:    "short title",
+		},
+		{
+			name:    "ascii longer than 80 bytes truncates",
+			message: strings.Repeat("a", 100),
+			want:    strings.Repeat("a", 80),
+		},
+		{
+			name:    "exactly 80 ascii bytes unchanged",
+			message: strings.Repeat("a", 80),
+			want:    strings.Repeat("a", 80),
+		},
+		{
+			name:    "cjk message at 90 bytes (30 runes) unchanged",
+			message: strings.Repeat("反", 30),
+			want:    strings.Repeat("反", 30),
+		},
+		{
+			name:    "cjk message longer than 80 runes truncated to 80 runes",
+			message: strings.Repeat("反", 100),
+			want:    strings.Repeat("反", 80),
+		},
+		{
+			name:    "cjk message exactly 80 runes unchanged",
+			message: strings.Repeat("反", 80),
+			want:    strings.Repeat("反", 80),
+		},
+		{
+			name:    "mixed ascii+cjk over byte budget truncates at rune boundary",
+			message: strings.Repeat("a", 70) + strings.Repeat("反", 20),
+			want:    strings.Repeat("a", 70) + strings.Repeat("反", 10),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := feedbackTitleFromMessage(tt.message)
+			if got != tt.want {
+				t.Fatalf("feedbackTitleFromMessage() = %q, want %q", got, tt.want)
+			}
+			if !utf8.ValidString(got) {
+				t.Fatalf("feedbackTitleFromMessage() returned invalid UTF-8: %q", got)
+			}
+			if n := utf8.RuneCountInString(got); n > 80 {
+				t.Fatalf("feedbackTitleFromMessage() returned %d runes, want <= 80", n)
+			}
+		})
+	}
 }

@@ -8,6 +8,35 @@ import { RESERVED_SLUGS } from "./reserved-slugs";
 // we hardcode the expected list and assert paths.workspace produces the same
 // keys. If you change either, BOTH need to be updated — the test catches drift.
 describe("paths.workspace() shape", () => {
+  it("exposes the expected parameterless workspace route methods", () => {
+    const ws = paths.workspace("__probe__");
+    const parameterlessRoutes = Object.entries(ws)
+      .filter(([, fn]) => typeof fn === "function" && fn.length === 0)
+      .map(([key]) => key);
+
+    expect(new Set(parameterlessRoutes)).toEqual(
+      new Set([
+        "root",
+        "usage",
+        "issues",
+        "projects",
+        "autopilots",
+        "agents",
+        "newAgent",
+        "newAgentManual",
+        "newAgentAi",
+        "chat",
+        "squads",
+        "inbox",
+        "myIssues",
+        "runtimes",
+        "skills",
+        "squads",
+        "settings",
+        "feedback",
+      ]),
+    );
+  });
 
   it("each parameterless route emits /{slug}/{segment}", () => {
     const ws = paths.workspace("acme");
@@ -30,6 +59,7 @@ describe("paths.workspace() shape", () => {
       ["skills", "skills"],
       ["squads", "squads"],
       ["settings", "settings"],
+      ["feedback", "feedback"],
     ];
     const wsAsAny = ws as unknown as Record<string, () => string>;
     for (const [method, segment] of expectedSegments) {
