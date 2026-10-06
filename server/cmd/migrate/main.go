@@ -312,13 +312,13 @@ var concurrentIndexCleanups = map[string]string{
 	"480_instance_telemetry_state_singleton_index":              "instance_telemetry_state_singleton_uidx",
 	"482_agent_task_queue_telemetry_started_index":              "idx_agent_task_queue_telemetry_started",
 	"484_issue_triage_state_index":                              "idx_issue_triage_state",
-	"458_template_apply_log_idempotency_unique_index":           "template_apply_log_workspace_key_unique",
-	"461_marketplace_listings_kind_index":                       "marketplace_listings_kind_idx",
-	"462_marketplace_listings_category_index":                   "marketplace_listings_category_idx",
-	"463_marketplace_listings_created_index":                    "marketplace_listings_created_idx",
-	"465_marketplace_listings_fts_index":                        "marketplace_listings_fts_idx",
-	"467_marketplace_download_dedup_unique_index":               "marketplace_download_dedup_listing_workspace_member_unique",
-	"468_marketplace_listings_source_workspace_id_title_unique": "marketplace_listings_source_workspace_id_title_key",
+	"501_template_apply_log_idempotency_unique_index":           "template_apply_log_workspace_key_unique",
+	"504_marketplace_listings_kind_index":                       "marketplace_listings_kind_idx",
+	"505_marketplace_listings_category_index":                   "marketplace_listings_category_idx",
+	"506_marketplace_listings_created_index":                    "marketplace_listings_created_idx",
+	"508_marketplace_listings_fts_index":                        "marketplace_listings_fts_idx",
+	"510_marketplace_download_dedup_unique_index":               "marketplace_download_dedup_listing_workspace_member_unique",
+	"511_marketplace_listings_source_workspace_id_title_unique": "marketplace_listings_source_workspace_id_title_key",
 }
 
 // concurrentDownIndexCleanups covers every migration whose down direction
