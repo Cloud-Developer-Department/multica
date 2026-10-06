@@ -180,7 +180,7 @@ export function MarketplaceListPage() {
                     {item.tags.slice(0, 4).map((tag) => (
                       <span
                         key={tag}
-                        className="rounded bg-muted px-1.5 py-0.5 text-caption text-muted-foreground"
+                        className="rounded-md bg-muted px-1.5 py-0.5 text-caption text-muted-foreground"
                       >
                         {tag}
                       </span>

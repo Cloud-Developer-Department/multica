@@ -909,7 +909,7 @@ export function ResourceTemplateImportDialog({
                     {e.validate.errors.map((err, j) => (
                       <li key={j} className="flex items-start gap-1.5">
                         {err.code && (
-                          <code className="rounded bg-destructive/10 px-1 font-mono text-micro">
+                          <code className="rounded-sm bg-destructive/10 px-1 font-mono text-micro">
                             {err.code}
                           </code>
                         )}

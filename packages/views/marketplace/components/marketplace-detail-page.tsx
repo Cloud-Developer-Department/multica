@@ -189,7 +189,7 @@ export function MarketplaceDetailPage({ id }: { id: string }) {
                 {listing.tags.map((tag) => (
                   <span
                     key={tag}
-                    className="rounded bg-muted px-1.5 py-0.5 text-caption text-muted-foreground"
+                    className="rounded-md bg-muted px-1.5 py-0.5 text-caption text-muted-foreground"
                   >
                     {tag}
                   </span>
@@ -239,7 +239,7 @@ export function MarketplaceDetailPage({ id }: { id: string }) {
                         {templateDoc.spec.agent.skills.map((s, i) => (
                           <span
                             key={`${s.name}-${i}`}
-                            className="rounded bg-muted px-1.5 py-0.5"
+                            className="rounded-md bg-muted px-1.5 py-0.5"
                           >
                             {s.name}
                           </span>
@@ -264,7 +264,7 @@ export function MarketplaceDetailPage({ id }: { id: string }) {
                         {templateDoc.spec.squad.members.map((m, i) => (
                           <span
                             key={`${m.ref}-${i}`}
-                            className="rounded bg-muted px-1.5 py-0.5"
+                            className="rounded-md bg-muted px-1.5 py-0.5"
                           >
                             {m.role}
                             {m.agent?.name ? `: ${m.agent.name}` : `: ${m.ref}`}
