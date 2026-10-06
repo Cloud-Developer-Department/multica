@@ -312,11 +312,11 @@ var concurrentIndexCleanups = map[string]string{
 	"480_instance_telemetry_state_singleton_index":              "instance_telemetry_state_singleton_uidx",
 	"482_agent_task_queue_telemetry_started_index":              "idx_agent_task_queue_telemetry_started",
 	"484_issue_triage_state_index":                              "idx_issue_triage_state",
-	"458_issue_document_workspace_updated_index":                "idx_issue_document_workspace_updated",
-	"459_issue_document_workspace_type_index":                   "idx_issue_document_workspace_type",
-	"460_issue_document_workspace_status_index":                 "idx_issue_document_workspace_status",
-	"461_issue_document_issue_index":                            "idx_issue_document_issue",
-	"462_issue_document_issue_type_version_unique_index":        "idx_issue_document_issue_type_version",
+	"492_issue_document_workspace_updated_index":                "idx_issue_document_workspace_updated",
+	"493_issue_document_workspace_type_index":                   "idx_issue_document_workspace_type",
+	"494_issue_document_workspace_status_index":                 "idx_issue_document_workspace_status",
+	"495_issue_document_issue_index":                            "idx_issue_document_issue",
+	"496_issue_document_issue_type_version_unique_index":        "idx_issue_document_issue_type_version",
 }
 
 // concurrentDownIndexCleanups covers every migration whose down direction
