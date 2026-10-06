@@ -1054,6 +1054,38 @@ type MaintenanceJob struct {
 	CompletedAt    pgtype.Timestamptz `json:"completed_at"`
 }
 
+type MarketplaceDownloadDedup struct {
+	ListingID   pgtype.UUID        `json:"listing_id"`
+	WorkspaceID pgtype.UUID        `json:"workspace_id"`
+	MemberID    pgtype.UUID        `json:"member_id"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+}
+
+type MarketplaceListing struct {
+	ID                pgtype.UUID        `json:"id"`
+	Kind              string             `json:"kind"`
+	Title             string             `json:"title"`
+	Summary           string             `json:"summary"`
+	Category          string             `json:"category"`
+	Tags              []string           `json:"tags"`
+	Version           string             `json:"version"`
+	AuthorID          pgtype.UUID        `json:"author_id"`
+	AuthorDisplayName string             `json:"author_display_name"`
+	SourceWorkspaceID pgtype.UUID        `json:"source_workspace_id"`
+	TemplateID        string             `json:"template_id"`
+	Template          []byte             `json:"template"`
+	Status            string             `json:"status"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
+}
+
+type MarketplaceStat struct {
+	ListingID pgtype.UUID        `json:"listing_id"`
+	Downloads int64              `json:"downloads"`
+	Installs  int64              `json:"installs"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+}
+
 type Member struct {
 	ID          pgtype.UUID        `json:"id"`
 	WorkspaceID pgtype.UUID        `json:"workspace_id"`
@@ -1432,6 +1464,16 @@ type TaskUsageHourlyRollupState struct {
 	LastRunFinishedAt pgtype.Timestamptz `json:"last_run_finished_at"`
 	LastRunRows       int64              `json:"last_run_rows"`
 	LastError         pgtype.Text        `json:"last_error"`
+}
+
+type TemplateApplyLog struct {
+	ID              int64              `json:"id"`
+	WorkspaceID     pgtype.UUID        `json:"workspace_id"`
+	IdempotencyKey  string             `json:"idempotency_key"`
+	TemplateID      string             `json:"template_id"`
+	TemplateVersion string             `json:"template_version"`
+	Result          []byte             `json:"result"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 }
 
 type User struct {

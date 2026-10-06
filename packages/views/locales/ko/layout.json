@@ -1,4 +1,4 @@
-{
+﻿{
   "nav": {
     "inbox": "인박스",
     "chat": "채팅",
@@ -8,6 +8,7 @@
     "autopilots": "오토파일럿",
     "agents": "에이전트",
     "squads": "스쿼드",
+    "marketplace": "마켓플레이스",
     "usage": "분석",
     "runtimes": "런타임",
     "skills": "스킬",
@@ -21,6 +22,7 @@
     "member": "멤버",
     "squad": "스쿼드",
     "skill": "스킬",
+    "marketplace": "마켓플레이스",
     "machine": "머신",
     "runtime": "런타임",
     "attachment": "첨부파일",
