@@ -2291,9 +2291,13 @@ func countDiskUsageTaskDirs(root string) int {
 }
 
 func profilesRootDir() (string, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", err
+	home := strings.TrimSpace(os.Getenv("HOME"))
+	if home == "" {
+		var err error
+		home, err = os.UserHomeDir()
+		if err != nil {
+			return "", err
+		}
 	}
 	return filepath.Join(home, ".multica", "profiles"), nil
 }
