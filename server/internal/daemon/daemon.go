@@ -2101,6 +2101,17 @@ func (d *Daemon) clearWSHeartbeatAcks() {
 
 // Run starts the daemon: resolves auth, registers runtimes, then polls for tasks.
 func (d *Daemon) Run(ctx context.Context) error {
+	return d.run(ctx, nil)
+}
+
+// RunWithHealthListener uses an already-bound loopback listener. The CLI keeps
+// that listener open while publishing its actual port for other processes.
+func (d *Daemon) RunWithHealthListener(ctx context.Context, healthLn net.Listener) error {
+	return d.run(ctx, healthLn)
+}
+
+func (d *Daemon) run(ctx context.Context, healthLn net.Listener) error {
+	var err error
 	// Wrap context so handleUpdate can cancel the daemon for restart.
 	ctx, cancel := context.WithCancel(ctx)
 	d.cancelFunc = cancel
@@ -2108,10 +2119,13 @@ func (d *Daemon) Run(ctx context.Context) error {
 	d.rootCtx = ctx
 
 	// Bind health port early to detect another running daemon.
-	healthLn, err := d.listenHealth()
-	if err != nil {
-		return err
+	if healthLn == nil {
+		healthLn, err = d.listenHealth()
+		if err != nil {
+			return err
+		}
 	}
+	defer healthLn.Close()
 
 	agentNames := make([]string, 0, len(d.agents()))
 	for name := range d.agents() {
