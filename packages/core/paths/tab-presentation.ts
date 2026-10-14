@@ -47,6 +47,7 @@ export type TabLabelKey =
   | "member"
   | "squad"
   | "skill"
+  | "marketplace"
   | "machine"
   | "runtime"
   | "attachment"
@@ -84,6 +85,7 @@ export interface TabEntityData {
   /** Resolved display name for an actor subject. */
   actorName?: string;
   skill?: { name: string };
+  marketplaceTitle?: string;
   machine?: { name: string };
   runtime?: { name: string };
   /** Resolved chat session title (already includes the "New chat" fallback). */
@@ -186,12 +188,17 @@ export function resolveTabPresentation(
         visual: { kind: "icon", icon: "BookOpenText" },
         title: textOr(data.skill?.name, "skill"),
       };
-    case "feedback":
+case "feedback":
       // Feedback detail resolves like a plain page until a richer identity is
       // added: the page icon + nav label (never a type-ambiguous default).
       return {
         visual: { kind: "icon", icon: WORKSPACE_PAGES.feedback.icon },
         title: { kind: "nav", navKey: WORKSPACE_PAGES.feedback.navKey },
+      };
+    case "marketplace":
+      return {
+        visual: { kind: "icon", icon: "Store" },
+        title: textOr(data.marketplaceTitle, "marketplace"),
       };
     case "machine":
       return {

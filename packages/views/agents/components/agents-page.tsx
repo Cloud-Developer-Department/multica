@@ -6,6 +6,7 @@ import {
   Bot,
   Lock,
   Plus,
+  Upload,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -234,6 +235,7 @@ export function rowMatchesFilters(
  */
 import { isAccessChangeReady } from "@multica/core/agents";
 import { AgentBatchToolbar } from "./agent-batch-toolbar";
+import { ResourceTemplateImportDialog } from "../../common/resource-template-import-dialog";
 export { isAccessChangeReady };
 
 export interface AgentsPageProps {
@@ -252,11 +254,14 @@ export interface AgentsPageProps {
 function PageHeaderBar({
   totalCount,
   onCreate,
+  onImport,
 }: {
   totalCount: number;
   onCreate: () => void;
+  onImport: () => void;
 }) {
   const { t, i18n } = useT("agents");
+  const { t: tt } = useT("templates");
   return (
     <CollectionPageHeader
       icon={Bot}
@@ -268,11 +273,18 @@ function PageHeaderBar({
         label: t(($) => $.page.learn_more),
       }}
       actions={
-        <CollectionPageHeaderAction
-          icon={Plus}
-          label={t(($) => $.page.new_agent)}
-          onClick={onCreate}
-        />
+        <div className="flex items-center gap-2">
+          <CollectionPageHeaderAction
+            icon={Upload}
+            label={tt(($) => $.import.button)}
+            onClick={onImport}
+          />
+          <CollectionPageHeaderAction
+            icon={Plus}
+            label={t(($) => $.page.new_agent)}
+            onClick={onCreate}
+          />
+        </div>
       }
     />
   );
@@ -280,17 +292,19 @@ function PageHeaderBar({
 
 function ListError({
   onCreate,
+  onImport,
   listError,
   onRetry,
 }: {
   onCreate: () => void;
+  onImport: () => void;
   listError: unknown;
   onRetry: () => void;
 }) {
   const { t } = useT("agents");
   return (
     <div className="flex flex-1 min-h-0 flex-col">
-      <PageHeaderBar totalCount={0} onCreate={onCreate} />
+      <PageHeaderBar totalCount={0} onCreate={onCreate} onImport={onImport} />
       <CollectionPageState
         role="alert"
         tone="destructive"
@@ -798,6 +812,7 @@ export function AgentsPage(_props: AgentsPageProps = {}) {
     new Set(),
   );
   const [search, setSearch] = useState("");
+  const [templateImportOpen, setTemplateImportOpen] = useState(false);
 
   const rawScope = useAgentsViewStore((s) => s.scope);
   const scope = AGENT_SCOPES.includes(rawScope) ? rawScope : "mine";
@@ -1002,6 +1017,7 @@ export function AgentsPage(_props: AgentsPageProps = {}) {
     return (
       <ListError
         onCreate={() => navigation.push(paths.newAgent())}
+        onImport={() => setTemplateImportOpen(true)}
         listError={listError}
         onRetry={() => refetchList()}
       />
@@ -1039,6 +1055,7 @@ export function AgentsPage(_props: AgentsPageProps = {}) {
       <PageHeaderBar
         totalCount={totalCount}
         onCreate={() => navigation.push(paths.newAgent())}
+        onImport={() => setTemplateImportOpen(true)}
       />
 
       {isLoading || (!showEmpty && !listReady) ? (
@@ -1192,6 +1209,12 @@ export function AgentsPage(_props: AgentsPageProps = {}) {
         members={members}
         currentUserId={currentUser?.id ?? null}
         onClear={() => setSelectedIds(new Set())}
+        onImport={() => setTemplateImportOpen(true)}
+      />
+
+      <ResourceTemplateImportDialog
+        open={templateImportOpen}
+        onOpenChange={setTemplateImportOpen}
       />
 
     </div>

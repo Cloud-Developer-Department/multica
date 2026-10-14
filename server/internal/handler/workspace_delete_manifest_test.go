@@ -101,7 +101,10 @@ var workspaceDeletionManifest = map[string]workspaceDeleteAction{
 	"lark_installation":                  workspaceDelete,
 	"lark_outbound_card_message":         workspaceDelete,
 	"lark_user_binding":                  workspaceDelete,
-	"maintenance_job":                    workspaceDeleteKeep, // Global maintenance audit history, not workspace-owned.
+"maintenance_job":                    workspaceDeleteKeep, // Global maintenance audit history, not workspace-owned.
+	"marketplace_download_dedup":         workspaceDelete,
+	"marketplace_listings":               workspaceDelete,
+	"marketplace_stats":                  workspaceDelete,
 	"member":                             workspaceDelete,
 	"notification_preference":            workspaceDelete,
 	"personal_access_token":              workspaceDeleteKeep,
@@ -136,6 +139,7 @@ var workspaceDeletionManifest = map[string]workspaceDeleteAction{
 	"task_usage_hourly":                  workspaceDelete,
 	"task_usage_hourly_dirty":            workspaceDelete,
 	"task_usage_hourly_rollup_state":     workspaceDeleteKeep,
+	"template_apply_log":                 workspaceDelete,
 	"user":                               workspaceDeleteKeep,
 	"user_composio_connection":           workspaceDeleteKeep,
 	"vcs_commit_status":                  workspaceDelete,

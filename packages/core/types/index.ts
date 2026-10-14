@@ -309,6 +309,7 @@ export type {
   SquadActivityLog,
   SquadActivityOutcome,
   CreateSquadRequest,
+  CreateSquadMember,
   UpdateSquadRequest,
   AddSquadMemberRequest,
   RemoveSquadMemberRequest,
@@ -358,3 +359,47 @@ export type {
 export type { IssueWakeup, IssueWakeupInput, SystemWakeup, WorkspaceSystemWakeup, WakeupPreview, IssueWakeupSummaryRow, WakeupCondition, WakeupPausedReason, WakeupRun, PausedWakeup, WakeupSource } from "./issue-wakeup";
 
 export type { WorkspaceWakeup, WorkspaceWakeupPage, WorkspaceWakeupFilters, WakeupScope } from "./issue-wakeup";
+
+export type {
+  ResourceTemplateKind,
+  TemplateMembersMode,
+  ResourceTemplateDoc,
+  TemplateWarning,
+  TemplateError,
+  ExportMetadataInput,
+  ExportResourceTemplateRequest,
+  ExportResourceTemplateResponse,
+  RequiredEnvKeyInput,
+  MissingSkillInput,
+  MissingMcpServerInput,
+  MissingAgentInput,
+  RequiredInputs,
+  NameConflict,
+  ApplyPlan,
+  ValidateResourceTemplateRequest,
+  ValidateResourceTemplateResponse,
+  ConflictPolicy,
+  AgentOverride,
+  ApplyOverrides,
+  ApplyResourceTemplateRequest,
+  CreatedAgent,
+  CreatedSquad,
+  CreatedSkill,
+  ApplyCreated,
+  SkippedResource,
+  ApplyResourceTemplateResponse,
+} from "./resource-template";
+export type {
+  MarketplaceKind,
+  MarketplaceSort,
+  MarketplaceListing,
+  MarketplacePublishMetadata,
+  PublishMarketplaceListingRequest,
+  ListMarketplaceListingsResponse,
+  MarketplaceDetailResponse,
+  ReportMarketplaceDownloadResponse,
+  MarketplaceCategory,
+} from "./marketplace";
+export {
+  MARKETPLACE_CATEGORIES,
+} from "./marketplace";

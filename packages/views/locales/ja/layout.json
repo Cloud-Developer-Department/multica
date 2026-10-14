@@ -1,4 +1,4 @@
-{
+﻿{
   "nav": {
     "inbox": "インボックス",
     "chat": "チャット",
@@ -8,6 +8,7 @@
     "autopilots": "オートパイロット",
     "agents": "エージェント",
     "squads": "スクワッド",
+    "marketplace": "マーケットプレイス",
     "usage": "分析",
     "issue_documents": "Issue Documents",
     "runtimes": "ランタイム",
@@ -23,6 +24,7 @@
     "member": "メンバー",
     "squad": "スクワッド",
     "skill": "スキル",
+    "marketplace": "マーケットプレイス",
     "machine": "マシン",
     "runtime": "ランタイム",
     "attachment": "添付ファイル",

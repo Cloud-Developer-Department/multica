@@ -102,6 +102,7 @@ const PAGE_KEYWORDS: Record<WorkspacePageKey, string[]> = {
   autopilots: ["autopilot", "autopilots", "automation", "schedule", "cron", "webhook", "自动化", "定时"],
   agents: ["agents", "bots", "ai", "智能体"],
   squads: ["squads", "teams", "小队", "团队"],
+  marketplace: ["marketplace", "market", "store", "市场", "商店"],
   usage: ["usage", "analytics", "stats", "metrics", "统计", "分析", "用量"],
   issueDocuments: ["documents", "docs", "flow", "issue documents", "流程文档"],
   runtimes: ["runtimes", "environments", "machines", "运行时"],
