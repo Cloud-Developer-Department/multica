@@ -16,6 +16,9 @@ COPY packages/views/package.json packages/views/
 COPY packages/tsconfig/package.json packages/tsconfig/
 COPY packages/eslint-config/package.json packages/eslint-config/
 
+# Local build infra: CN mirror for pnpm/corepack fetches (build-only, mirrors main's GOPROXY approach)
+ENV COREPACK_NPM_REGISTRY=https://registry.npmmirror.com
+ENV npm_config_registry=https://registry.npmmirror.com
 RUN corepack enable && \
     PNPM_VERSION="$(node -p 'require("./package.json").packageManager')" && \
     corepack prepare "$PNPM_VERSION" --activate
