@@ -1,0 +1,339 @@
+---
+title: 资源模板
+description: 把验证好用的智能体/小队定义与配置导出成可移植模板，团队一键载入并微调出自己的副本。
+---
+
+import { Callout } from "fumadocs-ui/components/callout";
+
+资源模板（resource template）让你把一个 [智能体](/agents) 或 [小队](/squads) 的定义与配置**导出成一个可移植的 JSON 文件**，同事拿到后**载入、微调**，就能生成自己工作区里的副本。这是把"个人验证有效的配置"沉淀成团队可复用资产的标准方式。
+
+一期模板能力以 **CLI** 为主交互界面（`multica template export / validate / apply`），通过 JSON 文件在工作区内分享；模板本身不落库，也没有 Web UI。
+
+<Callout type="info">
+**它和官方只读模板的区别**。Multica 内置了一批只读的精选智能体模板（在创建智能体时的 TemplateChooser 里挑选），它们是仓库内置的静态资源、不支持自定义。资源模板是**你自己导出的**用户模板，可以改、可以分享，两者互不影响。
+</Callout>
+
+## 整体流程
+
+把一个人的配置变成另一个人的副本，走三步：
+
+1. **export** —— 把你有权读取的智能体/小队脱敏后写成模板文件。
+2. **validate** —— 用目标运行时校验模板结构、版本、引用、冲突，并给出一份"将要创建什么"的计划。
+3. **apply** —— 在目标工作区里按计划创建副本，可 dry-run 预览、可改字段、可重试。
+
+```bash
+# 把一个智能体导成模板
+multica template export --kind agent --id my-reviewer --file reviewer.json
+
+# 用目标运行时校验
+multica template validate --file reviewer.json --runtime-id <rt>
+
+# 预览将要创建的资源（不写任何东西）
+multica template apply --file reviewer.json --runtime-id <rt> --dry-run
+
+# 确认无误后真正创建
+multica template apply --file reviewer.json --runtime-id <rt> --yes
+```
+
+## 模板 JSON 结构
+
+模板是一个普通的 JSON 对象，顶层结构如下（JSON 不支持注释，下面的 `//` 仅供说明）：
+
+```jsonc
+{
+  "schema_version": "1.0",
+  "template_id": "<服务端基于资源确定性生成的 UUID>",
+  "kind": "agent",                // 或 "squad"
+  "metadata": {
+    "name": "代码审查员",
+    "description": "...",
+    "author": { "id": "<uuid>", "display_name": "徐毅" },
+    "version": "1.0.0",          // 用户管理的 SemVer
+    "visibility": "workspace",   // 一期只允许该值
+    "tags": ["review", "qa"],
+    "source_workspace": "<uuid>", // 仅展示，绝不可作导入授权依据
+    "created_at": "2026-08-05T14:00:00Z",
+    "readme": "README.md"        // 同名说明文件名（展示用，不是路径）
+  },
+  "spec": {
+    "agent": { "..." }           // kind=agent 时是 agent；kind=squad 时是 squad
+  }
+}
+```
+
+### 顶层字段
+
+| 字段 | 说明 |
+| --- | --- |
+| `schema_version` | 模板格式版本，必填。格式为 `major.minor`（patch 忽略）。**major 必须等于服务器支持的 major，且模板的 minor 不能超过服务器支持版本**。一期服务器是 `1.0`，所以接受 `1.0.x`，拒绝 `1.1+` 与 `0.x`/`2.x`。major 不匹配会直接报 `TEMPLATE_VERSION_UNSUPPORTED`，服务器不会猜测、不会降级。 |
+| `template_id` | 导出时**由服务端基于被导出资源确定性生成**：同一资源多次导出得到的 `template_id` 相同，方便幂等识别。它只用于追溯/幂等，**绝不**作为导入授权依据。`metadata.version` 由你手动管理 SemVer，两者独立演进。 |
+| `kind` | `agent` 或 `squad`。一期不支持 `bundle`，收到会报 `TEMPLATE_INVALID`。`kind` 必须与 `spec` 里唯一的键一致——出现另一个键或未知顶层键都会被拒。 |
+| `metadata` | 作者、版本、可见范围等展示性元数据。`source_workspace` 和 `created_at` 只用于展示，不带任何授权权重。 |
+| `spec` | 按 `kind` 承载 `agent` 或 `squad` 的具体定义（见下）。 |
+
+<Callout type="warning">
+**`schema_version` 兼容策略**：major 必须相等，模板 minor 不得超过服务器 minor，patch 忽略。这条策略比"只看 major"更严——否则一个携带 `1.7` 的模板会被当 `1.0` 静默错读。版本不符时整个模板直接拒绝，不会按缺省语义勉强处理。
+</Callout>
+
+### AgentSpec（kind=agent）
+
+```jsonc
+"spec": {
+  "agent": {
+    "name": "代码审查员",
+    "description": "...",
+    "instructions": "...",
+    "model": "claude-opus-5",            // 可空 = 目标运行时默认模型
+    "thinking_level": "",                // 可空，按目标运行时重校验
+    "service_tier": "",                  // 同上
+    "max_concurrent_tasks": 6,
+    "permission_mode": "private",        // private 或 public_to
+    "public_to_workspace": false,
+    "custom_args": ["..."],
+    "skills": [
+      { "name": "multica-squads", "source_url": "https://...", "enabled": true }
+    ],
+    "custom_env_keys": [
+      { "key": "API_KEY", "required": true, "description": "..." }
+    ],
+    "mcp_servers": [
+      { "name": "...", "transport": "stdio", "requires_auth": true,
+        "config_skeleton": { "command": "...", "args": ["..."] } }
+    ]
+  }
+}
+```
+
+要点：
+
+- `model` 为空表示用目标运行时的默认模型。`thinking_level` / `service_tier` 是运行时相关 token，apply 时会按**目标运行时**用 `IsKnownThinkingValue` / `IsKnownServiceTier` 重校验，不认识就报错并提示置空，**不静默丢弃**。
+- `skills[].source_url` 是唯一可自动物化的字段（复用 skill importer 支持的 URL 家族）。没有 `source_url` 的本地 skill 只按 `name` 在目标工作区找同名，找不到会进 `required_inputs.missing_skills`，**绝不自动执行任何不受信任脚本**。
+- `custom_env_keys` 只有 key 名 + 是否必填，**永远不带值**。apply 时缺必填 key 会报 `REQUIRED_INPUT_MISSING`，需要你通过安全通道补齐。
+- `mcp_servers` 只留结构骨架（command/args/transport），auth/token/headers/env 的值在导出时全部剥除。
+
+### SquadSpec（kind=squad）
+
+```jsonc
+"spec": {
+  "squad": {
+    "name": "研发工程小队",
+    "description": "...",
+    "instructions": "...",
+    "members_mode": "embedded",          // 或 "references"
+    "leader_ref": "architect-agent",
+    "members": [
+      { "ref": "architect-agent", "role": "leader", "agent": { "...AgentSpec..." } },
+      { "ref": "senior-dev", "role": "core-dev", "agent": { "..." } }
+    ]
+  }
+}
+```
+
+- `ref` 是**模板内部符号**（不是 UUID），用来把 `leader_ref` 和 `members[].ref` 关联起来，在模板内必须唯一。
+- `leader_ref` 必须命中某个 member，且该 member 的 `role` 必须是 `leader`。
+- 小队里的人类成员（`member_type=member`）不可移植，导出时会被丢弃并产生 `MEMBER_HUMAN_DROPPED` 警告——模板只承载智能体成员。
+
+## 脱敏规则：模板里永远没有密钥
+
+export 在写出模板前会做严格脱敏，并跑一遍密钥探测。这些字段**永不导出**：
+
+| 不导出的内容 | 原因 |
+| --- | --- |
+| `runtime_id` / `runtime_mode` / `runtime_config` | 机器本地配置，apply 时由调用方重新指定。 |
+| `custom_env` 的**值** | 密钥。只降级为 `custom_env_keys`（key + required）。 |
+| `mcp_config` 里的 auth/token/headers/env 值 | 密钥。只降级为 `mcp_servers`（结构骨架 + `requires_auth`）。 |
+| `invocation_targets` 里的 member 目标 | 工作区用户 UUID，不可移植。只压缩成 `permission_mode` + `public_to_workspace`。 |
+| `composio_toolkit_allowlist` / `avatar_url` / `owner_id` / `creator_id` / 各类 ID 与时间戳 / `archived_*` | 本地足迹或本地标识，不属于可复用配置。 |
+
+**为什么模板里不能有密钥**：模板本质上是会被贴进聊天记录、issue 评论、终端回滚和 PR 里的文件。任何明文凭据一旦进模板，就等于泄露。所以脱敏是硬性的——无论导出还是导入，一旦探测到明文密钥就直接报 `SECRET_DETECTED` 并拒绝，**绝不静默清洗**。
+
+密钥探测有两路并行信号，**key 名命中即报、不设值长度阈值**（漏报不可接受、误报可接受）：
+
+1. key 名大小写不敏感匹配 token / password / secret / api_key / private_key / authorization 等模式（含复合名边界匹配，如 `github_token`、`db_password`、`x-api-key`）；
+2. 值形态匹配已知凭据前缀与结构（`sk-`、`ghp_`、`AKIA`、`xoxb-`、`Bearer`/`Basic` 结构、PEM `-----BEGIN … PRIVATE KEY-----`、`scheme://user:pass@` 内联凭据）。
+
+如果误报，人工核验后修正字段再 apply 即可。
+
+## 凭据注入：没有明文 flag
+
+apply 需要补密钥时，**只接受文件或标准输入**，没有明文命令行 flag：
+
+- `--custom-env-file ./env.json`（推荐，文件权限设 `0600`）
+- `--custom-env-stdin`（从 stdin 读 JSON）
+- 交互式 fallback：在 TTY 下逐个提示，用 `ReadPassword` 不回显，可以 skip 留占位符稍后再用 `multica agent env` 配置。
+
+`env.json` 的形状按**智能体 ref** 键入（小队模板里就是成员的 `ref`，单智能体模板里就是智能体名）：
+
+```json
+{
+  "architect-agent": { "API_KEY": "<你的值>" },
+  "senior-dev":      { "DB_PASSWORD": "<你的值>" }
+}
+```
+
+为什么没有 `--custom-env KEY=value` 明文 flag？因为模板场景天然会被贴进聊天记录和终端回滚——比 `agent create` 更严，是从源头杜绝凭据落进日志。
+
+## CLI 使用示例
+
+### 导出智能体 → 校验 → 载入
+
+把一个人的配置变成另一个人的副本，走三步：
+
+1. **导出模板。** 用名称或 UUID 都行；名称解析限定在当前 CLI 工作区。
+
+```bash
+multica template export --kind agent --id my-reviewer --file reviewer.json
+# 可选：自定义版本、描述、标签
+multica template export --kind agent --id my-reviewer --file reviewer.json \
+    --version 1.2.0 --description "代码审查员模板" --tag review --tag qa
+```
+
+2. **用目标运行时校验。** `model` / `thinking_level` / `service_tier` 会按目标运行时重校验；缺 skill、缺 env key、名称冲突都会一次性列出。
+
+```bash
+multica template validate --file reviewer.json --runtime-id <rt> --output json
+```
+
+3. **dry-run 预览**将要创建的资源（绝不写库），确认无误后带 `--yes` 真正创建。非交互执行必须带 `--yes`；交互执行会先打印 dry-run 计划再确认。
+
+```bash
+multica template apply --file reviewer.json --runtime-id <rt> --dry-run
+multica template apply --file reviewer.json --runtime-id <rt> --yes
+```
+
+### 导出小队（embedded）
+
+embedded 模式把每个成员的完整 AgentSpec 内嵌进模板，载入时会自动创建缺失的智能体再组队：
+
+```bash
+multica template export --kind squad --id my-squad \
+    --members-mode embedded --file squad-embedded.json
+```
+
+### 导出小队（references）
+
+references 模式只导出成员的 `ref` + `role`，不带智能体定义。载入时按 `ref`（即导出时的智能体名）在目标工作区匹配**已存在**的智能体：
+
+```bash
+multica template export --kind squad --id my-squad \
+    --members-mode references --file squad-refs.json
+```
+
+### 微调字段再载入
+
+载入时可以覆盖模板里的任意字段。`--set` 用**点分路径**（根在模板文档上，支持数组索引）；复杂/批量覆盖走 `--overrides-file`（JSON 深度合并，`--set` 在冲突时赢）：
+
+```bash
+multica template apply --file squad-embedded.json --runtime-id <rt> --yes \
+    --set metadata.name="我的研发小队" \
+    --set spec.squad.members[0].agent.name="我的架构师"
+```
+
+<Callout>
+注意 `env` 和 `overrides` 的寻址方式不同：`overrides` 按模板文档的点分路径，而 `env` 按**智能体 ref** 键入（凭据要跟着符号引用走，不能因成员重排而错位）。两套寻址不要混用。
+</Callout>
+
+### 三种冲突策略
+
+目标工作区已有同名资源时，用 `--conflict-policy` 决定怎么办（默认 `fail`）：
+
+| 策略 | 行为 |
+| --- | --- |
+| `fail` | 同名即停，报冲突并退出（exit code 3）。让你先决定。 |
+| `rename` | 自动追加 `"<name>-" + 短 UUID 前 8 位`，并在 `resource_mapping` 里返回原名→新名的映射。 |
+| `skip` | 跳过同名资源，记入 `skipped` 列表，其余照常创建。 |
+
+```bash
+# 重名就改名
+multica template apply --file reviewer.json --runtime-id <rt> --yes --conflict-policy rename
+# 重名就跳过
+multica template apply --file reviewer.json --runtime-id <rt> --yes --conflict-policy skip
+```
+
+<Callout type="warning">
+**没有 `overwrite` 策略，且永远不会加。** 传入 `overwrite` 会直接报错。覆盖会静默改写他人资源，和"失败不留半成品"的原则冲突。
+</Callout>
+
+### 幂等重试
+
+apply 返回的响应里会带一个 `idempotency_key`（你没指定时 CLI 自动生成并打印）。如果 apply 因为网络超时（`RETRYABLE`，5xx）结果不确定，**用同一个 key 重试**就是安全的——服务器会识别这是同一次执行，要么回放已有结果（`idempotent_replay: true`，不重复创建），要么继续收敛到同一终态。失败场景想重新执行要换一个新 key。
+
+```bash
+# 第一次执行超时，用回显的 key 重试
+multica template apply --file reviewer.json --runtime-id <rt> --yes \
+    --idempotency-key tmpl-a1b2c3d4e5f6
+```
+
+## embedded vs references 怎么选
+
+| 模式 | 模板里有什么 | apply 时怎么做 | 适合 |
+| --- | --- | --- | --- |
+| `embedded` | 每个成员的完整 AgentSpec | 按依赖顺序先建全部智能体，再建小队，再挂成员 | 想把"一整套人马"原样搬到新工作区 |
+| `references` | 只有成员的 ref + role | 按 ref（智能体名）匹配目标工作区已存在的智能体 | 目标工作区已经有这些智能体，只想组队关系 |
+
+一个重要的方向性约束：**embedded 模板可以按 references 模式载入**（丢弃内嵌定义、改按名字找现存智能体，是信息丢弃，可做）；**references 模板不能按 embedded 模式载入**——它根本没有智能体定义，凭空生成不出来，必须报错并提示重新导出，不能退化成"创建空壳智能体"。
+
+```bash
+# 用 --members-mode 在载入时覆盖模板自带的模式
+multica template apply --file squad-embedded.json --runtime-id <rt> --yes \
+    --members-mode references
+```
+
+## 升级与回滚
+
+### apply 失败如何读回滚结果
+
+apply 的事务性是硬性的：技能绑定、智能体、小队、成员关系在**同一个数据库事务**内完成。任一步失败 → 整个事务回滚，返回 `APPLY_ROLLED_BACK` + 失败依赖 + `rolled_back: true`，**不留任何孤儿资源**。你不需要手动清理半成品。
+
+### 如何安全重试
+
+网络超时这类"结果不确定"的场景，用**同一个 idempotency key** 重试（见上文）。事务内失败已回滚的场景，换一个**新** key 重新 apply。
+
+### 清理载入产生的资源
+
+apply 创建出来的都是普通智能体/小队，和手动创建的没有区别——用常规方式清理即可：
+
+```bash
+multica agent archive <agent-id>
+multica squad archive <squad-id>
+```
+
+## 错误码
+
+validate / apply 的错误用结构化 `errors[]` 承载，每条带 `code` + `path` + `message`，校验会**一次性收集全部错误**再返回（不会 fail-fast，方便你一次看全）：
+
+| code | 含义 |
+| --- | --- |
+| `TEMPLATE_INVALID` | JSON 坏、字段缺失、未知顶层字段、枚举非法、kind/spec 不一致 |
+| `TEMPLATE_VERSION_UNSUPPORTED` | schema_version major 不匹配 |
+| `SECRET_DETECTED` | 模板含明文密钥（导出与导入双侧拒绝） |
+| `DEPENDENCY_NOT_FOUND` | references 模式引用不到智能体 / 依赖已归档 |
+| `NAME_CONFLICT` | 同名且策略是 fail |
+| `APPLY_ROLLED_BACK` | 事务内失败已回滚 |
+| `REQUIRED_INPUT_MISSING` | required 的 env key 未在 apply 提供 |
+| `RUNTIME_NOT_FOUND` | target_runtime_id 不存在或调用者无权访问 |
+| `FORBIDDEN` | 越权导出/创建（不泄露资源是否存在） |
+| `CONFIG_NOT_ALLOWED` | permission/mcp/runtime 配置未过目标 allowlist |
+
+CLI 退出码：`0` 成功，`1` 一般错误，`2` 校验失败（errors 非空），`3` 冲突需要决策。
+
+## 一期边界
+
+为了把核心能力尽快交付，一期有几个明确的范围限制：
+
+- **不做服务端模板目录**：模板是文件，靠 CLI + JSON 在工作区内分享，不建数据库模板市场。
+- **不做 Web UI**：交互全走 CLI。
+- **`visibility` 固定为 `workspace`**：一期只在工作区内分享。
+- **`kind` 只有 agent / squad**，不支持 bundle。
+
+元数据里的 `author`、`version`、`visibility`、`tags`、`source_workspace` 这些字段是为**未来**的跨工作区分享、甚至社区分享预留的——它们现在能被导出和展示，但还不驱动任何跨工作区的导入授权逻辑。
+
+---
+
+到这里你知道怎么把一个验证好用的智能体/小队变成团队可复用的模板了。下一步可以去试试导出自己名下的某个智能体，或者看看 CLI 命令的完整参数。
+
+## 下一步
+
+- [智能体](/agents) —— 模板的主要载体
+- [小队](/squads) —— 一组智能体编队协作
+- [CLI 参考](/cli) —— `multica template` 的完整命令参数

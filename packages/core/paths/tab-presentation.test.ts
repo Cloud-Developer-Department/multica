@@ -39,7 +39,7 @@ describe("resolveTabPresentation — direct resources", () => {
     ).toEqual({
       // `category` travels with the visual so the tab strip never has to guess
       // the glyph for a custom status key. (MUL-6243)
-      visual: { kind: "issue-status", status: "in_progress", category: "in_progress" },
+      visual: { kind: "issue-status", status: "in_progress", category: "started" },
       title: { kind: "text", text: "MUL-1: Fix" },
     });
   });
@@ -90,6 +90,14 @@ describe("resolveTabPresentation — direct resources", () => {
     ).toEqual({
       visual: { kind: "icon", icon: "Server" },
       title: { kind: "text", text: "cloud-1" },
+    });
+    expect(present("/acme/feedback")).toEqual({
+      visual: { kind: "icon", icon: "MessageCircle" },
+      title: { kind: "nav", navKey: "feedback" },
+    });
+    expect(present("/acme/feedback/fb1")).toEqual({
+      visual: { kind: "icon", icon: "MessageCircle" },
+      title: { kind: "nav", navKey: "feedback" },
     });
   });
 

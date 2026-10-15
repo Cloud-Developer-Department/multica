@@ -25,8 +25,12 @@ import type modals from "../locales/en/modals.json";
 import type runtimes from "../locales/en/runtimes.json";
 import type layout from "../locales/en/layout.json";
 import type usage from "../locales/en/usage.json";
+import type issueDocuments from "../locales/en/issue-documents.json";
 import type squads from "../locales/en/squads.json";
 import type billing from "../locales/en/billing.json";
+import type feedback from "../locales/en/feedback.json";
+import type templates from "../locales/en/templates.json";
+import type marketplace from "../locales/en/marketplace.json";
 
 // Module augmentation enables i18next v26 selector API across the monorepo:
 // `t($ => $.signin.title)` resolves to the value in en/auth.json.
@@ -66,8 +70,12 @@ declare global {
     runtimes: typeof runtimes;
     layout: typeof layout;
     usage: typeof usage;
+    "issue-documents": typeof issueDocuments;
     squads: typeof squads;
     billing: typeof billing;
+    feedback: typeof feedback;
+    templates: typeof templates;
+    marketplace: typeof marketplace;
   }
 }
 

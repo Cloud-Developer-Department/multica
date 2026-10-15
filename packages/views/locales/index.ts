@@ -1,4 +1,4 @@
-import type { LocaleResources, SupportedLocale } from "@multica/core/i18n";
+﻿import type { LocaleResources, SupportedLocale } from "@multica/core/i18n";
 import enCommon from "./en/common.json";
 import enAuth from "./en/auth.json";
 import enSettings from "./en/settings.json";
@@ -21,9 +21,13 @@ import enModals from "./en/modals.json";
 import enRuntimes from "./en/runtimes.json";
 import enLayout from "./en/layout.json";
 import enUsage from "./en/usage.json";
+import enIssueDocuments from "./en/issue-documents.json";
 import enUi from "./en/ui.json";
 import enSquads from "./en/squads.json";
 import enBilling from "./en/billing.json";
+import enFeedback from "./en/feedback.json";
+import enTemplates from "./en/templates.json";
+import enMarketplace from "./en/marketplace.json";
 import zhHansCommon from "./zh-Hans/common.json";
 import zhHansAuth from "./zh-Hans/auth.json";
 import zhHansSettings from "./zh-Hans/settings.json";
@@ -46,9 +50,13 @@ import zhHansModals from "./zh-Hans/modals.json";
 import zhHansRuntimes from "./zh-Hans/runtimes.json";
 import zhHansLayout from "./zh-Hans/layout.json";
 import zhHansUsage from "./zh-Hans/usage.json";
+import zhHansIssueDocuments from "./zh-Hans/issue-documents.json";
 import zhHansUi from "./zh-Hans/ui.json";
 import zhHansSquads from "./zh-Hans/squads.json";
 import zhHansBilling from "./zh-Hans/billing.json";
+import zhHansFeedback from "./zh-Hans/feedback.json";
+import zhHansTemplates from "./zh-Hans/templates.json";
+import zhHansMarketplace from "./zh-Hans/marketplace.json";
 import koCommon from "./ko/common.json";
 import koAuth from "./ko/auth.json";
 import koSettings from "./ko/settings.json";
@@ -71,9 +79,13 @@ import koModals from "./ko/modals.json";
 import koRuntimes from "./ko/runtimes.json";
 import koLayout from "./ko/layout.json";
 import koUsage from "./ko/usage.json";
+import koIssueDocuments from "./ko/issue-documents.json";
 import koUi from "./ko/ui.json";
 import koSquads from "./ko/squads.json";
 import koBilling from "./ko/billing.json";
+import koFeedback from "./ko/feedback.json";
+import koTemplates from "./ko/templates.json";
+import koMarketplace from "./ko/marketplace.json";
 import jaCommon from "./ja/common.json";
 import jaAuth from "./ja/auth.json";
 import jaSettings from "./ja/settings.json";
@@ -96,9 +108,38 @@ import jaModals from "./ja/modals.json";
 import jaRuntimes from "./ja/runtimes.json";
 import jaLayout from "./ja/layout.json";
 import jaUsage from "./ja/usage.json";
+import jaIssueDocuments from "./ja/issue-documents.json";
 import jaUi from "./ja/ui.json";
 import jaSquads from "./ja/squads.json";
 import jaBilling from "./ja/billing.json";
+import jaFeedback from "./ja/feedback.json";
+import jaTemplates from "./ja/templates.json";
+import jaMarketplace from "./ja/marketplace.json";
+import frCommon from "./fr/common.json";
+import frAuth from "./fr/auth.json";
+import frSettings from "./fr/settings.json";
+import frIssues from "./fr/issues.json";
+import frAgents from "./fr/agents.json";
+import frEditor from "./fr/editor.json";
+import frOnboarding from "./fr/onboarding.json";
+import frInvite from "./fr/invite.json";
+import frLabels from "./fr/labels.json";
+import frMembers from "./fr/members.json";
+import frMyIssues from "./fr/my-issues.json";
+import frSearch from "./fr/search.json";
+import frInbox from "./fr/inbox.json";
+import frWorkspace from "./fr/workspace.json";
+import frProjects from "./fr/projects.json";
+import frAutopilots from "./fr/autopilots.json";
+import frSkills from "./fr/skills.json";
+import frChat from "./fr/chat.json";
+import frModals from "./fr/modals.json";
+import frRuntimes from "./fr/runtimes.json";
+import frLayout from "./fr/layout.json";
+import frUsage from "./fr/usage.json";
+import frUi from "./fr/ui.json";
+import frSquads from "./fr/squads.json";
+import frBilling from "./fr/billing.json";
 
 // Single source of truth for the resource bundle. Both apps (web layout +
 // desktop App.tsx) import from here so adding a locale or namespace happens
@@ -127,9 +168,13 @@ export const RESOURCES: Record<SupportedLocale, LocaleResources> = {
     runtimes: enRuntimes,
     layout: enLayout,
     usage: enUsage,
+    "issue-documents": enIssueDocuments,
     ui: enUi,
     squads: enSquads,
+    marketplace: enMarketplace,
     billing: enBilling,
+    feedback: enFeedback,
+    templates: enTemplates,
   },
   "zh-Hans": {
     common: zhHansCommon,
@@ -154,9 +199,13 @@ export const RESOURCES: Record<SupportedLocale, LocaleResources> = {
     runtimes: zhHansRuntimes,
     layout: zhHansLayout,
     usage: zhHansUsage,
+    "issue-documents": zhHansIssueDocuments,
     ui: zhHansUi,
     squads: zhHansSquads,
+    marketplace: zhHansMarketplace,
     billing: zhHansBilling,
+    feedback: zhHansFeedback,
+    templates: zhHansTemplates,
   },
   ko: {
     common: koCommon,
@@ -181,9 +230,13 @@ export const RESOURCES: Record<SupportedLocale, LocaleResources> = {
     runtimes: koRuntimes,
     layout: koLayout,
     usage: koUsage,
+    "issue-documents": koIssueDocuments,
     ui: koUi,
     squads: koSquads,
+    marketplace: koMarketplace,
     billing: koBilling,
+    feedback: koFeedback,
+    templates: koTemplates,
   },
   ja: {
     common: jaCommon,
@@ -208,8 +261,39 @@ export const RESOURCES: Record<SupportedLocale, LocaleResources> = {
     runtimes: jaRuntimes,
     layout: jaLayout,
     usage: jaUsage,
+    "issue-documents": jaIssueDocuments,
     ui: jaUi,
     squads: jaSquads,
+    marketplace: jaMarketplace,
     billing: jaBilling,
+feedback: jaFeedback,
+    templates: jaTemplates,
+  },
+  fr: {
+    common: frCommon,
+    auth: frAuth,
+    settings: frSettings,
+    issues: frIssues,
+    agents: frAgents,
+    editor: frEditor,
+    onboarding: frOnboarding,
+    invite: frInvite,
+    labels: frLabels,
+    members: frMembers,
+    "my-issues": frMyIssues,
+    search: frSearch,
+    inbox: frInbox,
+    workspace: frWorkspace,
+    projects: frProjects,
+    autopilots: frAutopilots,
+    skills: frSkills,
+    chat: frChat,
+    modals: frModals,
+    runtimes: frRuntimes,
+    layout: frLayout,
+    usage: frUsage,
+    ui: frUi,
+    squads: frSquads,
+    billing: frBilling,
   },
 };

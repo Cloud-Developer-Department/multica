@@ -17,11 +17,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@multica/ui/components/ui/dropdown-menu";
-import { useModalStore } from "@multica/core/modals";
 import { useConfigStore } from "@multica/core/config";
 import { isDesktopShell } from "../platform/local-directory";
+import { useModalStore } from "@multica/core/modals";
+import { paths, useWorkspaceSlug } from "@multica/core/paths";
+import { useOptionalNavigation } from "../navigation";
 import { DISCORD_URL, DiscordIcon } from "./discord";
 import { useT } from "../i18n";
+import { docsLocalePrefix } from "../common/docs-locale";
 
 const DOCS_URL = "https://multica.ai/docs";
 const CHANGELOG_URL = "https://multica.ai/changelog";
@@ -32,7 +35,7 @@ const CHANGELOG_URL = "https://multica.ai/changelog";
 const DOWNLOAD_URL = "https://multica.ai/download";
 
 export function HelpLauncher() {
-  const { t } = useT("layout");
+  const { t, i18n } = useT("layout");
   const serverVersion = useConfigStore((state) => state.serverVersion);
   // Web-only: offering "download the desktop app" inside the desktop app is
   // nonsense, and this sidebar is shared — apps/desktop renders the same
@@ -44,12 +47,22 @@ export function HelpLauncher() {
   // markup matches either way, so the link can ship in the SSR payload instead
   // of popping in a frame late.
   const desktop = isDesktopShell();
+  // The sidebar only renders inside a workspace route, so navigation is always
+  // available there. Outside one (e.g. standalone tests) we fall back to the
+  // legacy feedback modal so the entry never dead-ends.
+  const slug = useWorkspaceSlug();
+  const navigation = useOptionalNavigation();
+  const feedbackPath = slug ? paths.workspace(slug).feedback() : null;
+  const openFeedback = () => {
+    if (navigation && feedbackPath) navigation.push(feedbackPath);
+    else useModalStore.getState().open("feedback");
+  };
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
         aria-label={t(($) => $.help.trigger)}
         title={t(($) => $.help.trigger)}
-        className="inline-flex size-7 items-center justify-center rounded-full text-muted-foreground transition-colors cursor-pointer hover:bg-accent hover:text-foreground data-popup-open:bg-accent data-popup-open:text-foreground"
+        className="inline-flex size-8 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors cursor-pointer hover:bg-accent hover:text-foreground data-popup-open:bg-accent data-popup-open:text-foreground"
       >
         <CircleHelp className="size-4" />
       </DropdownMenuTrigger>
@@ -79,7 +92,11 @@ export function HelpLauncher() {
         )}
         <DropdownMenuItem
           render={
-            <a href={DOCS_URL} target="_blank" rel="noopener noreferrer" />
+            <a
+              href={`${DOCS_URL}${docsLocalePrefix(i18n.language)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+            />
           }
         >
           <BookOpen className="h-3.5 w-3.5" />
@@ -109,7 +126,7 @@ export function HelpLauncher() {
           <ArrowUpRight className="size-3 translate-y-px text-faint-foreground" />
         </DropdownMenuItem>
         <DropdownMenuItem
-          onClick={() => useModalStore.getState().open("feedback")}
+          onClick={openFeedback}
         >
           <MessageCircle className="h-3.5 w-3.5" />
           {t(($) => $.help.feedback)}

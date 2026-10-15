@@ -393,7 +393,7 @@ function SquadNameEditor({
         <button
           type="button"
           {...triggerProps}
-          className="group -mx-1 inline-flex items-center gap-1.5 self-start rounded px-1 text-left text-title font-semibold leading-tight transition-colors hover:bg-accent/50"
+          className="group -mx-1 inline-flex items-center gap-1.5 self-start rounded-xs px-1 text-left text-title font-semibold leading-tight transition-colors hover:bg-accent/50"
         >
           <span>{value}</span>
           <Pencil className="h-3.5 w-3.5 shrink-0 text-transparent transition-colors group-hover:text-muted-foreground" />
@@ -531,7 +531,9 @@ function AddMemberDialog({
     if (!target) return;
     setSubmitting(true);
     try {
-      await onSubmit({ type: target.type, id: target.id, role });
+      // CLO-418: the backend requires a role for every member; default to
+      // "member" when the user left it blank.
+      await onSubmit({ type: target.type, id: target.id, role: role.trim() || "member" });
       onClose();
     } catch {
       setSubmitting(false);
@@ -844,7 +846,7 @@ function SquadDescriptionEditor({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="group -mx-1 inline-flex items-start gap-1.5 self-start rounded px-1 text-left text-caption leading-relaxed transition-colors hover:bg-accent/50"
+        className="group -mx-1 inline-flex items-start gap-1.5 self-start rounded-xs px-1 text-left text-caption leading-relaxed transition-colors hover:bg-accent/50"
       >
         {value ? (
           <span className="text-muted-foreground">{value}</span>
@@ -1190,7 +1192,7 @@ function SquadMembersTab({
                     {t(($) => $.member_type[m.member_type])}
                   </span>
                   {isLeader(m) && (
-                    <span className="inline-flex items-center gap-0.5 text-caption bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 px-1.5 py-0.5 rounded">
+                    <span className="inline-flex items-center gap-0.5 text-caption bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 px-1.5 py-0.5 rounded-xs">
                       <Crown className="size-3" />
                       {t(($) => $.members_tab.leader_chip)}
                     </span>

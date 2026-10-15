@@ -30,6 +30,10 @@ export type TabSubject =
   | { kind: "actor"; actorType: TabActorType; id: string }
   /** A single skill detail. */
   | { kind: "skill"; id: string }
+  /** A single feedback detail. */
+  | { kind: "feedback"; id: string }
+  /** A single marketplace listing detail. */
+  | { kind: "marketplace"; id: string }
   /** A runtime machine detail. */
   | { kind: "machine"; machineId: string }
   /** A runtime nested under a machine. */
@@ -96,8 +100,14 @@ export function parseTabSubject(url: string): TabSubject {
       return id
         ? { kind: "actor", actorType: "squad", id }
         : { kind: "page", page: "squads" };
+    case "marketplace":
+      return id
+        ? { kind: "marketplace", id }
+        : { kind: "page", page: "marketplace" };
     case "usage":
       return { kind: "page", page: "usage" };
+    case "issue-documents":
+      return { kind: "page", page: "issueDocuments" };
     case "inbox":
       return {
         kind: "inbox",
@@ -115,6 +125,10 @@ export function parseTabSubject(url: string): TabSubject {
       return { kind: "machine", machineId: id };
     case "skills":
       return id ? { kind: "skill", id } : { kind: "page", page: "skills" };
+    case "feedback":
+      return id
+        ? { kind: "feedback", id }
+        : { kind: "page", page: "feedback" };
     case "settings":
       return { kind: "page", page: "settings" };
     case "attachments":
@@ -151,6 +165,10 @@ export function tabSubjectKey(subject: TabSubject): string {
       return `actor:${subject.actorType}:${subject.id}`;
     case "skill":
       return `skill:${subject.id}`;
+    case "feedback":
+      return `feedback:${subject.id}`;
+    case "marketplace":
+      return `marketplace:${subject.id}`;
     case "machine":
       return `machine:${subject.machineId}`;
     case "runtime":

@@ -27,6 +27,7 @@ function workspaceScoped(slug: string) {
   return {
     root: () => `${ws}/issues`,
     usage: () => `${ws}/usage`,
+    issueDocuments: () => `${ws}/issue-documents`,
     issues: () => `${ws}/issues`,
     issueDetail: (id: string) => `${ws}/issues/${encode(id)}`,
     projects: () => `${ws}/projects`,
@@ -53,6 +54,8 @@ function workspaceScoped(slug: string) {
     memberDetail: (id: string) => `${ws}/members/${encode(id)}`,
     squads: () => `${ws}/squads`,
     squadDetail: (id: string) => `${ws}/squads/${encode(id)}`,
+    marketplace: () => `${ws}/marketplace`,
+    marketplaceDetail: (id: string) => `${ws}/marketplace/${encode(id)}`,
     inbox: () => `${ws}/inbox`,
     chat: () => `${ws}/chat`,
     chatWithAgent: (agentId: string) =>
@@ -67,6 +70,8 @@ function workspaceScoped(slug: string) {
     skills: () => `${ws}/skills`,
     skillDetail: (id: string) => `${ws}/skills/${encode(id)}`,
     settings: () => `${ws}/settings`,
+    feedback: () => `${ws}/feedback`,
+    feedbackDetail: (id: string) => `${ws}/feedback/${encode(id)}`,
     attachmentPreview: (id: string) => `${ws}/attachments/${encode(id)}/preview`,
   };
 }

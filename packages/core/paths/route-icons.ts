@@ -22,13 +22,16 @@
 export type RouteIconName =
   | "Inbox"
   | "MessageSquare"
+  | "MessageCircle"
   | "CircleUser"
   | "ListTodo"
   | "FolderKanban"
   | "Zap"
   | "Bot"
   | "Users"
+  | "Store"
   | "BarChart3"
+  | "FileStack"
   | "Monitor"
   | "Server"
   | "BookOpenText"
@@ -52,10 +55,13 @@ export type NavLabelKey =
   | "autopilots"
   | "agents"
   | "squads"
+  | "marketplace"
   | "usage"
+  | "issue_documents"
   | "runtimes"
   | "skills"
-  | "settings";
+  | "settings"
+  | "feedback";
 
 /** Stable identifier for each workspace navigation page. */
 export type WorkspacePageKey =
@@ -67,10 +73,13 @@ export type WorkspacePageKey =
   | "autopilots"
   | "agents"
   | "squads"
+  | "marketplace"
   | "usage"
+  | "issueDocuments"
   | "runtimes"
   | "skills"
-  | "settings";
+  | "settings"
+  | "feedback";
 
 export interface WorkspacePage {
   /** Route segment at index 1 of `/{slug}/{segment}/...`. */
@@ -94,10 +103,13 @@ export const WORKSPACE_PAGES: Record<WorkspacePageKey, WorkspacePage> = {
   autopilots: { segment: "autopilots", icon: "Zap", navKey: "autopilots" },
   agents: { segment: "agents", icon: "Bot", navKey: "agents" },
   squads: { segment: "squads", icon: "Users", navKey: "squads" },
+  marketplace: { segment: "marketplace", icon: "Store", navKey: "marketplace" },
   usage: { segment: "usage", icon: "BarChart3", navKey: "usage" },
+  issueDocuments: { segment: "issue-documents", icon: "FileStack", navKey: "issue_documents" },
   runtimes: { segment: "runtimes", icon: "Monitor", navKey: "runtimes" },
   skills: { segment: "skills", icon: "BookOpenText", navKey: "skills" },
   settings: { segment: "settings", icon: "Settings", navKey: "settings" },
+  feedback: { segment: "feedback", icon: "MessageCircle", navKey: "feedback" },
 };
 
 /** Reverse lookup: route segment → page key. */

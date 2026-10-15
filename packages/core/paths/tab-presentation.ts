@@ -32,7 +32,7 @@ export type TabVisual =
   /** An issue's live status glyph. `null` while the issue is loading.
    *  `category` is what selects the glyph — carried here so the tab strip
    *  never has to resolve a custom status key on its own. (MUL-6243) */
-  | { kind: "issue-status"; status: IssueStatus | null; category?: IssueStatusCategory }
+  | { kind: "issue-status"; status: IssueStatus | null; category?: IssueStatusCategory; color?: string | null; icon?: string | null }
   /** A project's own icon. `null` falls back to the default project glyph. */
   | { kind: "project-icon"; icon: string | null }
   /** An actor's avatar, resolved by the view layer from `actorType`+`id`. */
@@ -47,6 +47,7 @@ export type TabLabelKey =
   | "member"
   | "squad"
   | "skill"
+  | "marketplace"
   | "machine"
   | "runtime"
   | "attachment"
@@ -84,6 +85,7 @@ export interface TabEntityData {
   /** Resolved display name for an actor subject. */
   actorName?: string;
   skill?: { name: string };
+  marketplaceTitle?: string;
   machine?: { name: string };
   runtime?: { name: string };
   /** Resolved chat session title (already includes the "New chat" fallback). */
@@ -185,6 +187,18 @@ export function resolveTabPresentation(
       return {
         visual: { kind: "icon", icon: "BookOpenText" },
         title: textOr(data.skill?.name, "skill"),
+      };
+case "feedback":
+      // Feedback detail resolves like a plain page until a richer identity is
+      // added: the page icon + nav label (never a type-ambiguous default).
+      return {
+        visual: { kind: "icon", icon: WORKSPACE_PAGES.feedback.icon },
+        title: { kind: "nav", navKey: WORKSPACE_PAGES.feedback.navKey },
+      };
+    case "marketplace":
+      return {
+        visual: { kind: "icon", icon: "Store" },
+        title: textOr(data.marketplaceTitle, "marketplace"),
       };
     case "machine":
       return {

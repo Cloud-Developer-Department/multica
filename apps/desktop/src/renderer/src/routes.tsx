@@ -16,6 +16,7 @@ import { AttachmentPreviewRoute } from "./pages/attachment-preview-page";
 import { IssuesPage } from "@multica/views/issues/components";
 import { ProjectsPage } from "@multica/views/projects/components";
 import { DashboardPage } from "@multica/views/dashboard";
+import { IssueDocumentsPage } from "@multica/views/issue-documents";
 import { AutopilotsPage } from "@multica/views/autopilots/components";
 import { MyIssuesPage } from "@multica/views/my-issues";
 import { SkillsPage } from "@multica/views/skills";
@@ -30,6 +31,8 @@ import { SquadsPage, SquadDetailPage as SquadDetailPageView } from "@multica/vie
 import { InboxPage } from "@multica/views/inbox";
 import { ChatPage } from "@multica/views/chat";
 import { SettingsPage } from "@multica/views/settings";
+import { FeedbackCenterPage } from "@multica/views/feedback";
+import { FeedbackDetailPage } from "./pages/feedback-detail-page";
 import { useT } from "@multica/views/i18n";
 import { Download, Server } from "lucide-react";
 import { DaemonSettingsTab } from "./components/daemon-settings-tab";
@@ -220,6 +223,16 @@ export const appRoutes: RouteObject[] = [
             element: <SquadDetailPageView />,
             handle: { title: "Squad" },
           },
+          {
+            path: "feedback",
+            element: <FeedbackCenterPage />,
+            handle: { title: "Feedback" },
+          },
+          {
+            path: "feedback/:id",
+            element: <FeedbackDetailPage />,
+            handle: { title: "Feedback" },
+          },
           { path: "inbox", element: <InboxPage />, handle: { title: "Inbox" } },
           { path: "chat", element: <ChatPage />, handle: { title: "Chat" } },
           {
@@ -231,6 +244,11 @@ export const appRoutes: RouteObject[] = [
             path: "usage",
             element: <DashboardPage />,
             handle: { title: "Usage" },
+          },
+          {
+            path: "issue-documents",
+            element: <IssueDocumentsPage />,
+            handle: { title: "Issue Documents" },
           },
           {
             path: "settings",
