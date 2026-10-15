@@ -4,7 +4,6 @@ FROM golang:1.26.9-alpine AS builder
 RUN apk add --no-cache git
 
 ENV GOPROXY=https://goproxy.cn,direct
-
 WORKDIR /src
 
 # Cache dependencies
