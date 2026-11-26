@@ -79,6 +79,7 @@ jobs:
               - 'apps/web/**'
               - 'apps/desktop/**'
               - 'apps/docs/**'
+              - 'apps/ui-lab/**'
               - 'packages/**'
               - 'package.json'
               - '.npmrc'
