@@ -173,6 +173,7 @@ const aiTeamNav: { key: NavKey; labelKey: NavLabelKey }[] = [
 const utilityNav: { key: NavKey; labelKey: NavLabelKey }[] = [
   { key: "usage", labelKey: "usage" },
   { key: "issueDocuments", labelKey: "issue_documents" },
+  { key: "marketplace", labelKey: "marketplace" },
   { key: "feedback", labelKey: "feedback" },
   { key: "settings", labelKey: "settings" },
 ];

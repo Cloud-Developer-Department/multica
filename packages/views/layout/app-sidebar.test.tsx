@@ -409,6 +409,18 @@ describe("navigation item presentation", () => {
   });
 });
 
+describe("navigation item — Marketplace", () => {
+  it("registers Marketplace in the utility nav group", () => {
+    const { container } = render(<AppSidebar />);
+    expect(container.querySelector('button[data-href="/acme/marketplace"]')).not.toBeNull();
+  });
+
+  it("renders the Marketplace label from i18n", () => {
+    renderWithI18n(<AppSidebar />);
+    expect(screen.getByText("Marketplace")).toBeInTheDocument();
+  });
+});
+
 describe("personal nav — Chat", () => {
   beforeEach(() => {
     chatSessions.current = [];
