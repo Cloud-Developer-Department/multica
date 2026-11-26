@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -634,13 +633,13 @@ func (h *Handler) CreateIssueDocument(w http.ResponseWriter, r *http.Request) {
 
 	r.Body = http.MaxBytesReader(w, r.Body, maxIssueDocumentRequestBytes)
 	var req CreateIssueDocumentRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := decodeJSONBody(r, &req); err != nil {
 		var maxErr *http.MaxBytesError
 		if errors.As(err, &maxErr) {
 			writeError(w, http.StatusRequestEntityTooLarge, "request body is too large")
 			return
 		}
-		writeError(w, http.StatusBadRequest, "invalid request body")
+		writeBodyDecodeError(w, err)
 		return
 	}
 	req.Content = sanitizeNullBytes(req.Content)
