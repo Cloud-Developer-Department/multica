@@ -217,3 +217,9 @@ corresponding side of the canvas heading. Desktop
 panel preferences persist across routes and reloads, separately from design
 drafts. On narrow screens the left toggle opens the navigation drawer; the
 right panel closes from its own header and reopens from the canvas heading.
+
+## CI
+
+Changes under `apps/ui-lab/**` are matched by the frontend quality gate
+(`frontend-build`, `frontend-test`, `frontend-views-test`) together with web,
+desktop and documentation.
