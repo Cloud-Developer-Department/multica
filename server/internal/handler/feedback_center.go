@@ -287,8 +287,8 @@ func (h *Handler) CreateFeedbackCenter(w http.ResponseWriter, r *http.Request) {
 
 	r.Body = http.MaxBytesReader(w, r.Body, feedbackBodyLimit)
 	var req CreateFeedbackCenterRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body")
+	if err := decodeJSONBody(r, &req); err != nil {
+		writeBodyDecodeError(w, err)
 		return
 	}
 
@@ -567,8 +567,8 @@ func (h *Handler) CreateFeedbackComment(w http.ResponseWriter, r *http.Request) 
 
 	r.Body = http.MaxBytesReader(w, r.Body, feedbackBodyLimit)
 	var req CreateFeedbackCommentRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body")
+	if err := decodeJSONBody(r, &req); err != nil {
+		writeBodyDecodeError(w, err)
 		return
 	}
 

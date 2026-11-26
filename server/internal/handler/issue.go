@@ -2737,8 +2737,8 @@ type QuickCreateIssueResponse struct {
 
 func (h *Handler) QuickCreateIssue(w http.ResponseWriter, r *http.Request) {
 	var req QuickCreateIssueRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body")
+	if err := decodeJSONBody(r, &req); err != nil {
+		writeBodyDecodeError(w, err)
 		return
 	}
 	prompt := strings.TrimSpace(req.Prompt)
@@ -3193,8 +3193,8 @@ func duplicateIssueMessage(issue IssueResponse) string {
 func (h *Handler) CreateIssue(w http.ResponseWriter, r *http.Request) {
 	r = h.withWakeupActor(r)
 	var req CreateIssueRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body")
+	if err := decodeJSONBody(r, &req); err != nil {
+		writeBodyDecodeError(w, err)
 		return
 	}
 
@@ -3754,6 +3754,9 @@ func (h *Handler) UpdateIssue(w http.ResponseWriter, r *http.Request) {
 	bodyBytes, err := io.ReadAll(r.Body)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "failed to read request body")
+		return
+	}
+	if rejectInvalidUTF8Body(w, bodyBytes) {
 		return
 	}
 

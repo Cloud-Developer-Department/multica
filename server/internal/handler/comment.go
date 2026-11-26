@@ -3,7 +3,6 @@ package handler
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -1595,8 +1594,8 @@ func (h *Handler) PreviewCommentTriggers(w http.ResponseWriter, r *http.Request)
 	}
 
 	var req CommentTriggerPreviewRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body")
+	if err := decodeJSONBody(r, &req); err != nil {
+		writeBodyDecodeError(w, err)
 		return
 	}
 
@@ -1713,8 +1712,8 @@ func (h *Handler) CreateComment(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req CreateCommentRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body")
+	if err := decodeJSONBody(r, &req); err != nil {
+		writeBodyDecodeError(w, err)
 		return
 	}
 
@@ -3414,8 +3413,8 @@ func (h *Handler) UpdateComment(w http.ResponseWriter, r *http.Request) {
 		SuppressAgentIDs []string  `json:"suppress_agent_ids"`
 		ExpectedRevision *int64    `json:"expected_revision,omitempty"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid request body")
+	if err := decodeJSONBody(r, &req); err != nil {
+		writeBodyDecodeError(w, err)
 		return
 	}
 	// See CreateComment: strip NUL / invalid-UTF-8 bytes PostgreSQL's TEXT column
